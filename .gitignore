@@ -1,0 +1,47 @@
+# dependencies
+node_modules/
+.pnp
+.pnp.*
+
+# next.js
+.next/
+out/
+dist/
+build/
+
+# testing
+/coverage
+/test-results/
+/playwright-report/
+/playwright/.cache/
+/e2e/.auth/
+
+# env files
+.env
+.env.local
+.env*.local
+.env.production
+!.env.local.example
+
+# vercel
+.vercel
+
+# claude code / agent tooling (local, not app code)
+.claude/
+.agents/
+
+# local sqlite db (dev fallback before Turso is wired up)
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+local.db.bak-*
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+# misc
+.DS_Store
+*.pem
+npm-debug.log*

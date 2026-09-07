@@ -1,0 +1,668 @@
+@tailwind base;
+@tailwind components;
+
+/* ============================================================
+   Design tokens — maritime, two modes (docs/08-design-system.md)
+   Light palette on :root; dark overrides in BOTH the media query
+   (guarded so the toggle can force light) and [data-theme="dark"].
+   ============================================================ */
+:root {
+  --bg-1: #f5f8fc;
+  --bg-2: #e9eff6;
+  --surface: #ffffff;
+  --surface-hover: #f2f6fb;
+  --surface-raised: #ffffff;
+  --border: rgba(15, 45, 70, 0.12);
+  --border-strong: rgba(15, 45, 70, 0.22);
+  --text-primary: #0f2333;
+  --text-secondary: rgba(15, 35, 51, 0.64);
+  --text-muted: rgba(15, 35, 51, 0.42);
+  --accent: #0e7490;
+  --accent-strong: #0c5c73;
+  --accent-soft: rgba(14, 116, 144, 0.12);
+  --accent-border: rgba(14, 116, 144, 0.38);
+  --signal: #b45309;
+  --signal-soft: rgba(180, 83, 9, 0.12);
+  --positive: #0f766e;
+  --negative: #b91c1c;
+  --focus-ring: rgba(14, 116, 144, 0.35);
+
+  --radius-card: 14px;
+  --radius-control: 10px;
+  --radius-pill: 999px;
+  --font-mono: 'SF Mono', 'Fira Code', 'JetBrains Mono', Consolas, ui-monospace, monospace;
+
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --bg-1: #0a1420;
+    --bg-2: #0e2033;
+    --surface: rgba(255, 255, 255, 0.04);
+    --surface-hover: rgba(255, 255, 255, 0.07);
+    --surface-raised: #0f2740;
+    --border: rgba(255, 255, 255, 0.1);
+    --border-strong: rgba(255, 255, 255, 0.18);
+    --text-primary: #e6edf5;
+    --text-secondary: rgba(230, 237, 245, 0.62);
+    --text-muted: rgba(230, 237, 245, 0.38);
+    --accent: #38bdf8;
+    --accent-strong: #7dd3fc;
+    --accent-soft: rgba(56, 189, 248, 0.14);
+    --accent-border: rgba(56, 189, 248, 0.42);
+    --signal: #f5a623;
+    --signal-soft: rgba(245, 166, 35, 0.15);
+    --positive: #2dd4bf;
+    --negative: #f87171;
+    --focus-ring: rgba(56, 189, 248, 0.45);
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme='dark'] {
+  --bg-1: #0a1420;
+  --bg-2: #0e2033;
+  --surface: rgba(255, 255, 255, 0.04);
+  --surface-hover: rgba(255, 255, 255, 0.07);
+  --surface-raised: #0f2740;
+  --border: rgba(255, 255, 255, 0.1);
+  --border-strong: rgba(255, 255, 255, 0.18);
+  --text-primary: #e6edf5;
+  --text-secondary: rgba(230, 237, 245, 0.62);
+  --text-muted: rgba(230, 237, 245, 0.38);
+  --accent: #38bdf8;
+  --accent-strong: #7dd3fc;
+  --accent-soft: rgba(56, 189, 248, 0.14);
+  --accent-border: rgba(56, 189, 248, 0.42);
+  --signal: #f5a623;
+  --signal-soft: rgba(245, 166, 35, 0.15);
+  --positive: #2dd4bf;
+  --negative: #f87171;
+  --focus-ring: rgba(56, 189, 248, 0.45);
+  color-scheme: dark;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body {
+  overflow-x: hidden;
+}
+
+/* The page doesn't scroll — the content area below the header does. That keeps
+   the scrollbar under the header instead of running alongside it. */
+body {
+  height: 100vh;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: linear-gradient(160deg, var(--bg-1) 0%, var(--bg-2) 100%);
+  background-attachment: fixed;
+  color: var(--text-primary);
+  font-family: var(--font-sans), -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+    'Helvetica Neue', Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+::selection {
+  background: var(--accent-soft);
+  color: var(--text-primary);
+}
+
+/* ── App shell ── */
+.app-header {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 28px;
+  border-bottom: 1px solid var(--border);
+  border-top: 2px solid var(--accent-border);
+  background: var(--surface-raised);
+  z-index: 20;
+}
+
+.app-brand {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+}
+
+.app-brand svg {
+  width: 20px;
+  height: 20px;
+  color: var(--accent);
+}
+
+.app-nav {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-size: 0.85rem;
+}
+
+.app-nav-user {
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+/* ── Section tabs ── */
+.app-tabs {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.app-tab {
+  color: var(--text-secondary);
+  font-size: 0.82rem;
+  font-weight: 600;
+  padding: 5px 10px;
+  border-radius: var(--radius-control);
+  white-space: nowrap;
+  transition: color 0.15s, background 0.15s;
+}
+.app-tab:hover {
+  color: var(--text-primary);
+}
+.app-tab.active {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+/* ── FX ticker ── */
+.fx-ticker {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  min-height: 1em;
+}
+.fx-item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+}
+.fx-code {
+  font-weight: 700;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  letter-spacing: 0.03em;
+}
+.fx-val {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+  font-weight: 600;
+}
+.fx-chg {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.72rem;
+}
+.fx-chg[data-dir='up'] {
+  color: var(--positive);
+}
+.fx-chg[data-dir='down'] {
+  color: var(--negative);
+}
+
+@media (max-width: 900px) {
+  .fx-ticker {
+    display: none;
+  }
+  .app-tab {
+    padding: 5px 7px;
+    font-size: 0.78rem;
+  }
+  .app-nav-user {
+    display: none;
+  }
+}
+@media (max-width: 560px) {
+  .app-brand-name {
+    display: none;
+  }
+}
+
+/* Fixed frame below the header. Each page decides what scrolls: the list page
+   fills the frame and scrolls inside the table (.page-fill + .box-scroll); the
+   detail/admin pages scroll as a whole (.page-scroll). Anything else falls back
+   to scrolling .app-main itself. */
+.app-main {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 28px;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-main-inner {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  max-width: 1120px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.page-fill {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.page-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  /* keep a little room so the last row isn't flush with the frame edge */
+  padding-bottom: 4px;
+}
+
+/* A .box whose body scrolls internally, with a pinned header row. */
+.box-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+.box-scroll .table thead th {
+  position: sticky;
+  top: 0;
+  background: var(--surface-raised);
+  z-index: 1;
+}
+
+@media (max-width: 640px) {
+  .app-header {
+    padding: 12px 16px;
+  }
+  .app-main {
+    padding: 18px 14px 48px;
+  }
+}
+
+/* ── Card / box ── */
+.box {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+:root:not([data-theme='dark']) .box {
+  box-shadow: 0 1px 3px rgba(15, 45, 70, 0.06);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .box {
+    -webkit-backdrop-filter: blur(6px);
+    backdrop-filter: blur(6px);
+  }
+}
+
+.box-pad {
+  padding: 18px 20px;
+}
+
+.box-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 14px 18px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.box-title {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.muted {
+  color: var(--text-muted);
+  font-size: 0.72rem;
+}
+
+.section-title {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+/* ── Buttons ── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border-radius: var(--radius-control);
+  border: 1px solid transparent;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 9px 16px;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.btn-primary {
+  background: var(--accent);
+  color: #fff;
+}
+.btn-primary:hover:not(:disabled) {
+  background: var(--accent-strong);
+}
+.btn-ghost {
+  background: var(--accent-soft);
+  border-color: var(--border);
+  color: var(--text-secondary);
+}
+.btn-ghost:hover:not(:disabled) {
+  color: var(--text-primary);
+  border-color: var(--border-strong);
+}
+.btn-danger {
+  background: transparent;
+  border-color: color-mix(in srgb, var(--negative) 40%, transparent);
+  color: var(--negative);
+}
+.btn-danger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--negative) 10%, transparent);
+}
+.btn-sm {
+  padding: 5px 10px;
+  font-size: 0.78rem;
+}
+
+.link-accent {
+  color: var(--accent);
+  font-weight: 600;
+}
+.link-accent:hover {
+  color: var(--accent-strong);
+}
+
+/* ── Forms ── */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+}
+.field input,
+.field textarea,
+.field select {
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  padding: 9px 12px;
+  font: inherit;
+  font-size: 0.9rem;
+  color: var(--text-primary);
+}
+.field input:focus,
+.field textarea:focus,
+.field select:focus {
+  outline: none;
+  border-color: var(--accent-border);
+  box-shadow: 0 0 0 3px var(--focus-ring);
+}
+.form-error {
+  color: var(--negative);
+  background: color-mix(in srgb, var(--negative) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--negative) 22%, transparent);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 0.85rem;
+}
+.form-ok {
+  color: var(--positive);
+  background: color-mix(in srgb, var(--positive) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--positive) 25%, transparent);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 0.85rem;
+}
+
+/* ── Tabs / filter chips ── */
+.chip {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.76rem;
+  font-weight: 600;
+  padding: 4px 12px;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+.chip:hover {
+  color: var(--text-primary);
+  border-color: var(--border-strong);
+}
+.chip.active {
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-color: var(--accent-border);
+}
+
+/* ── Icon toggle (theme) ── */
+.icon-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-control);
+  border: 1px solid var(--border);
+  background: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+.icon-toggle:hover {
+  color: var(--text-primary);
+  border-color: var(--border-strong);
+}
+.icon-toggle[aria-pressed='true'] {
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-color: var(--accent-border);
+}
+
+/* ── Table ── */
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+.table thead th {
+  text-align: left;
+  padding: 8px 14px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.table thead th.col-right .th-sort {
+  flex-direction: row-reverse;
+}
+
+.th-sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.th-sort:hover {
+  color: var(--text-primary);
+}
+
+.table thead th[aria-sort='ascending'] .th-sort,
+.table thead th[aria-sort='descending'] .th-sort {
+  color: var(--accent);
+}
+
+.sort-ind {
+  font-size: 0.7em;
+  opacity: 0.7;
+}
+
+.table thead th[aria-sort='none'] .sort-ind {
+  opacity: 0.3;
+}
+.table tbody td {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+.table tbody tr:last-child td {
+  border-bottom: none;
+}
+.table tbody tr:hover {
+  background: var(--surface-hover);
+}
+.num {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+.col-right {
+  text-align: right;
+}
+
+/* ── Score badge — the one place --signal is allowed ── */
+.score-badge {
+  display: inline-block;
+  min-width: 34px;
+  text-align: center;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  font-size: 0.8rem;
+  padding: 3px 9px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border-strong);
+}
+.score-badge[data-band='low'] {
+  color: var(--text-muted);
+  background: var(--surface-hover);
+}
+.score-badge[data-band='mid'] {
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-color: var(--accent-border);
+}
+.score-badge[data-band='high'] {
+  color: var(--signal);
+  background: var(--signal-soft);
+  border-color: color-mix(in srgb, var(--signal) 45%, transparent);
+}
+.score-badge[data-band='none'] {
+  color: var(--text-muted);
+  background: transparent;
+  border-style: dashed;
+}
+
+/* ── Meter bars for the sub-scores ── */
+.meter {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--surface-hover);
+  overflow: hidden;
+}
+.meter > span {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent-soft), var(--accent));
+  border-radius: 3px;
+}
+
+/* ── Category tag ── */
+.cat {
+  display: inline-block;
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 2px 7px;
+  border-radius: 5px;
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+}
+.cat[data-cat='new_order'] {
+  color: var(--signal);
+  border-color: color-mix(in srgb, var(--signal) 40%, transparent);
+}
+.cat[data-cat='delivery'] {
+  color: var(--positive);
+  border-color: color-mix(in srgb, var(--positive) 40%, transparent);
+}
+.cat[data-cat='financial'] {
+  color: var(--negative);
+  border-color: color-mix(in srgb, var(--negative) 40%, transparent);
+}
+
+@media print {
+  .app-header {
+    display: none;
+  }
+  /* let the whole document flow for printing, not the fixed-height app shell */
+  body {
+    display: block;
+    height: auto;
+    overflow: visible;
+  }
+  .app-main {
+    overflow: visible;
+  }
+}
+
+/* Kept last so Tailwind utilities win cascade ties against the component
+   classes above (matches minmatside's ordering). */
+@tailwind utilities;

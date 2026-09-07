@@ -1,0 +1,24 @@
+{
+  "mcpServers": {
+    "chrome-devtools": {
+      "command": "npx.cmd",
+      "args": ["chrome-devtools-mcp@latest"]
+    },
+    "filesystem": {
+      "command": "npx.cmd",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "c:\\Users\\TVadla\\Experis Projects\\bergen-maritime-leads"
+      ]
+    },
+    "git": {
+      "command": "uvx",
+      "args": [
+        "mcp-server-git",
+        "--repository",
+        "c:\\Users\\TVadla\\Experis Projects\\bergen-maritime-leads"
+      ]
+    }
+  }
+}
