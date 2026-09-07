@@ -37,9 +37,14 @@ the guest magic-link flow, `scripts/hash-password.mjs`, `scripts/create-user.mjs
    Admin "Kjør skann" / "Full oppdatering" call the same `runScan()`.
 
 ## Deploy state
-- Vercel project: _TBD — filled in after first `vercel deploy`_.
+- **LIVE:** https://bergen-maritime-leads.vercel.app — Vercel project
+  `torvad/bergen-maritime-leads`. Deploy: `npx vercel deploy --prod`.
 - Prod env set: `SESSION_SECRET`, `CRON_SECRET`, `ADMIN_EMAIL`, `ADMIN_PASSWORD_HASH`,
-  `GUEST_EMAIL`, `GUEST_PASSWORD_HASH`, `SCAN_BATCH`.
+  `GUEST_EMAIL`, `GUEST_PASSWORD_HASH`, `SCAN_BATCH=18`, `DB_PATH=/tmp/bml.db`
+  (Vercel's `/var/task` is read-only — the libSQL file **must** live in `/tmp`).
+- Nightly cron 05:00 UTC → `/api/cron/scan` (discovery + 18-company enrichment batch).
+  Verified from Vercel: enrichment 5 companies / 2.6 s / 0 errors.
+- First deploy 2026-09-07 with a committed 614-company snapshot from a local full scan.
 - **Open item — Turso.** Prod DB is an ephemeral `/tmp` file until
   `TURSO_DATABASE_URL` + `TURSO_AUTH_TOKEN` are set. The committed
   `data/companies-snapshot.json` keeps the list populated on cold instances; without
