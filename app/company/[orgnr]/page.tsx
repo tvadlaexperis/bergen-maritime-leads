@@ -78,9 +78,8 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
         </div>
 
         {/* Key facts */}
-        <div className="box" style={{ flex: '1 1 320px', maxWidth: 440 }}>
-          <div className="box-header"><span className="box-title">Nøkkelinfo</span></div>
-          <div className="box-pad" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 14 }}>
+        <div style={{ flex: '1 1 320px', maxWidth: 440 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 14 }}>
             <Fact label="Ansatte" value={fmtInt(co.employees)} />
             <Fact label="Omsetning (siste)" value={fmtNok(co.revenue_latest, { compact: true })} />
             <Fact label="Vekst å/å" value={co.revenue_growth_pct != null ? fmtPct(co.revenue_growth_pct, 0) : '—'} />
