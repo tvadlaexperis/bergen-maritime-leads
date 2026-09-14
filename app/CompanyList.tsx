@@ -178,6 +178,7 @@ export default function CompanyList({
     setSearch(DEFAULT_FILTERS.search);
   }
 
+  const hasGrowthData = useMemo(() => rows.some((r) => r.revenue_growth_pct != null), [rows]);
   const groups = useMemo(() => uniqSorted(rows.map((r) => r.matched_group)), [rows]);
   const bransjer = useMemo(() => uniqSorted(rows.map((r) => r.nace1_text)), [rows]);
   const orgForms = useMemo(() => uniqSorted(rows.map((r) => r.org_form)), [rows]);
@@ -412,6 +413,12 @@ export default function CompanyList({
             <button className={`chip${minGrowth === '25' ? ' active' : ''}`} onClick={() => setMinGrowth('25')}>
               Vekst &gt; 25 %
             </button>
+            {!hasGrowthData && (
+              <span className="muted" style={{ fontSize: '0.76rem' }}>
+                Ingen vekstdata ennå — Brønnøysund har foreløpig bare siste årsregnskap for disse
+                selskapene. Fylles ut automatisk etter hvert som nye årsregnskap leveres.
+              </span>
+            )}
           </div>
         )}
 
