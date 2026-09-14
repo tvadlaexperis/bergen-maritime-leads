@@ -76,86 +76,88 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
         </p>
       </div>
 
-      {/* Score panel */}
-      <div className="box">
-        <div className="box-header">
-          <span className="box-title">Lead-score</span>
-          <span className="muted">{co.computed_at ? `oppdatert ${agoLabel(co.computed_at)}` : 'ikke scoret ennå'}</span>
-        </div>
-        <div className="box-pad" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          {co.lead_score != null ? (
-            <>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                <span className="num" data-band={band} style={{ fontSize: '2.4rem', fontWeight: 800, lineHeight: 1 }}>
-                  {co.lead_score}
-                </span>
-                <span className="muted" style={{ fontSize: '0.8rem' }}>
-                  / 100
-                  <br />
-                  {band === 'high' ? 'prioritert lead' : band === 'mid' ? 'verdt en vurdering' : 'lav prioritet'}
-                </span>
-              </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 18, alignItems: 'start' }}>
+        {/* Score panel */}
+        <div className="box">
+          <div className="box-header">
+            <span className="box-title">Lead-score</span>
+            <span className="muted">{co.computed_at ? `oppdatert ${agoLabel(co.computed_at)}` : 'ikke scoret ennå'}</span>
+          </div>
+          <div className="box-pad" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {co.lead_score != null ? (
+              <>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                  <span className="num" data-band={band} style={{ fontSize: '2.4rem', fontWeight: 800, lineHeight: 1 }}>
+                    {co.lead_score}
+                  </span>
+                  <span className="muted" style={{ fontSize: '0.8rem' }}>
+                    / 100
+                    <br />
+                    {band === 'high' ? 'prioritert lead' : band === 'mid' ? 'verdt en vurdering' : 'lav prioritet'}
+                  </span>
+                </div>
 
-              <div style={{ display: 'grid', gap: 8 }}>
-                {SUBSCORES.map((s) => {
-                  const v = co[s.key] ?? 0;
-                  return (
-                    <div key={s.key} style={{ display: 'grid', gridTemplateColumns: '190px 1fr 42px', gap: 10, alignItems: 'center' }}>
-                      <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
-                        {s.label} <span className="muted">{s.weight}</span>
-                      </span>
-                      <span className="meter">
-                        <span style={{ width: `${v}%` }} />
-                      </span>
-                      <span className="num muted" style={{ fontSize: '0.76rem', textAlign: 'right' }}>{v}</span>
-                    </div>
-                  );
-                })}
-              </div>
-              {co.reason && <p style={{ fontSize: '0.86rem', color: 'var(--text-secondary)' }}>{co.reason}</p>}
-              {history.length > 1 && (
-                <p className="muted" style={{ fontSize: '0.72rem' }}>
-                  Historikk: {history.slice().reverse().map((h) => h.lead_score).join(' → ')}
-                </p>
-              )}
-            </>
-          ) : (
-            <p className="muted">
-              Ingen score ennå. {isAdmin ? 'Bruk «Oppdater fra registrene» under.' : 'Neste skann beregner en.'}
-            </p>
+                <div style={{ display: 'grid', gap: 8 }}>
+                  {SUBSCORES.map((s) => {
+                    const v = co[s.key] ?? 0;
+                    return (
+                      <div key={s.key} style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 6, alignItems: 'center' }}>
+                        <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+                          {s.label} <span className="muted">{s.weight}</span>
+                        </span>
+                        <span className="num muted" style={{ fontSize: '0.76rem', textAlign: 'right' }}>{v}</span>
+                        <span className="meter" style={{ gridColumn: '1 / -1' }}>
+                          <span style={{ width: `${v}%` }} />
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+                {co.reason && <p style={{ fontSize: '0.86rem', color: 'var(--text-secondary)' }}>{co.reason}</p>}
+                {history.length > 1 && (
+                  <p className="muted" style={{ fontSize: '0.72rem' }}>
+                    Historikk: {history.slice().reverse().map((h) => h.lead_score).join(' → ')}
+                  </p>
+                )}
+              </>
+            ) : (
+              <p className="muted">
+                Ingen score ennå. {isAdmin ? 'Bruk «Oppdater fra registrene» under.' : 'Neste skann beregner en.'}
+              </p>
+            )}
+          </div>
+        </div>
+
+        {/* Key facts */}
+        <div className="box">
+          <div className="box-header"><span className="box-title">Nøkkelinfo</span></div>
+          <div className="box-pad" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 14 }}>
+            <Fact label="Ansatte" value={fmtInt(co.employees)} />
+            <Fact label="Omsetning (siste)" value={fmtNok(co.revenue_latest, { compact: true })} />
+            <Fact label="Vekst å/å" value={co.revenue_growth_pct != null ? fmtPct(co.revenue_growth_pct, 0) : '—'} />
+            <Fact label="Driftsmargin" value={co.operating_margin_pct != null ? fmtPct(co.operating_margin_pct, 0) : '—'} />
+            <Fact label="Bransje (NACE)" value={nace.map((n) => `${n.code} ${n.text ?? ''}`).join(' · ') || '—'} />
+            <Fact label="Adresse" value={[co.address, co.postnummer, co.poststed].filter(Boolean).join(', ') || '—'} />
+            <Fact label="Registrert" value={dateLabel(co.registered_at)} />
+            <Fact label="Siste årsregnskap" value={co.last_annual_report ?? '—'} />
+          </div>
+        </div>
+
+        {/* Contacts */}
+        <div className="box">
+          <div className="box-header"><span className="box-title">Kontakter</span></div>
+          <div className="box-pad" style={{ display: 'grid', gap: 14 }}>
+            <ContactFact label="Daglig leder" name={co.ceo_name} />
+            <ContactFact label="Kontaktperson" name={co.contact_name} email={co.contact_email} phone={co.contact_phone} />
+            <ContactFact label="CTO" name={co.cto_name} email={co.cto_email} phone={co.cto_phone} />
+            <ContactFact label="Salgssjef" name={co.sales_name} email={co.sales_email} phone={co.sales_phone} />
+          </div>
+          {!co.ceo_name && !co.contact_name && !co.cto_name && !co.sales_name && (
+            <div className="box-pad muted" style={{ paddingTop: 0, fontSize: '0.82rem' }}>
+              Ingen kontaktinfo registrert ennå.{isAdmin ? ' Legg inn under.' : ''}
+            </div>
           )}
         </div>
-      </div>
-
-      {/* Key facts */}
-      <div className="box">
-        <div className="box-header"><span className="box-title">Nøkkelinfo</span></div>
-        <div className="box-pad" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 14 }}>
-          <Fact label="Ansatte" value={fmtInt(co.employees)} />
-          <Fact label="Omsetning (siste)" value={fmtNok(co.revenue_latest, { compact: true })} />
-          <Fact label="Vekst å/å" value={co.revenue_growth_pct != null ? fmtPct(co.revenue_growth_pct, 0) : '—'} />
-          <Fact label="Driftsmargin" value={co.operating_margin_pct != null ? fmtPct(co.operating_margin_pct, 0) : '—'} />
-          <Fact label="Bransje (NACE)" value={nace.map((n) => `${n.code} ${n.text ?? ''}`).join(' · ') || '—'} />
-          <Fact label="Adresse" value={[co.address, co.postnummer, co.poststed].filter(Boolean).join(', ') || '—'} />
-          <Fact label="Registrert" value={dateLabel(co.registered_at)} />
-          <Fact label="Siste årsregnskap" value={co.last_annual_report ?? '—'} />
-        </div>
-      </div>
-
-      {/* Contacts */}
-      <div className="box">
-        <div className="box-header"><span className="box-title">Kontakter</span></div>
-        <div className="box-pad" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 14 }}>
-          <ContactFact label="Daglig leder" name={co.ceo_name} />
-          <ContactFact label="Kontaktperson" name={co.contact_name} email={co.contact_email} phone={co.contact_phone} />
-          <ContactFact label="CTO" name={co.cto_name} email={co.cto_email} phone={co.cto_phone} />
-          <ContactFact label="Salgssjef" name={co.sales_name} email={co.sales_email} phone={co.sales_phone} />
-        </div>
-        {!co.ceo_name && !co.contact_name && !co.cto_name && !co.sales_name && (
-          <div className="box-pad muted" style={{ paddingTop: 0, fontSize: '0.82rem' }}>
-            Ingen kontaktinfo registrert ennå.{isAdmin ? ' Legg inn under.' : ''}
-          </div>
-        )}
       </div>
 
       {isAdmin && base && (
