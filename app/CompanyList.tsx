@@ -24,7 +24,6 @@ interface StoredFilters {
   minScore: ScoreFilter;
   filterTab: FilterTab;
   search: string;
-  favoritesOnly: boolean;
 }
 
 const DEFAULT_FILTERS: StoredFilters = {
@@ -36,7 +35,6 @@ const DEFAULT_FILTERS: StoredFilters = {
   minScore: 'all',
   filterTab: 'segment',
   search: '',
-  favoritesOnly: false,
 };
 
 function uniqSorted(values: (string | null)[]): string[] {
@@ -80,7 +78,6 @@ export default function CompanyList({
   const [minScore, setMinScore] = useState<ScoreFilter>(DEFAULT_FILTERS.minScore);
   const [filterTab, setFilterTab] = useState<FilterTab>(DEFAULT_FILTERS.filterTab);
   const [search, setSearch] = useState<string>(DEFAULT_FILTERS.search);
-  const [favoritesOnly, setFavoritesOnly] = useState<boolean>(DEFAULT_FILTERS.favoritesOnly);
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
   const [sortKey, setSortKey] = useState<SortKey>('score');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
@@ -101,7 +98,6 @@ export default function CompanyList({
         if (saved.minScore) setMinScore(saved.minScore);
         if (saved.filterTab) setFilterTab(saved.filterTab);
         if (saved.search) setSearch(saved.search);
-        if (saved.favoritesOnly) setFavoritesOnly(saved.favoritesOnly);
       }
     } catch {
       // localStorage unavailable (private mode, blocked storage, …) — fall back to defaults.
@@ -128,14 +124,13 @@ export default function CompanyList({
       minScore,
       filterTab,
       search,
-      favoritesOnly,
     };
     try {
       window.localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave));
     } catch {
       // ignore write failures
     }
-  }, [group, bransje, orgForm, kommuneFilter, minSize, minScore, filterTab, search, favoritesOnly]);
+  }, [group, bransje, orgForm, kommuneFilter, minSize, minScore, filterTab, search]);
 
   useEffect(() => {
     if (!loadedFavorites.current) return;
@@ -155,6 +150,25 @@ export default function CompanyList({
     });
   }
 
+  const hasActiveFilters =
+    group !== DEFAULT_FILTERS.group ||
+    bransje !== DEFAULT_FILTERS.bransje ||
+    orgForm !== DEFAULT_FILTERS.orgForm ||
+    kommuneFilter !== DEFAULT_FILTERS.kommuneFilter ||
+    minSize !== DEFAULT_FILTERS.minSize ||
+    minScore !== DEFAULT_FILTERS.minScore ||
+    search !== DEFAULT_FILTERS.search;
+
+  function resetFilters() {
+    setGroup(DEFAULT_FILTERS.group);
+    setBransje(DEFAULT_FILTERS.bransje);
+    setOrgForm(DEFAULT_FILTERS.orgForm);
+    setKommuneFilter(DEFAULT_FILTERS.kommuneFilter);
+    setMinSize(DEFAULT_FILTERS.minSize);
+    setMinScore(DEFAULT_FILTERS.minScore);
+    setSearch(DEFAULT_FILTERS.search);
+  }
+
   const groups = useMemo(() => uniqSorted(rows.map((r) => r.matched_group)), [rows]);
   const bransjer = useMemo(() => uniqSorted(rows.map((r) => r.nace1_text)), [rows]);
   const orgForms = useMemo(() => uniqSorted(rows.map((r) => r.org_form)), [rows]);
@@ -171,7 +185,7 @@ export default function CompanyList({
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     const list = rows.filter((r) => {
-      if ((lockFavorites || favoritesOnly) && !favorites.has(r.orgnr)) return false;
+      if (lockFavorites && !favorites.has(r.orgnr)) return false;
       if (group !== 'ALL' && r.matched_group !== group) return false;
       if (bransje !== 'ALL' && r.nace1_text !== bransje) return false;
       if (orgForm !== 'ALL' && r.org_form !== orgForm) return false;
@@ -200,7 +214,7 @@ export default function CompanyList({
       if (typeof av === 'string') return mul * av.localeCompare(bv as string, 'nb');
       return mul * ((av as number) - (bv as number));
     });
-  }, [rows, group, bransje, orgForm, kommuneFilter, minSize, minScore, search, favoritesOnly, favorites, lockFavorites, sortKey, sortDir]);
+  }, [rows, group, bransje, orgForm, kommuneFilter, minSize, minScore, search, favorites, lockFavorites, sortKey, sortDir]);
 
   return (
     <div className="page-fill" style={{ gap: 16 }}>
@@ -220,12 +234,9 @@ export default function CompanyList({
             onChange={(e) => setSearch(e.target.value)}
             aria-label="Søk i selskaper"
           />
-          {!lockFavorites && (
-            <button
-              className={`chip${favoritesOnly ? ' active' : ''}`}
-              onClick={() => setFavoritesOnly((v) => !v)}
-            >
-              ★ Kun favoritter{favorites.size > 0 ? ` (${favorites.size})` : ''}
+          {hasActiveFilters && (
+            <button type="button" className="btn btn-ghost btn-sm" onClick={resetFilters}>
+              Nullstill filter
             </button>
           )}
           {adminHref && (
