@@ -8,7 +8,8 @@ import ScoreBadge from './components/ScoreBadge';
 
 type SizeFilter = 'all' | 'under10' | '5-15' | '10' | '50';
 type ScoreFilter = 'all' | '40' | '66';
-type FilterTab = 'segment' | 'bransje' | 'selskapsform' | 'kommune' | 'size' | 'score';
+type GrowthFilter = 'all' | '0' | '10' | '25';
+type FilterTab = 'segment' | 'bransje' | 'selskapsform' | 'kommune' | 'size' | 'growth' | 'score';
 type SortKey = 'name' | 'group' | 'employees' | 'revenue' | 'growth' | 'score';
 type SortDir = 'asc' | 'desc';
 
@@ -21,6 +22,7 @@ interface StoredFilters {
   orgForm: string;
   kommuneFilter: string;
   minSize: SizeFilter;
+  minGrowth: GrowthFilter;
   minScore: ScoreFilter;
   filterTab: FilterTab;
   search: string;
@@ -32,6 +34,7 @@ const DEFAULT_FILTERS: StoredFilters = {
   orgForm: 'ALL',
   kommuneFilter: 'ALL',
   minSize: 'all',
+  minGrowth: 'all',
   minScore: 'all',
   filterTab: 'segment',
   search: '',
@@ -75,6 +78,7 @@ export default function CompanyList({
   const [orgForm, setOrgForm] = useState<string>(DEFAULT_FILTERS.orgForm);
   const [kommuneFilter, setKommuneFilter] = useState<string>(DEFAULT_FILTERS.kommuneFilter);
   const [minSize, setMinSize] = useState<SizeFilter>(DEFAULT_FILTERS.minSize);
+  const [minGrowth, setMinGrowth] = useState<GrowthFilter>(DEFAULT_FILTERS.minGrowth);
   const [minScore, setMinScore] = useState<ScoreFilter>(DEFAULT_FILTERS.minScore);
   const [filterTab, setFilterTab] = useState<FilterTab>(DEFAULT_FILTERS.filterTab);
   const [search, setSearch] = useState<string>(DEFAULT_FILTERS.search);
@@ -95,6 +99,7 @@ export default function CompanyList({
         if (saved.orgForm) setOrgForm(saved.orgForm);
         if (saved.kommuneFilter) setKommuneFilter(saved.kommuneFilter);
         if (saved.minSize) setMinSize(saved.minSize);
+        if (saved.minGrowth) setMinGrowth(saved.minGrowth);
         if (saved.minScore) setMinScore(saved.minScore);
         if (saved.filterTab) setFilterTab(saved.filterTab);
         if (saved.search) setSearch(saved.search);
@@ -121,6 +126,7 @@ export default function CompanyList({
       orgForm,
       kommuneFilter,
       minSize,
+      minGrowth,
       minScore,
       filterTab,
       search,
@@ -130,7 +136,7 @@ export default function CompanyList({
     } catch {
       // ignore write failures
     }
-  }, [group, bransje, orgForm, kommuneFilter, minSize, minScore, filterTab, search]);
+  }, [group, bransje, orgForm, kommuneFilter, minSize, minGrowth, minScore, filterTab, search]);
 
   useEffect(() => {
     if (!loadedFavorites.current) return;
@@ -150,14 +156,16 @@ export default function CompanyList({
     });
   }
 
-  const hasActiveFilters =
-    group !== DEFAULT_FILTERS.group ||
-    bransje !== DEFAULT_FILTERS.bransje ||
-    orgForm !== DEFAULT_FILTERS.orgForm ||
-    kommuneFilter !== DEFAULT_FILTERS.kommuneFilter ||
-    minSize !== DEFAULT_FILTERS.minSize ||
-    minScore !== DEFAULT_FILTERS.minScore ||
-    search !== DEFAULT_FILTERS.search;
+  const activeFilterCount = [
+    group !== DEFAULT_FILTERS.group,
+    bransje !== DEFAULT_FILTERS.bransje,
+    orgForm !== DEFAULT_FILTERS.orgForm,
+    kommuneFilter !== DEFAULT_FILTERS.kommuneFilter,
+    minSize !== DEFAULT_FILTERS.minSize,
+    minGrowth !== DEFAULT_FILTERS.minGrowth,
+    minScore !== DEFAULT_FILTERS.minScore,
+    search !== DEFAULT_FILTERS.search,
+  ].filter(Boolean).length;
 
   function resetFilters() {
     setGroup(DEFAULT_FILTERS.group);
@@ -165,6 +173,7 @@ export default function CompanyList({
     setOrgForm(DEFAULT_FILTERS.orgForm);
     setKommuneFilter(DEFAULT_FILTERS.kommuneFilter);
     setMinSize(DEFAULT_FILTERS.minSize);
+    setMinGrowth(DEFAULT_FILTERS.minGrowth);
     setMinScore(DEFAULT_FILTERS.minScore);
     setSearch(DEFAULT_FILTERS.search);
   }
@@ -195,6 +204,10 @@ export default function CompanyList({
       if (minSize === '5-15' && (employees < 5 || employees > 15)) return false;
       if (minSize === '10' && employees < 10) return false;
       if (minSize === '50' && employees < 50) return false;
+      const growth = r.revenue_growth_pct;
+      if (minGrowth === '0' && (growth == null || growth <= 0)) return false;
+      if (minGrowth === '10' && (growth == null || growth <= 10)) return false;
+      if (minGrowth === '25' && (growth == null || growth <= 25)) return false;
       if (minScore === '40' && (r.lead_score ?? -1) < 40) return false;
       if (minScore === '66' && (r.lead_score ?? -1) < 66) return false;
       if (q) {
@@ -214,7 +227,7 @@ export default function CompanyList({
       if (typeof av === 'string') return mul * av.localeCompare(bv as string, 'nb');
       return mul * ((av as number) - (bv as number));
     });
-  }, [rows, group, bransje, orgForm, kommuneFilter, minSize, minScore, search, favorites, lockFavorites, sortKey, sortDir]);
+  }, [rows, group, bransje, orgForm, kommuneFilter, minSize, minGrowth, minScore, search, favorites, lockFavorites, sortKey, sortDir]);
 
   return (
     <div className="page-fill" style={{ gap: 16 }}>
@@ -226,6 +239,7 @@ export default function CompanyList({
           </p>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          <span className="hit-badge">Treff {filtered.length}</span>
           <input
             type="search"
             className="search-input"
@@ -280,16 +294,28 @@ export default function CompanyList({
             Størrelse
           </button>
           <button
+            className={`chip-tab${filterTab === 'growth' ? ' active' : ''}`}
+            onClick={() => setFilterTab('growth')}
+          >
+            {minGrowth !== 'all' && <span className="chip-tab-dot" />}
+            Vekst
+          </button>
+          <button
             className={`chip-tab${filterTab === 'score' ? ' active' : ''}`}
             onClick={() => setFilterTab('score')}
           >
             {minScore !== 'all' && <span className="chip-tab-dot" />}
             Score
           </button>
-          {hasActiveFilters && (
-            <button type="button" className="clear-filters" onClick={resetFilters}>
-              <span aria-hidden="true">✕</span> Nullstill
-            </button>
+          {activeFilterCount > 0 && (
+            <span style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 10 }}>
+              <span className="muted" style={{ fontSize: '0.76rem' }}>
+                {activeFilterCount} {activeFilterCount === 1 ? 'filter' : 'filtre'} aktive
+              </span>
+              <button type="button" className="clear-filters" onClick={resetFilters}>
+                <span aria-hidden="true">✕</span> Nullstill
+              </button>
+            </span>
           )}
         </div>
 
@@ -368,6 +394,23 @@ export default function CompanyList({
             </button>
             <button className={`chip${minSize === '50' ? ' active' : ''}`} onClick={() => setMinSize('50')}>
               50+ ansatte
+            </button>
+          </div>
+        )}
+
+        {filterTab === 'growth' && (
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+            <button className={`chip${minGrowth === 'all' ? ' active' : ''}`} onClick={() => setMinGrowth('all')}>
+              Alle
+            </button>
+            <button className={`chip${minGrowth === '0' ? ' active' : ''}`} onClick={() => setMinGrowth('0')}>
+              Vekst &gt; 0 %
+            </button>
+            <button className={`chip${minGrowth === '10' ? ' active' : ''}`} onClick={() => setMinGrowth('10')}>
+              Vekst &gt; 10 %
+            </button>
+            <button className={`chip${minGrowth === '25' ? ' active' : ''}`} onClick={() => setMinGrowth('25')}>
+              Vekst &gt; 25 %
             </button>
           </div>
         )}

@@ -568,6 +568,19 @@ a {
   color: var(--negative);
 }
 
+.hit-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 14px;
+  border-radius: var(--radius-control);
+  border: 1px solid var(--accent-border);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 0.8rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
 /* ── Icon toggle (theme) ── */
 .icon-toggle {
   display: inline-flex;
