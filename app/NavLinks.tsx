@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 const LINKS = [
   { href: '/', label: 'Selskaper' },
   { href: '/dashboard', label: 'Oversikt' },
+  { href: '/favoritter', label: 'Favoritter' },
 ];
 
 export default function NavLinks({ isAdmin }: { isAdmin: boolean }) {

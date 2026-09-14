@@ -17,37 +17,42 @@ export default async function HomePage() {
   const scored = active.filter((r) => r.lead_score != null).length;
   const lastScan = scans[0];
 
+  const subtitle = (
+    <>
+      {active.length} selskaper · {scored} scoret · sortert etter lead-score ·{' '}
+      {lastScan ? `sist skannet ${agoLabel(lastScan.started_at)}` : 'ingen skann ennå'}
+    </>
+  );
+
   return (
     <div className="page-fill" style={{ gap: 16 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', flexWrap: 'wrap', gap: 8 }}>
-        <div>
-          <h1 style={{ fontSize: '1.4rem', fontWeight: 800, letterSpacing: '-0.02em' }}>
-            Maritim sektor i Bergen
-          </h1>
-          <p className="muted" style={{ fontSize: '0.8rem', marginTop: 2 }}>
-            {active.length} selskaper · {scored} scoret · sortert etter lead-score ·{' '}
-            {lastScan ? `sist skannet ${agoLabel(lastScan.started_at)}` : 'ingen skann ennå'}
-          </p>
-        </div>
-        {user?.role === 'admin' && (
-          <Link href="/admin" className="btn btn-ghost btn-sm">
-            Administrer
-          </Link>
-        )}
-      </div>
-
       {active.length === 0 ? (
-        <div className="box box-pad muted">
-          Ingen selskaper ennå. Kjør{' '}
-          {user?.role === 'admin' ? (
-            <Link href="/admin" className="link-accent">et skann fra Admin</Link>
-          ) : (
-            <code>npm run scan:local</code>
-          )}
-          .
-        </div>
+        <>
+          <div>
+            <h1 style={{ fontSize: '1.4rem', fontWeight: 800, letterSpacing: '-0.02em' }}>
+              Maritim sektor i Bergen
+            </h1>
+            <p className="muted" style={{ fontSize: '0.8rem', marginTop: 2 }}>
+              {subtitle}
+            </p>
+          </div>
+          <div className="box box-pad muted">
+            Ingen selskaper ennå. Kjør{' '}
+            {user?.role === 'admin' ? (
+              <Link href="/admin" className="link-accent">et skann fra Admin</Link>
+            ) : (
+              <code>npm run scan:local</code>
+            )}
+            .
+          </div>
+        </>
       ) : (
-        <CompanyList rows={active} />
+        <CompanyList
+          rows={active}
+          title="Maritim sektor i Bergen"
+          subtitle={subtitle}
+          adminHref={user?.role === 'admin' ? '/admin' : undefined}
+        />
       )}
 
       <p className="muted" style={{ fontSize: '0.72rem', flexShrink: 0 }}>

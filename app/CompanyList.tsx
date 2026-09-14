@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import type { CompanyWithScore } from '@/lib/db';
 import { fmtNok, fmtPct, fmtInt } from './format';
@@ -58,7 +58,20 @@ const COLUMNS: {
   { key: 'score', label: 'Lead', align: 'right', firstDir: 'desc', value: (r) => r.lead_score },
 ];
 
-export default function CompanyList({ rows }: { rows: CompanyWithScore[] }) {
+export default function CompanyList({
+  rows,
+  title,
+  subtitle,
+  adminHref,
+  lockFavorites,
+}: {
+  rows: CompanyWithScore[];
+  title: string;
+  subtitle: ReactNode;
+  adminHref?: string;
+  /** Forces the list to show favorites only and hides the toggle — used by the /favoritter page. */
+  lockFavorites?: boolean;
+}) {
   const [group, setGroup] = useState<string>(DEFAULT_FILTERS.group);
   const [bransje, setBransje] = useState<string>(DEFAULT_FILTERS.bransje);
   const [orgForm, setOrgForm] = useState<string>(DEFAULT_FILTERS.orgForm);
@@ -158,7 +171,7 @@ export default function CompanyList({ rows }: { rows: CompanyWithScore[] }) {
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     const list = rows.filter((r) => {
-      if (favoritesOnly && !favorites.has(r.orgnr)) return false;
+      if ((lockFavorites || favoritesOnly) && !favorites.has(r.orgnr)) return false;
       if (group !== 'ALL' && r.matched_group !== group) return false;
       if (bransje !== 'ALL' && r.nace1_text !== bransje) return false;
       if (orgForm !== 'ALL' && r.org_form !== orgForm) return false;
@@ -187,12 +200,18 @@ export default function CompanyList({ rows }: { rows: CompanyWithScore[] }) {
       if (typeof av === 'string') return mul * av.localeCompare(bv as string, 'nb');
       return mul * ((av as number) - (bv as number));
     });
-  }, [rows, group, bransje, orgForm, kommuneFilter, minSize, minScore, search, favoritesOnly, favorites, sortKey, sortDir]);
+  }, [rows, group, bransje, orgForm, kommuneFilter, minSize, minScore, search, favoritesOnly, favorites, lockFavorites, sortKey, sortDir]);
 
   return (
-    <div className="page-fill" style={{ gap: 12 }}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flexShrink: 0 }}>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+    <div className="page-fill" style={{ gap: 16 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
+        <div>
+          <h1 style={{ fontSize: '1.4rem', fontWeight: 800, letterSpacing: '-0.02em' }}>{title}</h1>
+          <p className="muted" style={{ fontSize: '0.8rem', marginTop: 2 }}>
+            {subtitle}
+          </p>
+        </div>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           <input
             type="search"
             className="search-input"
@@ -201,14 +220,23 @@ export default function CompanyList({ rows }: { rows: CompanyWithScore[] }) {
             onChange={(e) => setSearch(e.target.value)}
             aria-label="Søk i selskaper"
           />
-          <button
-            className={`chip${favoritesOnly ? ' active' : ''}`}
-            onClick={() => setFavoritesOnly((v) => !v)}
-          >
-            ★ Kun favoritter{favorites.size > 0 ? ` (${favorites.size})` : ''}
-          </button>
+          {!lockFavorites && (
+            <button
+              className={`chip${favoritesOnly ? ' active' : ''}`}
+              onClick={() => setFavoritesOnly((v) => !v)}
+            >
+              ★ Kun favoritter{favorites.size > 0 ? ` (${favorites.size})` : ''}
+            </button>
+          )}
+          {adminHref && (
+            <Link href={adminHref} className="btn btn-ghost btn-sm">
+              Administrer
+            </Link>
+          )}
         </div>
+      </div>
 
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flexShrink: 0 }}>
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
           <button
             className={`chip-tab${filterTab === 'segment' ? ' active' : ''}`}
@@ -411,7 +439,9 @@ export default function CompanyList({ rows }: { rows: CompanyWithScore[] }) {
               {filtered.length === 0 && (
                 <tr>
                   <td colSpan={8} className="muted" style={{ textAlign: 'center', padding: 28 }}>
-                    Ingen selskaper matcher filtrene.
+                    {lockFavorites && favorites.size === 0
+                      ? 'Ingen favoritter ennå. Klikk ☆ ved et selskap for å legge det til.'
+                      : 'Ingen selskaper matcher filtrene.'}
                   </td>
                 </tr>
               )}
