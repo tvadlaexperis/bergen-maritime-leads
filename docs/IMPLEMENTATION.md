@@ -18,11 +18,25 @@ the guest magic-link flow, `scripts/hash-password.mjs`, `scripts/create-user.mjs
 | Lead score (pure) | `lib/score.ts` |
 | DB schema + queries | `lib/db.ts` — tables `companies`, `financials`, `company_scores`, `scans`, `users`, `audit_log`, `rate_limits` |
 | Scan engine | `lib/scan.ts` |
-| Providers | `lib/orchestrator/providers/brreg.ts`, `…/score.ts` |
-| Pages | `app/page.tsx` + `CompanyList.tsx`, `app/company/[orgnr]/`, `app/dashboard/`, `app/admin/` |
+| Providers | `lib/orchestrator/providers/brreg.ts`, `…/score.ts`, `…/news.ts` |
+| Pages | `app/page.tsx` + `CompanyList.tsx`, `app/company/[orgnr]/`, `app/dashboard/`, `app/admin/`, `app/favoritter/` |
 | Cron | `app/api/cron/scan/route.ts` (Vercel cron 05:00 UTC) |
 | Scripts | `scripts/build-db.mjs`, `scripts/scan-local.mjs`, `scripts/export-snapshot.mjs` |
-| Tests | `lib/score.test.ts`, `lib/brreg.test.ts`, `lib/http/safeFetch.test.ts`, `lib/orchestrator/providers/fx.test.ts` |
+| Tests | `lib/score.test.ts`, `lib/brreg.test.ts`, `lib/http/safeFetch.test.ts`, `lib/orchestrator/providers/fx.test.ts`, `…/news.test.ts` |
+
+### Company page: contacts + news
+- **Daglig leder** — auto-filled from `data.brreg.no/enhetsregisteret/api/enheter/{orgnr}/roller`
+  during enrichment (`enrichCompany()` in `lib/scan.ts`, alongside the regnskap fetch). Only the name
+  is read; birth dates in the roller payload are deliberately not stored.
+  `lib/brreg.ts#parseDagligLeder`.
+- **Kontaktperson / CTO / Salgssjef** — not in any public registry, so these are admin-entered
+  free text (name/e-post/telefon) via `AdminControls` → `updateContactsAction` →
+  `setCompanyContacts()`. Same pattern as the existing `notes` field.
+- **Nyheter** — `lib/orchestrator/providers/news.ts` queries the GDELT DOC 2.0 API
+  (`api.gdeltproject.org`, free, keyless) for the company name, 6h `revalidate` cache
+  (GDELT rate-limits to ~1 req/5s). `SKIP_NEWS=1` hides the section entirely.
+- Both are best-effort like every other provider: a failed/rate-limited news fetch or missing
+  roller data degrades to an empty section, never an error.
 
 ## Data flow
 1. **Discovery** — for each kommune × NACE prefix, page through

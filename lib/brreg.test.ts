@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { normalizeEnhet, parseEnhetPage, parseRegnskap, isValidOrgnr } from './brreg';
+import { normalizeEnhet, parseEnhetPage, parseRegnskap, parseDagligLeder, isValidOrgnr } from './brreg';
 import { matchNace } from '../data/maritime-sectors.mjs';
 
 const rawEnhet = {
@@ -83,6 +83,51 @@ describe('isValidOrgnr', () => {
     expect(isValidOrgnr('971171898')).toBe(true);
     expect(isValidOrgnr('971171899')).toBe(false);
     expect(isValidOrgnr('12345')).toBe(false);
+  });
+});
+
+describe('parseDagligLeder', () => {
+  it('reads the active daglig leder from a rollegruppe', () => {
+    const name = parseDagligLeder({
+      rollegrupper: [
+        {
+          type: { kode: 'DAGL' },
+          roller: [{ type: { kode: 'DAGL' }, person: { navn: { fornavn: 'Audun', etternavn: 'Grimsland' } }, avregistrert: false }],
+        },
+        { type: { kode: 'STYR' }, roller: [] },
+      ],
+    });
+    expect(name).toBe('Audun Grimsland');
+  });
+
+  it('includes a mellomnavn when present', () => {
+    const name = parseDagligLeder({
+      rollegrupper: [
+        {
+          type: { kode: 'DAGL' },
+          roller: [{ person: { navn: { fornavn: 'Ingrid Sara', mellomnavn: 'Petersson', etternavn: 'Punkki' } }, avregistrert: false }],
+        },
+      ],
+    });
+    expect(name).toBe('Ingrid Sara Petersson Punkki');
+  });
+
+  it('skips a deregistered or deceased role holder', () => {
+    const name = parseDagligLeder({
+      rollegrupper: [
+        {
+          type: { kode: 'DAGL' },
+          roller: [{ person: { navn: { fornavn: 'Gammel', etternavn: 'Leder' } }, avregistrert: true }],
+        },
+      ],
+    });
+    expect(name).toBeNull();
+  });
+
+  it('returns null when there is no DAGL group or malformed input', () => {
+    expect(parseDagligLeder({ rollegrupper: [{ type: { kode: 'STYR' }, roller: [] }] })).toBeNull();
+    expect(parseDagligLeder({})).toBeNull();
+    expect(parseDagligLeder(null)).toBeNull();
   });
 });
 

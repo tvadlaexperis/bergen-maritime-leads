@@ -4,6 +4,7 @@ import {
   BRREG_ENHET_HOST,
   parseEnhetPage,
   parseRegnskap,
+  parseDagligLeder,
   type Company,
   type EnhetPage,
 } from '../../brreg';
@@ -68,9 +69,15 @@ async function getRegnskap(orgnr: string): Promise<CompanyFinancials[]> {
   return parseRegnskap(json);
 }
 
+async function getDagligLeder(orgnr: string): Promise<string | null> {
+  const json = await getJson(`${ENHET_BASE}/${encodeURIComponent(orgnr)}/roller`);
+  if (!json) return null;
+  return parseDagligLeder(json);
+}
+
 export const brregProvider: Provider = {
   id: 'brreg',
-  tools: ['searchEnheter', 'getEnhet', 'getRegnskap'],
+  tools: ['searchEnheter', 'getEnhet', 'getRegnskap', 'getRoller'],
   isEnabled: () => true,
   async call(tool, args) {
     if (tool === 'searchEnheter') {
@@ -82,6 +89,9 @@ export const brregProvider: Provider = {
     }
     if (tool === 'getRegnskap') {
       return getRegnskap(String((args as { orgnr: string }).orgnr));
+    }
+    if (tool === 'getRoller') {
+      return getDagligLeder(String((args as { orgnr: string }).orgnr));
     }
     throw new Error(`brreg: unknown tool ${tool}`);
   },

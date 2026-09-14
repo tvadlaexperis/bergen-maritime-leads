@@ -9,6 +9,7 @@ import {
   markCompanyRefreshed,
   replaceFinancials,
   insertScore,
+  setCompanyCeo,
   listCompaniesToRefresh,
   listActiveCompanies,
   getCompanyByOrgnr,
@@ -66,6 +67,9 @@ async function enrichCompany(orgnr: string, errors: ScanError[]): Promise<boolea
   const fin = await orchestrator.callTool<CompanyFinancials[]>('brreg.getRegnskap', { orgnr }, 15_000);
   const financials = fin.ok ? fin.data : [];
   if (!fin.ok) errors.push({ scope: `regnskap ${orgnr}`, message: fin.error });
+
+  const roller = await orchestrator.callTool<string | null>('brreg.getRoller', { orgnr }, 12_000);
+  if (roller.ok) await setCompanyCeo(company.id, roller.data);
 
   let fetched = 0;
   if (financials.length) {

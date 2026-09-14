@@ -55,6 +55,10 @@ const SCHEMA = `
     manual_entry INTEGER NOT NULL DEFAULT 0,
     status TEXT NOT NULL DEFAULT 'active',
     notes TEXT,
+    ceo_name TEXT,
+    contact_name TEXT, contact_email TEXT, contact_phone TEXT,
+    cto_name TEXT, cto_email TEXT, cto_phone TEXT,
+    sales_name TEXT, sales_email TEXT, sales_phone TEXT,
     discovered_at INTEGER NOT NULL,
     last_refreshed_at INTEGER,
     updated_at INTEGER NOT NULL
@@ -152,6 +156,8 @@ async function loadSnapshot(db) {
     'address', 'postnummer', 'poststed', 'kommune', 'kommunenummer', 'registered_at',
     'established_at', 'last_annual_report', 'in_mva', 'bankrupt', 'under_liquidation',
     'matched_code', 'matched_label', 'matched_group', 'manual_entry', 'status', 'notes',
+    'ceo_name', 'contact_name', 'contact_email', 'contact_phone',
+    'cto_name', 'cto_email', 'cto_phone', 'sales_name', 'sales_email', 'sales_phone',
   ];
   let n = 0;
   for (const entry of snapshot.companies) {

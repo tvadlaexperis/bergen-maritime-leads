@@ -46,6 +46,16 @@ export interface Company {
   manual_entry: number;
   status: CompanyStatus;
   notes: string | null;
+  ceo_name: string | null;
+  contact_name: string | null;
+  contact_email: string | null;
+  contact_phone: string | null;
+  cto_name: string | null;
+  cto_email: string | null;
+  cto_phone: string | null;
+  sales_name: string | null;
+  sales_email: string | null;
+  sales_phone: string | null;
   discovered_at: number;
   last_refreshed_at: number | null;
   updated_at: number;
@@ -124,6 +134,35 @@ function getClient(): Client {
   return client;
 }
 
+// `CREATE TABLE IF NOT EXISTS` above only covers a brand-new database. For a
+// `companies` table that already existed before these columns were added
+// (any persistent local.db or Turso DB), add them one at a time and swallow
+// the "duplicate column" error on a DB that already has them.
+const CONTACT_COLUMNS = [
+  'ceo_name TEXT',
+  'contact_name TEXT',
+  'contact_email TEXT',
+  'contact_phone TEXT',
+  'cto_name TEXT',
+  'cto_email TEXT',
+  'cto_phone TEXT',
+  'sales_name TEXT',
+  'sales_email TEXT',
+  'sales_phone TEXT',
+];
+
+async function addContactColumns(): Promise<void> {
+  const c = getClient();
+  for (const col of CONTACT_COLUMNS) {
+    try {
+      await c.execute(`ALTER TABLE companies ADD COLUMN ${col}`);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (!/duplicate column name/i.test(msg)) throw e;
+    }
+  }
+}
+
 async function ensureSchema(): Promise<void> {
   if (!schemaReady) {
     schemaReady = getClient()
@@ -169,6 +208,10 @@ async function ensureSchema(): Promise<void> {
         manual_entry INTEGER NOT NULL DEFAULT 0,
         status TEXT NOT NULL DEFAULT 'active',
         notes TEXT,
+        ceo_name TEXT,
+        contact_name TEXT, contact_email TEXT, contact_phone TEXT,
+        cto_name TEXT, cto_email TEXT, cto_phone TEXT,
+        sales_name TEXT, sales_email TEXT, sales_phone TEXT,
         discovered_at INTEGER NOT NULL,
         last_refreshed_at INTEGER,
         updated_at INTEGER NOT NULL
@@ -237,6 +280,7 @@ async function ensureSchema(): Promise<void> {
       );
     `,
       )
+      .then(() => addContactColumns())
       .then(() => ensureSeeded());
   }
   return schemaReady;
@@ -325,6 +369,8 @@ async function loadSnapshot(c: Client): Promise<void> {
       'address', 'postnummer', 'poststed', 'kommune', 'kommunenummer', 'registered_at',
       'established_at', 'last_annual_report', 'in_mva', 'bankrupt', 'under_liquidation',
       'matched_code', 'matched_label', 'matched_group', 'manual_entry', 'status', 'notes',
+      'ceo_name', 'contact_name', 'contact_email', 'contact_phone',
+      'cto_name', 'cto_email', 'cto_phone', 'sales_name', 'sales_email', 'sales_phone',
     ];
     await c.execute({
       sql: `INSERT INTO companies (${cols.join(', ')}, discovered_at, updated_at, last_refreshed_at)
@@ -580,6 +626,45 @@ export async function setCompanyStatus(id: number, status: CompanyStatus): Promi
 export async function setCompanyNotes(id: number, notes: string | null): Promise<void> {
   const c = await db();
   await c.execute({ sql: 'UPDATE companies SET notes = ?, updated_at = ? WHERE id = ?', args: [notes, Date.now(), id] });
+}
+
+// Auto-filled from Brønnøysund's roller API during enrichment (lib/scan.ts) —
+// the one contact field that comes from an official source rather than admin entry.
+export async function setCompanyCeo(id: number, ceoName: string | null): Promise<void> {
+  const c = await db();
+  await c.execute({ sql: 'UPDATE companies SET ceo_name = ? WHERE id = ?', args: [ceoName, id] });
+}
+
+export interface CompanyContactsInput {
+  contact_name: string | null;
+  contact_email: string | null;
+  contact_phone: string | null;
+  cto_name: string | null;
+  cto_email: string | null;
+  cto_phone: string | null;
+  sales_name: string | null;
+  sales_email: string | null;
+  sales_phone: string | null;
+}
+
+// Admin-curated — Brønnøysund has no CTO/sales-manager role, so these are
+// filled in by hand (same pattern as `notes`).
+export async function setCompanyContacts(id: number, input: CompanyContactsInput): Promise<void> {
+  const c = await db();
+  await c.execute({
+    sql: `UPDATE companies SET
+            contact_name = ?, contact_email = ?, contact_phone = ?,
+            cto_name = ?, cto_email = ?, cto_phone = ?,
+            sales_name = ?, sales_email = ?, sales_phone = ?,
+            updated_at = ?
+          WHERE id = ?`,
+    args: [
+      input.contact_name, input.contact_email, input.contact_phone,
+      input.cto_name, input.cto_email, input.cto_phone,
+      input.sales_name, input.sales_email, input.sales_phone,
+      Date.now(), id,
+    ],
+  });
 }
 
 export async function deleteCompany(id: number): Promise<void> {

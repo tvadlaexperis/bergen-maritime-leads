@@ -12,6 +12,7 @@ import {
   getUserByEmail,
   setCompanyStatus,
   setCompanyNotes,
+  setCompanyContacts,
   deleteCompany,
   type CompanyStatus,
 } from '@/lib/db';
@@ -50,6 +51,37 @@ export async function updateNotesAction(_prev: ActionState, formData: FormData):
   await audit('company.notes', { actor: user.email, target: `company:${id}` });
   revalidatePath('/company');
   return { ok: 'Notater lagret.' };
+}
+
+const CONTACT_FIELDS = [
+  'contact_name', 'contact_email', 'contact_phone',
+  'cto_name', 'cto_email', 'cto_phone',
+  'sales_name', 'sales_email', 'sales_phone',
+] as const;
+
+export async function updateContactsAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const user = await guard('admin-contacts');
+  const id = Number(formData.get('id'));
+  if (!id || !(await getCompany(id))) return { error: 'Ukjent selskap.' };
+
+  const value = (key: string) => {
+    const v = String(formData.get(key) ?? '').trim().slice(0, 200);
+    return v || null;
+  };
+  const input = Object.fromEntries(CONTACT_FIELDS.map((f) => [f, value(f)])) as Record<
+    (typeof CONTACT_FIELDS)[number],
+    string | null
+  >;
+
+  const email = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  for (const f of ['contact_email', 'cto_email', 'sales_email'] as const) {
+    if (input[f] && !email.test(input[f]!)) return { error: `Ugyldig e-post: ${input[f]}` };
+  }
+
+  await setCompanyContacts(id, input);
+  await audit('company.contacts', { actor: user.email, target: `company:${id}` });
+  revalidatePath('/company');
+  return { ok: 'Kontaktinfo lagret.' };
 }
 
 export async function setStatusAction(id: number, status: CompanyStatus): Promise<void> {

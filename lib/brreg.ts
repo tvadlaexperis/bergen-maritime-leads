@@ -173,6 +173,34 @@ export function parseRegnskap(json: unknown): CompanyFinancials[] {
   return [...byYear.values()].sort((a, b) => b.year - a.year);
 }
 
+// --- Roller (roles) ------------------------------------------------------
+// Only the statutory "daglig leder" (managing director) role is exposed —
+// Brønnøysund has no concept of CTO/sales manager, and we deliberately don't
+// read/store birth dates from the person object (privacy).
+
+interface RawRolle {
+  type?: { kode?: string };
+  person?: { navn?: { fornavn?: string; mellomnavn?: string; etternavn?: string }; erDoed?: boolean };
+  avregistrert?: boolean;
+}
+interface RawRollegruppe {
+  type?: { kode?: string };
+  roller?: RawRolle[];
+}
+interface RawRoller {
+  rollegrupper?: RawRollegruppe[];
+}
+
+export function parseDagligLeder(json: unknown): string | null {
+  const grupper = (json as RawRoller)?.rollegrupper ?? [];
+  const dagl = grupper.find((g) => g.type?.kode === 'DAGL');
+  const rolle = dagl?.roller?.find((r) => !r.avregistrert && r.person && !r.person.erDoed);
+  const navn = rolle?.person?.navn;
+  if (!navn) return null;
+  const full = [navn.fornavn, navn.mellomnavn, navn.etternavn].filter(Boolean).join(' ').trim();
+  return full || null;
+}
+
 // --- Misc --------------------------------------------------------------
 
 /** Norwegian organisasjonsnummer: 9 digits, mod-11 check digit. */

@@ -23,6 +23,8 @@ const COMPANY_COLS = [
   'address', 'postnummer', 'poststed', 'kommune', 'kommunenummer', 'registered_at',
   'established_at', 'last_annual_report', 'in_mva', 'bankrupt', 'under_liquidation',
   'matched_code', 'matched_label', 'matched_group', 'manual_entry', 'status', 'notes',
+  'ceo_name', 'contact_name', 'contact_email', 'contact_phone',
+  'cto_name', 'cto_email', 'cto_phone', 'sales_name', 'sales_email', 'sales_phone',
 ];
 
 const companies = (await db.execute('SELECT * FROM companies ORDER BY name COLLATE NOCASE')).rows;

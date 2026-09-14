@@ -4,6 +4,7 @@ import type { Metadata } from 'next';
 import { getCompanyByOrgnr, getCompany, listFinancials, getScoreHistory } from '@/lib/db';
 import { getCurrentUser } from '@/lib/auth';
 import { isValidOrgnr, proffUrl, brregUrl } from '@/lib/brreg';
+import { getCompanyNews, type NewsItem } from '@/lib/news';
 import { fmtNok, fmtPct, fmtInt, dateLabel, agoLabel } from '@/app/format';
 import ScoreBadge, { bandFor } from '@/app/components/ScoreBadge';
 import AdminControls from './AdminControls';
@@ -28,10 +29,11 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
   if (!co) notFound();
 
   const base = await getCompany(co.id);
-  const [financials, history, user] = await Promise.all([
+  const [financials, history, user, news] = await Promise.all([
     listFinancials(co.id),
     getScoreHistory(co.id, 12),
     getCurrentUser(),
+    getCompanyNews(co.name),
   ]);
   const isAdmin = user?.role === 'admin';
   const band = bandFor(co.lead_score);
@@ -140,6 +142,22 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
         </div>
       </div>
 
+      {/* Contacts */}
+      <div className="box">
+        <div className="box-header"><span className="box-title">Kontakter</span></div>
+        <div className="box-pad" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 14 }}>
+          <ContactFact label="Daglig leder" name={co.ceo_name} />
+          <ContactFact label="Kontaktperson" name={co.contact_name} email={co.contact_email} phone={co.contact_phone} />
+          <ContactFact label="CTO" name={co.cto_name} email={co.cto_email} phone={co.cto_phone} />
+          <ContactFact label="Salgssjef" name={co.sales_name} email={co.sales_email} phone={co.sales_phone} />
+        </div>
+        {!co.ceo_name && !co.contact_name && !co.cto_name && !co.sales_name && (
+          <div className="box-pad muted" style={{ paddingTop: 0, fontSize: '0.82rem' }}>
+            Ingen kontaktinfo registrert ennå.{isAdmin ? ' Legg inn under.' : ''}
+          </div>
+        )}
+      </div>
+
       {isAdmin && base && (
         <AdminControls
           id={base.id}
@@ -147,8 +165,46 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
           name={base.name}
           status={base.status}
           notes={base.notes ?? ''}
+          contacts={{
+            contact_name: base.contact_name,
+            contact_email: base.contact_email,
+            contact_phone: base.contact_phone,
+            cto_name: base.cto_name,
+            cto_email: base.cto_email,
+            cto_phone: base.cto_phone,
+            sales_name: base.sales_name,
+            sales_email: base.sales_email,
+            sales_phone: base.sales_phone,
+          }}
         />
       )}
+
+      {/* News */}
+      <div className="box">
+        <div className="box-header">
+          <span className="box-title">Nyheter</span>
+          <span className="muted">GDELT</span>
+        </div>
+        <div className="box-pad" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {news.length === 0 && <p className="muted" style={{ fontSize: '0.85rem' }}>Ingen nyhetstreff siste tiden.</p>}
+          {news.map((n: NewsItem) => (
+            <a
+              key={n.url}
+              href={n.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="link-accent"
+              style={{ display: 'flex', flexDirection: 'column', gap: 2, fontWeight: 400 }}
+            >
+              <span>{n.title}</span>
+              <span className="muted" style={{ fontSize: '0.72rem' }}>
+                {n.domain}
+                {n.seenAt ? ` · ${dateLabel(n.seenAt)}` : ''}
+              </span>
+            </a>
+          ))}
+        </div>
+      </div>
 
       {/* Financial history */}
       <div className="box">
@@ -203,6 +259,39 @@ function Fact({ label, value }: { label: string; value: string }) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
       <span className="muted" style={{ fontSize: '0.72rem' }}>{label}</span>
       <span style={{ fontSize: '0.9rem' }}>{value}</span>
+    </div>
+  );
+}
+
+function ContactFact({
+  label,
+  name,
+  email,
+  phone,
+}: {
+  label: string;
+  name: string | null;
+  email?: string | null;
+  phone?: string | null;
+}) {
+  if (!name) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+        <span className="muted" style={{ fontSize: '0.72rem' }}>{label}</span>
+        <span className="muted" style={{ fontSize: '0.9rem' }}>—</span>
+      </div>
+    );
+  }
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+      <span className="muted" style={{ fontSize: '0.72rem' }}>{label}</span>
+      <span style={{ fontSize: '0.9rem' }}>{name}</span>
+      {(email || phone) && (
+        <span style={{ display: 'flex', gap: 10, fontSize: '0.78rem' }}>
+          {email && <a href={`mailto:${email}`} className="link-accent">E-post ↗</a>}
+          {phone && <a href={`tel:${phone.replace(/\s/g, '')}`} className="link-accent">Ring ↗</a>}
+        </span>
+      )}
     </div>
   );
 }
