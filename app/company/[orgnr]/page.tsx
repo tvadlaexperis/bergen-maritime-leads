@@ -45,35 +45,52 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
 
   return (
     <div className="page-scroll" style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-      <div>
-        <Link href="/" className="muted" style={{ fontSize: '0.8rem' }}>
-          ← Alle selskaper
-        </Link>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap', marginTop: 6 }}>
-          <h1 style={{ fontSize: '1.5rem', fontWeight: 800, letterSpacing: '-0.02em' }}>{co.name}</h1>
-          <ScoreBadge score={co.lead_score} />
-          {co.under_liquidation === 1 && <span className="muted">(under avvikling)</span>}
-        </div>
-        <p className="muted" style={{ fontSize: '0.82rem', marginTop: 4 }}>
-          Org.nr {co.orgnr}
-          {co.org_form ? ` · ${co.org_form}` : ''}
-          {co.poststed ? ` · ${co.poststed}` : ''}
-          {co.matched_group ? ` · ${co.matched_group}` : ''}
-        </p>
-        <p style={{ fontSize: '0.82rem', marginTop: 6, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-          {co.website && (
-            <a href={co.website} target="_blank" rel="noopener noreferrer" className="link-accent">
-              Nettsted ↗
+      <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+        <div style={{ flex: '1 1 320px' }}>
+          <Link href="/" className="muted" style={{ fontSize: '0.8rem' }}>
+            ← Alle selskaper
+          </Link>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap', marginTop: 6 }}>
+            <h1 style={{ fontSize: '1.5rem', fontWeight: 800, letterSpacing: '-0.02em' }}>{co.name}</h1>
+            <ScoreBadge score={co.lead_score} />
+            {co.under_liquidation === 1 && <span className="muted">(under avvikling)</span>}
+          </div>
+          <p className="muted" style={{ fontSize: '0.82rem', marginTop: 4 }}>
+            Org.nr {co.orgnr}
+            {co.org_form ? ` · ${co.org_form}` : ''}
+            {co.poststed ? ` · ${co.poststed}` : ''}
+            {co.matched_group ? ` · ${co.matched_group}` : ''}
+          </p>
+          <p style={{ fontSize: '0.82rem', marginTop: 6, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+            {co.website && (
+              <a href={co.website} target="_blank" rel="noopener noreferrer" className="link-accent">
+                Nettsted ↗
+              </a>
+            )}
+            <a href={proffUrl(co.orgnr)} target="_blank" rel="noopener noreferrer" className="link-accent">
+              proff.no ↗
             </a>
-          )}
-          <a href={proffUrl(co.orgnr)} target="_blank" rel="noopener noreferrer" className="link-accent">
-            proff.no ↗
-          </a>
-          <a href={brregUrl(co.orgnr)} target="_blank" rel="noopener noreferrer" className="link-accent">
-            Brønnøysund ↗
-          </a>
-          {co.phone && <span className="muted">Tlf {co.phone}</span>}
-        </p>
+            <a href={brregUrl(co.orgnr)} target="_blank" rel="noopener noreferrer" className="link-accent">
+              Brønnøysund ↗
+            </a>
+            {co.phone && <span className="muted">Tlf {co.phone}</span>}
+          </p>
+        </div>
+
+        {/* Key facts */}
+        <div className="box" style={{ flex: '1 1 320px', maxWidth: 440 }}>
+          <div className="box-header"><span className="box-title">Nøkkelinfo</span></div>
+          <div className="box-pad" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 14 }}>
+            <Fact label="Ansatte" value={fmtInt(co.employees)} />
+            <Fact label="Omsetning (siste)" value={fmtNok(co.revenue_latest, { compact: true })} />
+            <Fact label="Vekst å/å" value={co.revenue_growth_pct != null ? fmtPct(co.revenue_growth_pct, 0) : '—'} />
+            <Fact label="Driftsmargin" value={co.operating_margin_pct != null ? fmtPct(co.operating_margin_pct, 0) : '—'} />
+            <Fact label="Bransje (NACE)" value={nace.map((n) => `${n.code} ${n.text ?? ''}`).join(' · ') || '—'} />
+            <Fact label="Adresse" value={[co.address, co.postnummer, co.poststed].filter(Boolean).join(', ') || '—'} />
+            <Fact label="Registrert" value={dateLabel(co.registered_at)} />
+            <Fact label="Siste årsregnskap" value={co.last_annual_report ?? '—'} />
+          </div>
+        </div>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 18, alignItems: 'start' }}>
@@ -128,21 +145,6 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
           </div>
         </div>
 
-        {/* Key facts */}
-        <div className="box">
-          <div className="box-header"><span className="box-title">Nøkkelinfo</span></div>
-          <div className="box-pad" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 14 }}>
-            <Fact label="Ansatte" value={fmtInt(co.employees)} />
-            <Fact label="Omsetning (siste)" value={fmtNok(co.revenue_latest, { compact: true })} />
-            <Fact label="Vekst å/å" value={co.revenue_growth_pct != null ? fmtPct(co.revenue_growth_pct, 0) : '—'} />
-            <Fact label="Driftsmargin" value={co.operating_margin_pct != null ? fmtPct(co.operating_margin_pct, 0) : '—'} />
-            <Fact label="Bransje (NACE)" value={nace.map((n) => `${n.code} ${n.text ?? ''}`).join(' · ') || '—'} />
-            <Fact label="Adresse" value={[co.address, co.postnummer, co.poststed].filter(Boolean).join(', ') || '—'} />
-            <Fact label="Registrert" value={dateLabel(co.registered_at)} />
-            <Fact label="Siste årsregnskap" value={co.last_annual_report ?? '—'} />
-          </div>
-        </div>
-
         {/* Contacts */}
         <div className="box">
           <div className="box-header"><span className="box-title">Kontakter</span></div>
@@ -157,6 +159,78 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
               Ingen kontaktinfo registrert ennå.{isAdmin ? ' Legg inn under.' : ''}
             </div>
           )}
+        </div>
+      </div>
+
+      {/* Financial history */}
+      <div className="box">
+        <div className="box-header">
+          <span className="box-title">Regnskapstall ({financials.length} år)</span>
+          <span className="muted">Regnskapsregisteret</span>
+        </div>
+        <div style={{ overflowX: 'auto' }}>
+          <table className="table">
+            <thead>
+              <tr>
+                <th>År</th>
+                <th className="col-right">Driftsinntekter</th>
+                <th className="col-right">Driftsresultat</th>
+                <th className="col-right">Årsresultat</th>
+                <th className="col-right">Egenkapital</th>
+                <th className="col-right">Sum eiendeler</th>
+              </tr>
+            </thead>
+            <tbody>
+              {financials.map((f) => (
+                <tr key={f.id}>
+                  <td className="num">{f.year}</td>
+                  <td className="col-right num">{fmtNok(f.revenue, { compact: true })}</td>
+                  <td className="col-right num" style={{ color: f.operating_result != null ? (f.operating_result >= 0 ? 'var(--positive)' : 'var(--negative)') : undefined }}>
+                    {fmtNok(f.operating_result, { compact: true })}
+                  </td>
+                  <td className="col-right num" style={{ color: f.profit != null ? (f.profit >= 0 ? 'var(--positive)' : 'var(--negative)') : undefined }}>
+                    {fmtNok(f.profit, { compact: true })}
+                  </td>
+                  <td className="col-right num">{fmtNok(f.equity, { compact: true })}</td>
+                  <td className="col-right num">{fmtNok(f.total_assets, { compact: true })}</td>
+                </tr>
+              ))}
+              {financials.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="muted" style={{ textAlign: 'center', padding: 28 }}>
+                    Ingen regnskapstall hentet ennå.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* News */}
+      <div className="box">
+        <div className="box-header">
+          <span className="box-title">Nyheter</span>
+          <span className="muted">GDELT</span>
+        </div>
+        <div className="box-pad" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {news.length === 0 && <p className="muted" style={{ fontSize: '0.85rem' }}>Ingen nyhetstreff siste tiden.</p>}
+          {news.map((n: NewsItem) => (
+            <a
+              key={n.url}
+              href={n.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="link-accent"
+              style={{ display: 'flex', flexDirection: 'column', gap: 2, fontWeight: 400 }}
+            >
+              <span>{n.title}</span>
+              <span className="muted" style={{ fontSize: '0.72rem' }}>
+                {n.domain}
+                {n.seenAt ? ` · ${dateLabel(n.seenAt)}` : ''}
+              </span>
+            </a>
+          ))}
         </div>
       </div>
 
@@ -180,80 +254,6 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
           }}
         />
       )}
-
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 18, alignItems: 'start' }}>
-        {/* News */}
-        <div className="box">
-          <div className="box-header">
-            <span className="box-title">Nyheter</span>
-            <span className="muted">GDELT</span>
-          </div>
-          <div className="box-pad" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {news.length === 0 && <p className="muted" style={{ fontSize: '0.85rem' }}>Ingen nyhetstreff siste tiden.</p>}
-            {news.map((n: NewsItem) => (
-              <a
-                key={n.url}
-                href={n.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="link-accent"
-                style={{ display: 'flex', flexDirection: 'column', gap: 2, fontWeight: 400 }}
-              >
-                <span>{n.title}</span>
-                <span className="muted" style={{ fontSize: '0.72rem' }}>
-                  {n.domain}
-                  {n.seenAt ? ` · ${dateLabel(n.seenAt)}` : ''}
-                </span>
-              </a>
-            ))}
-          </div>
-        </div>
-
-        {/* Financial history */}
-        <div className="box">
-          <div className="box-header">
-            <span className="box-title">Regnskapstall ({financials.length} år)</span>
-            <span className="muted">Regnskapsregisteret</span>
-          </div>
-          <div style={{ overflowX: 'auto' }}>
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>År</th>
-                  <th className="col-right">Driftsinntekter</th>
-                  <th className="col-right">Driftsresultat</th>
-                  <th className="col-right">Årsresultat</th>
-                  <th className="col-right">Egenkapital</th>
-                  <th className="col-right">Sum eiendeler</th>
-                </tr>
-              </thead>
-              <tbody>
-                {financials.map((f) => (
-                  <tr key={f.id}>
-                    <td className="num">{f.year}</td>
-                    <td className="col-right num">{fmtNok(f.revenue, { compact: true })}</td>
-                    <td className="col-right num" style={{ color: f.operating_result != null ? (f.operating_result >= 0 ? 'var(--positive)' : 'var(--negative)') : undefined }}>
-                      {fmtNok(f.operating_result, { compact: true })}
-                    </td>
-                    <td className="col-right num" style={{ color: f.profit != null ? (f.profit >= 0 ? 'var(--positive)' : 'var(--negative)') : undefined }}>
-                      {fmtNok(f.profit, { compact: true })}
-                    </td>
-                    <td className="col-right num">{fmtNok(f.equity, { compact: true })}</td>
-                    <td className="col-right num">{fmtNok(f.total_assets, { compact: true })}</td>
-                  </tr>
-                ))}
-                {financials.length === 0 && (
-                  <tr>
-                    <td colSpan={6} className="muted" style={{ textAlign: 'center', padding: 28 }}>
-                      Ingen regnskapstall hentet ennå.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
     </div>
   );
 }
