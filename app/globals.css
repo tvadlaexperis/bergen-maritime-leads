@@ -551,6 +551,23 @@ a {
   color: var(--accent);
 }
 
+.clear-filters {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 6px;
+}
+.clear-filters:hover {
+  color: var(--negative);
+}
+
 /* ── Icon toggle (theme) ── */
 .icon-toggle {
   display: inline-flex;

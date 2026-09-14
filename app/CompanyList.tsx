@@ -234,11 +234,6 @@ export default function CompanyList({
             onChange={(e) => setSearch(e.target.value)}
             aria-label="Søk i selskaper"
           />
-          {hasActiveFilters && (
-            <button type="button" className="btn btn-ghost btn-sm" onClick={resetFilters}>
-              Nullstill filter
-            </button>
-          )}
           {adminHref && (
             <Link href={adminHref} className="btn btn-ghost btn-sm">
               Administrer
@@ -291,6 +286,11 @@ export default function CompanyList({
             {minScore !== 'all' && <span className="chip-tab-dot" />}
             Score
           </button>
+          {hasActiveFilters && (
+            <button type="button" className="clear-filters" onClick={resetFilters}>
+              <span aria-hidden="true">✕</span> Nullstill
+            </button>
+          )}
         </div>
 
         {filterTab === 'segment' && (
