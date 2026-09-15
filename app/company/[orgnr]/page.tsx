@@ -60,11 +60,6 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
             </p>
           </div>
           <p style={{ fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-            {co.website && (
-              <a href={co.website} target="_blank" rel="noopener noreferrer" className="link-accent">
-                Nettsted ↗
-              </a>
-            )}
             {co.phone && (
               <a href={`tel:${co.phone.replace(/\s/g, '')}`} title={co.phone} className="link-accent" style={{ display: 'inline-flex' }}>
                 <PhoneIcon />
@@ -89,6 +84,11 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
             <a href={brregUrl(co.orgnr)} target="_blank" rel="noopener noreferrer" className="link-accent">
               Brønnøysund ↗
             </a>
+            {co.website && (
+              <a href={co.website} target="_blank" rel="noopener noreferrer" className="link-accent">
+                Nettsted ↗
+              </a>
+            )}
           </p>
         </div>
         <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', marginTop: 10 }}>
