@@ -235,22 +235,20 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
           )}
           {isAdmin && base && (
             <>
-              <div className="box-pad" style={{ paddingTop: 0 }}>
-                <ContactsEditForm
-                  id={base.id}
-                  contacts={{
-                    contact_name: base.contact_name,
-                    contact_email: base.contact_email,
-                    contact_phone: base.contact_phone,
-                    cto_name: base.cto_name,
-                    cto_email: base.cto_email,
-                    cto_phone: base.cto_phone,
-                    sales_name: base.sales_name,
-                    sales_email: base.sales_email,
-                    sales_phone: base.sales_phone,
-                  }}
-                />
-              </div>
+              <ContactsEditForm
+                id={base.id}
+                contacts={{
+                  contact_name: base.contact_name,
+                  contact_email: base.contact_email,
+                  contact_phone: base.contact_phone,
+                  cto_name: base.cto_name,
+                  cto_email: base.cto_email,
+                  cto_phone: base.cto_phone,
+                  sales_name: base.sales_name,
+                  sales_email: base.sales_email,
+                  sales_phone: base.sales_phone,
+                }}
+              />
               <div className="box-pad" style={{ paddingTop: 0 }}>
                 <AdminControls
                   embedded
