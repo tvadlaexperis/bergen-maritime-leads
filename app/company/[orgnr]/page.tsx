@@ -65,17 +65,23 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
               </a>
             )}
             {co.phone && (
-              <span className="muted" title={co.phone} style={{ display: 'inline-flex' }}>
+              <a href={`tel:${co.phone.replace(/\s/g, '')}`} title={co.phone} className="link-accent" style={{ display: 'inline-flex' }}>
                 <PhoneIcon />
-              </span>
+              </a>
             )}
-            <span
-              className="muted"
+            <a
+              href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+                [co.address, co.postnummer, co.poststed].filter(Boolean).join(', '),
+              )}`}
+              target="_blank"
+              rel="noopener noreferrer"
               title={[co.address, co.postnummer, co.poststed].filter(Boolean).join(', ') || undefined}
+              className="link-accent"
               style={{ display: 'inline-flex' }}
             >
               <PinIcon />
-            </span>
+            </a>
+            <span className="muted">|</span>
             <a href={proffUrl(co.orgnr)} target="_blank" rel="noopener noreferrer" className="link-accent">
               proff.no ↗
             </a>
