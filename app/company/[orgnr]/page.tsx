@@ -335,9 +335,11 @@ function AiSummary({ text }: { text: string }) {
     <div style={{ fontSize: '0.9rem', lineHeight: 1.6, color: 'var(--text-secondary)' }}>
       {lead && <p style={{ margin: 0 }}>{lead}</p>}
       {points.length > 0 && (
-        <ul style={{ margin: '10px 0 0', paddingLeft: '1.2em', display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <ul style={{ margin: '10px 0 0', paddingLeft: '1.2em', listStyleType: 'disc' }}>
           {points.map((p, i) => (
-            <li key={i}>{p}</li>
+            <li key={i} style={{ marginTop: i === 0 ? 0 : 6 }}>
+              {p}
+            </li>
           ))}
         </ul>
       )}
