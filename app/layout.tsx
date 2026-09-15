@@ -46,7 +46,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
           )}
 
           <div className="app-nav">
-            {user && <NavLinks isAdmin={user.role === 'admin'} />}
+            {user && <NavLinks />}
             <ThemeToggle initial={theme} />
             {user ? (
               <>

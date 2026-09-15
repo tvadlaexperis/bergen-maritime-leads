@@ -9,13 +9,12 @@ const LINKS = [
   { href: '/favoritter', label: 'Favoritter' },
 ];
 
-export default function NavLinks({ isAdmin }: { isAdmin: boolean }) {
+export default function NavLinks() {
   const path = usePathname();
-  const items = isAdmin ? [...LINKS, { href: '/admin', label: 'Admin' }] : LINKS;
 
   return (
     <nav className="app-tabs" aria-label="Seksjoner">
-      {items.map((l) => {
+      {LINKS.map((l) => {
         const active = l.href === '/' ? path === '/' : path.startsWith(l.href);
         return (
           <Link key={l.href} href={l.href} className={`app-tab${active ? ' active' : ''}`}>
