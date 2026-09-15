@@ -206,11 +206,23 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
         {/* Contacts */}
         <div className="box">
           <div className="box-header"><span className="box-title">Kontakter</span></div>
-          <div className="box-pad" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 14 }}>
-            <ContactFact label="Daglig leder" name={co.ceo_name} />
-            <ContactFact label="Kontaktperson" name={co.contact_name} email={co.contact_email} phone={co.contact_phone} />
-            <ContactFact label="CTO" name={co.cto_name} email={co.cto_email} phone={co.cto_phone} />
-            <ContactFact label="Salgssjef" name={co.sales_name} email={co.sales_email} phone={co.sales_phone} />
+          <div style={{ overflowX: 'auto' }}>
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Rolle</th>
+                  <th>Navn</th>
+                  <th>E-post</th>
+                  <th>Telefon</th>
+                </tr>
+              </thead>
+              <tbody>
+                <ContactRow label="Daglig leder" name={co.ceo_name} />
+                <ContactRow label="Kontaktperson" name={co.contact_name} email={co.contact_email} phone={co.contact_phone} />
+                <ContactRow label="CTO" name={co.cto_name} email={co.cto_email} phone={co.cto_phone} />
+                <ContactRow label="Salgssjef" name={co.sales_name} email={co.sales_email} phone={co.sales_phone} />
+              </tbody>
+            </table>
           </div>
           {!co.ceo_name && !co.contact_name && !co.cto_name && !co.sales_name && (
             <div className="box-pad muted" style={{ paddingTop: 0, fontSize: '0.82rem' }}>
@@ -295,7 +307,7 @@ function Fact({ label, value }: { label: string; value: string }) {
   );
 }
 
-function ContactFact({
+function ContactRow({
   label,
   name,
   email,
@@ -306,24 +318,12 @@ function ContactFact({
   email?: string | null;
   phone?: string | null;
 }) {
-  if (!name) {
-    return (
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-        <span className="muted" style={{ fontSize: '0.72rem' }}>{label}</span>
-        <span className="muted" style={{ fontSize: '0.9rem' }}>—</span>
-      </div>
-    );
-  }
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-      <span className="muted" style={{ fontSize: '0.72rem' }}>{label}</span>
-      <span style={{ fontSize: '0.9rem' }}>{name}</span>
-      {(email || phone) && (
-        <span style={{ display: 'flex', gap: 10, fontSize: '0.78rem' }}>
-          {email && <a href={`mailto:${email}`} className="link-accent">E-post ↗</a>}
-          {phone && <a href={`tel:${phone.replace(/\s/g, '')}`} className="link-accent">Ring ↗</a>}
-        </span>
-      )}
-    </div>
+    <tr>
+      <td className="muted">{label}</td>
+      <td>{name ?? <span className="muted">—</span>}</td>
+      <td>{email ? <a href={`mailto:${email}`} className="link-accent">{email}</a> : <span className="muted">—</span>}</td>
+      <td>{phone ? <a href={`tel:${phone.replace(/\s/g, '')}`} className="link-accent">{phone}</a> : <span className="muted">—</span>}</td>
+    </tr>
   );
 }
