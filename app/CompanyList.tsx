@@ -63,13 +63,11 @@ export default function CompanyList({
   rows,
   title,
   subtitle,
-  adminHref,
   lockFavorites,
 }: {
   rows: CompanyWithScore[];
   title: string;
   subtitle: ReactNode;
-  adminHref?: string;
   /** Forces the list to show favorites only and hides the toggle — used by the /favoritter page. */
   lockFavorites?: boolean;
 }) {
@@ -249,11 +247,6 @@ export default function CompanyList({
             onChange={(e) => setSearch(e.target.value)}
             aria-label="Søk i selskaper"
           />
-          {adminHref && (
-            <Link href={adminHref} className="btn btn-ghost btn-sm">
-              Administrer
-            </Link>
-          )}
         </div>
       </div>
 

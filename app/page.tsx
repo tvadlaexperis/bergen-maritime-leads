@@ -51,7 +51,6 @@ export default async function HomePage() {
           rows={active}
           title="Maritim sektor i Bergen"
           subtitle={subtitle}
-          adminHref={user?.role === 'admin' ? '/admin' : undefined}
         />
       )}
 
