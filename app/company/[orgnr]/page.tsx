@@ -105,7 +105,7 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 18, alignItems: 'stretch' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 18, alignItems: 'stretch' }}>
         {/* Score panel */}
         <div className="box">
           <LeadScoreTabs
@@ -170,42 +170,23 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
             <span className="box-title">Regnskapstall ({financials.length} år)</span>
             <span className="muted">Regnskapsregisteret</span>
           </div>
-          <div style={{ overflowX: 'auto' }}>
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>År</th>
-                  <th className="col-right">Driftsinntekter</th>
-                  <th className="col-right">Driftsresultat</th>
-                  <th className="col-right">Årsresultat</th>
-                  <th className="col-right">Egenkapital</th>
-                  <th className="col-right">Sum eiendeler</th>
-                </tr>
-              </thead>
-              <tbody>
-                {financials.map((f) => (
-                  <tr key={f.id}>
-                    <td className="num">{f.year}</td>
-                    <td className="col-right num">{fmtNok(f.revenue, { compact: true })}</td>
-                    <td className="col-right num" style={{ color: f.operating_result != null ? (f.operating_result >= 0 ? 'var(--positive)' : 'var(--negative)') : undefined }}>
-                      {fmtNok(f.operating_result, { compact: true })}
-                    </td>
-                    <td className="col-right num" style={{ color: f.profit != null ? (f.profit >= 0 ? 'var(--positive)' : 'var(--negative)') : undefined }}>
-                      {fmtNok(f.profit, { compact: true })}
-                    </td>
-                    <td className="col-right num">{fmtNok(f.equity, { compact: true })}</td>
-                    <td className="col-right num">{fmtNok(f.total_assets, { compact: true })}</td>
-                  </tr>
-                ))}
-                {financials.length === 0 && (
-                  <tr>
-                    <td colSpan={6} className="muted" style={{ textAlign: 'center', padding: 28 }}>
-                      Ingen regnskapstall hentet ennå.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+          <div className="box-pad" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            {financials.length === 0 ? (
+              <p className="muted" style={{ fontSize: '0.85rem' }}>Ingen regnskapstall hentet ennå.</p>
+            ) : (
+              financials.map((f, i) => (
+                <div key={f.id} style={{ display: 'flex', flexDirection: 'column', gap: 8, ...(i > 0 ? { borderTop: '1px solid var(--border)', paddingTop: 16 } : {}) }}>
+                  <span className="muted" style={{ fontSize: '0.72rem', fontWeight: 700 }}>{f.year}</span>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 12 }}>
+                    <Fact label="Driftsinntekter" value={fmtNok(f.revenue, { compact: true })} />
+                    <Fact label="Driftsresultat" value={fmtNok(f.operating_result, { compact: true })} />
+                    <Fact label="Årsresultat" value={fmtNok(f.profit, { compact: true })} />
+                    <Fact label="Egenkapital" value={fmtNok(f.equity, { compact: true })} />
+                    <Fact label="Sum eiendeler" value={fmtNok(f.total_assets, { compact: true })} />
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         </div>
       </div>
