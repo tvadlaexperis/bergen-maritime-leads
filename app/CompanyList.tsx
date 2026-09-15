@@ -238,7 +238,6 @@ export default function CompanyList({
           </p>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-          <span className="hit-badge">Treff {filtered.length}</span>
           <input
             type="search"
             className="search-input"
@@ -301,16 +300,19 @@ export default function CompanyList({
             {minScore !== 'all' && <span className="chip-tab-dot" />}
             Score
           </button>
-          {activeFilterCount > 0 && (
-            <span style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 10 }}>
-              <span className="muted" style={{ fontSize: '0.76rem' }}>
-                {activeFilterCount} {activeFilterCount === 1 ? 'filter' : 'filtre'} aktive
-              </span>
-              <button type="button" className="clear-filters" onClick={resetFilters}>
-                <span aria-hidden="true">✕</span> Nullstill
-              </button>
-            </span>
-          )}
+          <span style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 10 }}>
+            <span className="hit-badge">Treff {filtered.length}</span>
+            {activeFilterCount > 0 && (
+              <>
+                <span className="muted" style={{ fontSize: '0.76rem' }}>
+                  {activeFilterCount} {activeFilterCount === 1 ? 'filter' : 'filtre'} aktive
+                </span>
+                <button type="button" className="clear-filters" onClick={resetFilters}>
+                  <span aria-hidden="true">✕</span> Nullstill
+                </button>
+              </>
+            )}
+          </span>
         </div>
 
         {filterTab === 'segment' && (
