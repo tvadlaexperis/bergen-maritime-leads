@@ -54,7 +54,21 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
           <ScoreBadge score={co.lead_score} />
           {co.under_liquidation === 1 && <span className="muted">(under avvikling)</span>}
         </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap', marginTop: 4 }}>
+        <p style={{ fontSize: '0.82rem', marginTop: 6, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+          {co.website && (
+            <a href={co.website} target="_blank" rel="noopener noreferrer" className="link-accent">
+              Nettsted ↗
+            </a>
+          )}
+          <a href={proffUrl(co.orgnr)} target="_blank" rel="noopener noreferrer" className="link-accent">
+            proff.no ↗
+          </a>
+          <a href={brregUrl(co.orgnr)} target="_blank" rel="noopener noreferrer" className="link-accent">
+            Brønnøysund ↗
+          </a>
+          {co.phone && <span className="muted">Tlf {co.phone}</span>}
+        </p>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap', marginTop: 10 }}>
           <p className="muted" style={{ fontSize: '0.82rem' }}>
             Org.nr {co.orgnr}
             {co.org_form ? ` · ${co.org_form}` : ''}
@@ -66,27 +80,11 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
             <Fact label="Siste årsregnskap" value={co.last_annual_report ?? '—'} />
           </div>
         </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 16, flexWrap: 'wrap', marginTop: 10 }}>
-          <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
-            <Fact label="Ansatte" value={fmtInt(co.employees)} />
-            <Fact label="Omsetning (siste)" value={fmtNok(co.revenue_latest, { compact: true })} />
-            <Fact label="Vekst å/å" value={co.revenue_growth_pct != null ? fmtPct(co.revenue_growth_pct, 0) : '—'} />
-            <Fact label="Driftsmargin" value={co.operating_margin_pct != null ? fmtPct(co.operating_margin_pct, 0) : '—'} />
-          </div>
-          <p style={{ fontSize: '0.82rem', display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-            {co.website && (
-              <a href={co.website} target="_blank" rel="noopener noreferrer" className="link-accent">
-                Nettsted ↗
-              </a>
-            )}
-            <a href={proffUrl(co.orgnr)} target="_blank" rel="noopener noreferrer" className="link-accent">
-              proff.no ↗
-            </a>
-            <a href={brregUrl(co.orgnr)} target="_blank" rel="noopener noreferrer" className="link-accent">
-              Brønnøysund ↗
-            </a>
-            {co.phone && <span className="muted">Tlf {co.phone}</span>}
-          </p>
+        <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', marginTop: 10 }}>
+          <Fact label="Ansatte" value={fmtInt(co.employees)} />
+          <Fact label="Omsetning (siste)" value={fmtNok(co.revenue_latest, { compact: true })} />
+          <Fact label="Vekst å/å" value={co.revenue_growth_pct != null ? fmtPct(co.revenue_growth_pct, 0) : '—'} />
+          <Fact label="Driftsmargin" value={co.operating_margin_pct != null ? fmtPct(co.operating_margin_pct, 0) : '—'} />
         </div>
       </div>
 
