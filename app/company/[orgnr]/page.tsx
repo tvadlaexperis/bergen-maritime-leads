@@ -55,28 +55,44 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
             <ScoreBadge score={co.lead_score} />
             {co.under_liquidation === 1 && <span className="muted">(under avvikling)</span>}
           </div>
-          <p style={{ fontSize: '0.82rem', display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-            {co.website && (
-              <a href={co.website} target="_blank" rel="noopener noreferrer" className="link-accent">
-                Nettsted ↗
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-end' }}>
+            <p style={{ fontSize: '0.82rem', display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+              {co.website && (
+                <a href={co.website} target="_blank" rel="noopener noreferrer" className="link-accent">
+                  Nettsted ↗
+                </a>
+              )}
+              <a href={proffUrl(co.orgnr)} target="_blank" rel="noopener noreferrer" className="link-accent">
+                proff.no ↗
               </a>
-            )}
-            <a href={proffUrl(co.orgnr)} target="_blank" rel="noopener noreferrer" className="link-accent">
-              proff.no ↗
-            </a>
-            <a href={brregUrl(co.orgnr)} target="_blank" rel="noopener noreferrer" className="link-accent">
-              Brønnøysund ↗
-            </a>
-            {co.phone && <span className="muted">Tlf {co.phone}</span>}
-          </p>
+              <a href={brregUrl(co.orgnr)} target="_blank" rel="noopener noreferrer" className="link-accent">
+                Brønnøysund ↗
+              </a>
+            </p>
+            <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
+              <span className="muted" style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: '0.82rem' }}>
+                <PinIcon /> {[co.address, co.postnummer, co.poststed].filter(Boolean).join(', ') || '—'}
+              </span>
+              {co.phone && (
+                <span className="muted" style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: '0.82rem' }}>
+                  <PhoneIcon /> {co.phone}
+                </span>
+              )}
+            </div>
+          </div>
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap', marginTop: 10 }}>
-          <p className="muted" style={{ fontSize: '0.82rem' }}>
-            Org.nr {co.orgnr}
-            {co.org_form ? ` · ${co.org_form}` : ''}
-            {co.poststed ? ` · ${co.poststed}` : ''}
-            {co.matched_group ? ` · ${co.matched_group}` : ''}
-          </p>
+          <div>
+            <p className="muted" style={{ fontSize: '0.82rem' }}>
+              Org.nr {co.orgnr}
+              {co.org_form ? ` · ${co.org_form}` : ''}
+              {co.poststed ? ` · ${co.poststed}` : ''}
+              {co.matched_group ? ` · ${co.matched_group}` : ''}
+            </p>
+            <p style={{ fontSize: '0.82rem', marginTop: 4 }}>
+              {nace.map((n) => `${n.code} ${n.text ?? ''}`).join(' · ') || '—'}
+            </p>
+          </div>
           <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
             <Fact label="Registrert" value={dateLabel(co.registered_at)} />
             <Fact label="Siste årsregnskap" value={co.last_annual_report ?? '—'} />
@@ -91,15 +107,6 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 18, alignItems: 'stretch' }}>
-        {/* Key facts */}
-        <div className="box">
-          <div className="box-header"><span className="box-title">Nøkkelinfo</span></div>
-          <div className="box-pad" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 14 }}>
-            <Fact label="Bransje (NACE)" value={nace.map((n) => `${n.code} ${n.text ?? ''}`).join(' · ') || '—'} />
-            <Fact label="Adresse" value={[co.address, co.postnummer, co.poststed].filter(Boolean).join(', ') || '—'} />
-          </div>
-        </div>
-
         {/* Financial history */}
         <div className="box">
           <div className="box-header">
@@ -262,8 +269,36 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
           </div>
         </div>
       </div>
-
     </div>
+  );
+}
+
+function PinIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true" style={{ flexShrink: 0 }}>
+      <path
+        d="M12 21s-7-6.1-7-11.5A7 7 0 0 1 19 9.5C19 14.9 12 21 12 21z"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinejoin="round"
+      />
+      <circle cx="12" cy="9.5" r="2.3" fill="none" stroke="currentColor" strokeWidth="1.6" />
+    </svg>
+  );
+}
+
+function PhoneIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true" style={{ flexShrink: 0 }}>
+      <path
+        d="M6.6 10.8c1.4 2.8 3.8 5.2 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.25c1.1.36 2.3.56 3.5.56a1 1 0 0 1 1 1V20a1 1 0 0 1-1 1C10.6 21 3 13.4 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1c0 1.2.2 2.4.56 3.5a1 1 0 0 1-.25 1z"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinejoin="round"
+      />
+    </svg>
   );
 }
 
