@@ -151,11 +151,8 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
 
         {/* Score panel */}
         <div className="box">
-          <div className="box-header">
-            <span className="box-title">Lead-score</span>
-            <span className="muted">{co.computed_at ? `oppdatert ${agoLabel(co.computed_at)}` : 'ikke scoret ennå'}</span>
-          </div>
           <LeadScoreTabs
+            updatedLabel={co.computed_at ? `oppdatert ${agoLabel(co.computed_at)}` : 'ikke scoret ennå'}
             aiTab={
               co.ai_summary ? (
                 <p style={{ fontSize: '0.86rem', color: 'var(--text-secondary)' }}>{co.ai_summary}</p>
