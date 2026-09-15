@@ -49,25 +49,27 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
         <Link href="/" className="muted" style={{ fontSize: '0.8rem' }}>
           ← Alle selskaper
         </Link>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap', marginTop: 6 }}>
-          <h1 style={{ fontSize: '1.5rem', fontWeight: 800, letterSpacing: '-0.02em' }}>{co.name}</h1>
-          <ScoreBadge score={co.lead_score} />
-          {co.under_liquidation === 1 && <span className="muted">(under avvikling)</span>}
-        </div>
-        <p style={{ fontSize: '0.82rem', marginTop: 6, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-          {co.website && (
-            <a href={co.website} target="_blank" rel="noopener noreferrer" className="link-accent">
-              Nettsted ↗
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 16, flexWrap: 'wrap', marginTop: 6 }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
+            <h1 style={{ fontSize: '1.5rem', fontWeight: 800, letterSpacing: '-0.02em' }}>{co.name}</h1>
+            <ScoreBadge score={co.lead_score} />
+            {co.under_liquidation === 1 && <span className="muted">(under avvikling)</span>}
+          </div>
+          <p style={{ fontSize: '0.82rem', display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+            {co.website && (
+              <a href={co.website} target="_blank" rel="noopener noreferrer" className="link-accent">
+                Nettsted ↗
+              </a>
+            )}
+            <a href={proffUrl(co.orgnr)} target="_blank" rel="noopener noreferrer" className="link-accent">
+              proff.no ↗
             </a>
-          )}
-          <a href={proffUrl(co.orgnr)} target="_blank" rel="noopener noreferrer" className="link-accent">
-            proff.no ↗
-          </a>
-          <a href={brregUrl(co.orgnr)} target="_blank" rel="noopener noreferrer" className="link-accent">
-            Brønnøysund ↗
-          </a>
-          {co.phone && <span className="muted">Tlf {co.phone}</span>}
-        </p>
+            <a href={brregUrl(co.orgnr)} target="_blank" rel="noopener noreferrer" className="link-accent">
+              Brønnøysund ↗
+            </a>
+            {co.phone && <span className="muted">Tlf {co.phone}</span>}
+          </p>
+        </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap', marginTop: 10 }}>
           <p className="muted" style={{ fontSize: '0.82rem' }}>
             Org.nr {co.orgnr}
