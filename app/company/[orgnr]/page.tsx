@@ -84,10 +84,14 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
             <a href={brregUrl(co.orgnr)} target="_blank" rel="noopener noreferrer" className="link-accent">
               Brønnøysund ↗
             </a>
-            {co.website && (
+            {co.website ? (
               <a href={co.website} target="_blank" rel="noopener noreferrer" className="link-accent">
                 Nettsted ↗
               </a>
+            ) : (
+              <span className="muted" title="Ikke registrert i Brønnøysund">
+                Nettsted ↗
+              </span>
             )}
           </p>
         </div>
