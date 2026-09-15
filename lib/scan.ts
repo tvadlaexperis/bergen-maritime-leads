@@ -1,6 +1,8 @@
 import { orchestrator } from './orchestrator/boot';
 import type { LeadScoreResult } from './orchestrator/providers/score';
+import type { LeadAnalysis } from './orchestrator/providers/ai';
 import type { Company as RawCompany } from './brreg';
+import { getCompanyNews } from './news';
 import type { CompanyFinancials } from './types';
 import {
   startScan,
@@ -10,7 +12,7 @@ import {
   replaceFinancials,
   insertScore,
   setCompanyCeo,
-  setCompanyAiSummary,
+  setCompanyAiAnalysis,
   listCompaniesToRefresh,
   listActiveCompanies,
   getCompanyByOrgnr,
@@ -99,20 +101,35 @@ async function enrichCompany(orgnr: string, errors: ScanError[]): Promise<boolea
     });
 
     // Best-effort — disabled (no GEMINI_API_KEY) or failed calls just leave
-    // the previous summary in place rather than failing the whole scan.
-    const summary = await orchestrator.callTool<string | null>('ai.leadSummary', {
-      name: company.name,
-      poststed: company.poststed,
-      sector: company.matched_label,
-      nace: company.nace1_text,
-      employees: company.employees,
-      revenueLatest: s.revenueLatest,
-      revenueGrowthPct: s.revenueGrowthPct,
-      operatingMarginPct: s.operatingMarginPct,
-      leadScore: s.leadScore,
-      band: s.band,
-    });
-    if (summary.ok && summary.data) await setCompanyAiSummary(company.id, summary.data);
+    // the previous analysis in place rather than failing the whole scan.
+    const news = await getCompanyNews(company.name, 5);
+    const contacts: { role: string; name: string }[] = [
+      { role: 'Daglig leder', name: company.ceo_name },
+      { role: 'Kontaktperson', name: company.contact_name },
+      { role: 'CTO', name: company.cto_name },
+      { role: 'Salgssjef', name: company.sales_name },
+    ].filter((c): c is { role: string; name: string } => !!c.name);
+
+    const analysis = await orchestrator.callTool<LeadAnalysis | null>(
+      'ai.analyze',
+      {
+        name: company.name,
+        poststed: company.poststed,
+        sector: company.matched_label,
+        nace: company.nace1_text,
+        employees: company.employees,
+        financials: financials
+          .slice()
+          .sort((a, b) => b.year - a.year)
+          .map((f) => ({ year: f.year, revenue: f.revenue, operatingResult: f.operatingResult, profit: f.profit })),
+        leadScore: s.leadScore,
+        band: s.band,
+        news: news.map((n) => ({ title: n.title, date: n.seenAt, domain: n.domain })),
+        contacts,
+      },
+      25_000,
+    );
+    if (analysis.ok && analysis.data) await setCompanyAiAnalysis(company.id, JSON.stringify(analysis.data));
   } else {
     errors.push({ scope: `score ${orgnr}`, message: scored.error });
   }

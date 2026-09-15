@@ -7,6 +7,7 @@ import { isValidOrgnr, proffUrl, brregUrl } from '@/lib/brreg';
 import { getCompanyNews, type NewsItem } from '@/lib/news';
 import { fmtNok, fmtPct, fmtInt, dateLabel } from '@/app/format';
 import { bandFor } from '@/app/components/ScoreBadge';
+import type { LeadAnalysis, ScoreVerdict, SignalLevel } from '@/lib/orchestrator/providers/ai';
 import AdminControls from './AdminControls';
 import ContactsEditForm from './ContactsEditForm';
 import LeadScoreTabs from './LeadScoreTabs';
@@ -25,6 +26,23 @@ const SUBSCORES: { key: 'size_score' | 'revenue_score' | 'growth_score' | 'profi
   { key: 'profitability_score', label: 'Lønnsomhet (driftsmargin)', weight: '15 %' },
 ];
 
+function parseAnalysis(raw: string | null): LeadAnalysis | null {
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as LeadAnalysis;
+  } catch {
+    return null;
+  }
+}
+
+// Confidence is computed here, not self-reported by the model — how much
+// underlying documentation the analysis actually had to work with.
+function confidenceFor(dataPoints: number): 'høy' | 'middels' | 'lav' {
+  if (dataPoints >= 3) return 'høy';
+  if (dataPoints >= 1) return 'middels';
+  return 'lav';
+}
+
 export default async function CompanyPage({ params }: { params: { orgnr: string } }) {
   if (!isValidOrgnr(params.orgnr)) notFound();
   const co = await getCompanyByOrgnr(params.orgnr);
@@ -39,6 +57,13 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
   ]);
   const isAdmin = user?.role === 'admin';
   const band = bandFor(co.lead_score);
+  const analysis = parseAnalysis(co.ai_analysis);
+  const aiConfidence = confidenceFor(
+    (financials.length > 0 ? 1 : 0) +
+      (news.length > 0 ? 1 : 0) +
+      (co.employees != null ? 1 : 0) +
+      (co.ceo_name || co.contact_name || co.cto_name || co.sales_name ? 1 : 0),
+  );
 
   return (
     <div className="page-scroll" style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
@@ -105,62 +130,105 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
         </div>
       </div>
 
+      {analysis?.conclusion && (
+        <p className="ai-conclusion">
+          <AiConfidenceBadge confidence={aiConfidence} generatedAt={co.ai_analysis_at} /> {analysis.conclusion}
+        </p>
+      )}
+
       <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 18, alignItems: 'stretch' }}>
         {/* Score panel */}
         <div className="box">
           <LeadScoreTabs
-            aiTab={
-              co.ai_summary ? (
-                <AiSummary text={co.ai_summary} />
-              ) : (
-                <p className="muted" style={{ fontSize: '0.86rem' }}>
-                  Ingen AI-vurdering ennå. {isAdmin ? 'Bruk «Oppdater fra registrene» under.' : 'Neste skann beregner en.'}
-                </p>
-              )
-            }
-            scoreTab={
-              co.lead_score != null ? (
-                <>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                    <span className="num" data-band={band} style={{ fontSize: '2.4rem', fontWeight: 800, lineHeight: 1 }}>
-                      {co.lead_score}
-                    </span>
-                    <span className="muted" style={{ fontSize: '0.8rem' }}>
-                      / 100
-                      <br />
-                      {band === 'high' ? 'prioritert lead' : band === 'mid' ? 'verdt en vurdering' : 'lav prioritet'}
-                    </span>
-                  </div>
+            tabs={[
+              {
+                key: 'why',
+                label: 'Hvorfor aktuell',
+                content: analysis ? (
+                  <WhyRelevantTab analysis={analysis} />
+                ) : (
+                  <p className="muted" style={{ fontSize: '0.86rem' }}>
+                    Ingen AI-vurdering ennå. {isAdmin ? 'Bruk «Oppdater fra registrene» under.' : 'Neste skann beregner en.'}
+                  </p>
+                ),
+              },
+              {
+                key: 'score',
+                label: 'Score',
+                content:
+                  co.lead_score != null ? (
+                    <>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                        <span className="num" data-band={band} style={{ fontSize: '2.4rem', fontWeight: 800, lineHeight: 1 }}>
+                          {co.lead_score}
+                        </span>
+                        <span className="muted" style={{ fontSize: '0.8rem' }}>
+                          / 100
+                          <br />
+                          {band === 'high' ? 'prioritert lead' : band === 'mid' ? 'verdt en vurdering' : 'lav prioritet'}
+                        </span>
+                      </div>
 
-                  <div style={{ display: 'grid', gap: 8 }}>
-                    {SUBSCORES.map((s) => {
-                      const v = co[s.key] ?? 0;
-                      return (
-                        <div key={s.key} style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 6, alignItems: 'center' }}>
-                          <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
-                            {s.label} <span className="muted">{s.weight}</span>
+                      <div style={{ display: 'grid', gap: 8 }}>
+                        {SUBSCORES.map((s) => {
+                          const v = co[s.key] ?? 0;
+                          return (
+                            <div key={s.key} style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 6, alignItems: 'center' }}>
+                              <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+                                {s.label} <span className="muted">{s.weight}</span>
+                              </span>
+                              <span className="num muted" style={{ fontSize: '0.76rem', textAlign: 'right' }}>{v}</span>
+                              <span className="meter" style={{ gridColumn: '1 / -1' }}>
+                                <span style={{ width: `${v}%` }} />
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      {co.reason && <p style={{ fontSize: '0.86rem', color: 'var(--text-secondary)' }}>{co.reason}</p>}
+                      {history.length > 1 && (
+                        <p className="muted" style={{ fontSize: '0.72rem' }}>
+                          Historikk: {history.slice().reverse().map((h) => h.lead_score).join(' → ')}
+                        </p>
+                      )}
+                      {analysis && analysis.scoreFactors.length > 0 && (
+                        <div style={{ marginTop: 4, paddingTop: 14, borderTop: '1px solid var(--border)' }}>
+                          <span className="muted" style={{ fontSize: '0.72rem', fontWeight: 700 }}>
+                            Andre faktorer (AI-vurdert)
                           </span>
-                          <span className="num muted" style={{ fontSize: '0.76rem', textAlign: 'right' }}>{v}</span>
-                          <span className="meter" style={{ gridColumn: '1 / -1' }}>
-                            <span style={{ width: `${v}%` }} />
-                          </span>
+                          <ScoreFactorList factors={analysis.scoreFactors} />
                         </div>
-                      );
-                    })}
-                  </div>
-                  {co.reason && <p style={{ fontSize: '0.86rem', color: 'var(--text-secondary)' }}>{co.reason}</p>}
-                  {history.length > 1 && (
-                    <p className="muted" style={{ fontSize: '0.72rem' }}>
-                      Historikk: {history.slice().reverse().map((h) => h.lead_score).join(' → ')}
+                      )}
+                    </>
+                  ) : (
+                    <p className="muted">
+                      Ingen score ennå. {isAdmin ? 'Bruk «Oppdater fra registrene» under.' : 'Neste skann beregner en.'}
                     </p>
-                  )}
-                </>
-              ) : (
-                <p className="muted">
-                  Ingen score ennå. {isAdmin ? 'Bruk «Oppdater fra registrene» under.' : 'Neste skann beregner en.'}
-                </p>
-              )
-            }
+                  ),
+              },
+              {
+                key: 'buying',
+                label: 'Kjøpsmodus',
+                content: analysis ? (
+                  <BuyingSignalTab analysis={analysis} />
+                ) : (
+                  <p className="muted" style={{ fontSize: '0.86rem' }}>
+                    Ingen AI-vurdering ennå. {isAdmin ? 'Bruk «Oppdater fra registrene» under.' : 'Neste skann beregner en.'}
+                  </p>
+                ),
+              },
+              {
+                key: 'entry',
+                label: 'Tilrådd inngang',
+                content: analysis ? (
+                  <EntryTab analysis={analysis} />
+                ) : (
+                  <p className="muted" style={{ fontSize: '0.86rem' }}>
+                    Ingen AI-vurdering ennå. {isAdmin ? 'Bruk «Oppdater fra registrene» under.' : 'Neste skann beregner en.'}
+                  </p>
+                ),
+              },
+            ]}
           />
         </div>
 
@@ -307,22 +375,136 @@ function PhoneIcon() {
   );
 }
 
-// The AI prompt (lib/orchestrator/providers/ai.ts) asks for a lead sentence
-// followed by short one-per-line key-figure points — render that shape as a
-// real bullet list instead of a wall of text.
-function AiSummary({ text }: { text: string }) {
-  const [lead, ...points] = text.split('\n').map((l) => l.trim()).filter(Boolean);
+// Small "AI-tolkning · sikkerhet: X · sist generert ..." byline — satisfies
+// the requirement that AI-derived claims are visibly distinguished from
+// documented facts and carry a confidence grade + a check-date.
+function AiConfidenceBadge({ confidence, generatedAt }: { confidence: 'høy' | 'middels' | 'lav'; generatedAt: number | null }) {
   return (
-    <div style={{ fontSize: '0.9rem', lineHeight: 1.6, color: 'var(--text-secondary)' }}>
-      {lead && <p style={{ margin: 0 }}>{lead}</p>}
-      {points.length > 0 && (
+    <span
+      className="muted"
+      style={{ fontSize: '0.68rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', verticalAlign: 'middle' }}
+      title={generatedAt ? `AI-tolkning (Gemini) — sist generert ${dateLabel(generatedAt)}` : 'AI-tolkning (Gemini)'}
+    >
+      AI · sikkerhet {confidence}
+    </span>
+  );
+}
+
+function verdictColor(v: ScoreVerdict): string {
+  if (v === 'positiv') return 'var(--positive)';
+  if (v === 'negativ') return 'var(--negative)';
+  return 'var(--text-muted)';
+}
+
+function ScoreFactorList({ factors }: { factors: LeadAnalysis['scoreFactors'] }) {
+  return (
+    <div style={{ display: 'grid', gap: 8, marginTop: 10 }}>
+      {factors.map((f, i) => (
+        <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'baseline' }}>
+          <span style={{ width: 8, height: 8, borderRadius: '50%', background: verdictColor(f.verdict), flexShrink: 0, marginTop: 4 }} />
+          <span style={{ fontSize: '0.84rem' }}>
+            <strong style={{ fontWeight: 600 }}>{f.factor}:</strong>{' '}
+            <span style={{ color: 'var(--text-secondary)' }}>{f.note}</span>
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function WhyRelevantTab({ analysis }: { analysis: LeadAnalysis }) {
+  return (
+    <div style={{ fontSize: '0.9rem', lineHeight: 1.6 }}>
+      <p style={{ margin: 0, color: 'var(--text-secondary)' }}>{analysis.conclusion}</p>
+      {analysis.scoreFactors.length > 0 && <ScoreFactorList factors={analysis.scoreFactors} />}
+    </div>
+  );
+}
+
+function signalLevelColor(level: SignalLevel): string {
+  if (level === 'høy') return 'var(--positive)';
+  if (level === 'middels') return 'var(--accent)';
+  return 'var(--text-muted)';
+}
+
+function BuyingSignalTab({ analysis }: { analysis: LeadAnalysis }) {
+  const { buyingSignal } = analysis;
+  return (
+    <div style={{ fontSize: '0.9rem', lineHeight: 1.6 }}>
+      <span
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 6,
+          fontSize: '0.76rem',
+          fontWeight: 700,
+          color: signalLevelColor(buyingSignal.level),
+        }}
+      >
+        <span style={{ width: 8, height: 8, borderRadius: '50%', background: signalLevelColor(buyingSignal.level) }} />
+        Kjøpssignal: {buyingSignal.level}
+      </span>
+      <p style={{ margin: '8px 0 0', color: 'var(--text-secondary)' }}>{buyingSignal.explanation}</p>
+      {buyingSignal.signals.length > 0 && (
         <ul style={{ margin: '10px 0 0', paddingLeft: '1.2em', listStyleType: 'disc' }}>
-          {points.map((p, i) => (
+          {buyingSignal.signals.map((s, i) => (
             <li key={i} style={{ marginTop: i === 0 ? 0 : 6 }}>
-              {p}
+              {s.text} <span className="muted" style={{ fontSize: '0.76rem' }}>({s.source})</span>
             </li>
           ))}
         </ul>
+      )}
+    </div>
+  );
+}
+
+function EntryTab({ analysis }: { analysis: LeadAnalysis }) {
+  return (
+    <div style={{ fontSize: '0.9rem', lineHeight: 1.6, display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <div>
+        <span className="muted" style={{ fontSize: '0.72rem', fontWeight: 700 }}>Kontakt</span>
+        <p style={{ margin: '2px 0 0' }}>
+          {analysis.recommendedContact.name ? (
+            <strong>{analysis.recommendedContact.name}</strong>
+          ) : (
+            <span className="muted">Ingen registrert kontakt</span>
+          )}
+        </p>
+        <p style={{ margin: '2px 0 0', color: 'var(--text-secondary)', fontSize: '0.84rem' }}>{analysis.recommendedContact.reason}</p>
+      </div>
+
+      <div>
+        <span className="muted" style={{ fontSize: '0.72rem', fontWeight: 700 }}>Pitch</span>
+        <p style={{ margin: '2px 0 0', color: 'var(--text-secondary)' }}>{analysis.pitch}</p>
+      </div>
+
+      {analysis.icebreaker && (
+        <div>
+          <span className="muted" style={{ fontSize: '0.72rem', fontWeight: 700 }}>Icebreaker</span>
+          <p style={{ margin: '2px 0 0', color: 'var(--text-secondary)' }}>{analysis.icebreaker}</p>
+        </div>
+      )}
+
+      {analysis.questions.length > 0 && (
+        <div>
+          <span className="muted" style={{ fontSize: '0.72rem', fontWeight: 700 }}>Spørsmål å stille</span>
+          <ul style={{ margin: '6px 0 0', paddingLeft: '1.2em', listStyleType: 'disc' }}>
+            {analysis.questions.map((q, i) => (
+              <li key={i} style={{ marginTop: i === 0 ? 0 : 4 }}>{q}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {analysis.avoidClaiming.length > 0 && (
+        <div>
+          <span className="muted" style={{ fontSize: '0.72rem', fontWeight: 700 }}>Ikke påstå uten bekreftelse</span>
+          <ul style={{ margin: '6px 0 0', paddingLeft: '1.2em', listStyleType: 'disc', color: 'var(--text-secondary)' }}>
+            {analysis.avoidClaiming.map((a, i) => (
+              <li key={i} style={{ marginTop: i === 0 ? 0 : 4 }}>{a}</li>
+            ))}
+          </ul>
+        </div>
       )}
     </div>
   );

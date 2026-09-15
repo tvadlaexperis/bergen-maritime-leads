@@ -2,26 +2,37 @@
 
 import { useState, type ReactNode } from 'react';
 
-// Both tabs are rendered server-side and handed in as slots — this component
-// only toggles which one is visible, so no client data fetching is needed.
-export default function LeadScoreTabs({ aiTab, scoreTab }: { aiTab: ReactNode; scoreTab: ReactNode }) {
-  const [tab, setTab] = useState<'ai' | 'score'>('ai');
+export interface TabDef {
+  key: string;
+  label: string;
+  content: ReactNode;
+}
+
+// Every tab's content is rendered server-side and handed in as a slot — this
+// component only toggles which one is visible, so no client data fetching.
+export default function LeadScoreTabs({ tabs }: { tabs: TabDef[] }) {
+  const [active, setActive] = useState(tabs[0]?.key);
+  const current = tabs.find((t) => t.key === active) ?? tabs[0];
 
   return (
     <>
       <div className="box-header">
         <span className="box-title">Om selskapet</span>
-        <div style={{ display: 'flex', gap: 6 }}>
-          <button type="button" className={`chip-tab${tab === 'ai' ? ' active' : ''}`} onClick={() => setTab('ai')}>
-            Hvorfor aktuell
-          </button>
-          <button type="button" className={`chip-tab${tab === 'score' ? ' active' : ''}`} onClick={() => setTab('score')}>
-            Score
-          </button>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          {tabs.map((t) => (
+            <button
+              key={t.key}
+              type="button"
+              className={`chip-tab${t.key === current?.key ? ' active' : ''}`}
+              onClick={() => setActive(t.key)}
+            >
+              {t.label}
+            </button>
+          ))}
         </div>
       </div>
       <div className="box-pad" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-        {tab === 'ai' ? aiTab : scoreTab}
+        {current?.content}
       </div>
     </>
   );
