@@ -42,11 +42,14 @@ function buildPrompt(input: LeadSummaryInput): string {
     .join('\n');
 
   return (
-    'Du hjelper et salgsteam som selger til maritime bedrifter i Bergen-regionen. ' +
-    'Skriv en kort vurdering (2-3 setninger, norsk bokmål, ingen overskrift eller punktliste) av HVORFOR dette ' +
-    'selskapet kan være en aktuell salgsprospekt akkurat nå, basert på nøkkeltallene under. ' +
+    'Du hjelper et salgsteam som selger til maritime bedrifter i Bergen-regionen vurdere HVORFOR dette ' +
+    'selskapet kan være et aktuelt salgsprospekt akkurat nå, basert på nøkkeltallene under. ' +
     'Vær konkret og saklig — ikke overdriv, og ikke finn på fakta som ikke står i listen. ' +
     'Hvis tallene er svake eller mangler, si det ærlig i stedet for å pynte på det.\n\n' +
+    'Skriv svaret som norsk bokmål, delt opp i korte, lettleste linjer (maks 4 linjer totalt, hver linje er ' +
+    'én kort setning på maks ca. 15 ord, skilt med linjeskift): ' +
+    'linje 1 er en kort konklusjon; de neste 1-3 linjene er hver ett konkret nøkkeltall-poeng som begrunner den. ' +
+    'Ikke bruk overskrift, punktmarkører (-, *, •), nummerering eller fet skrift — bare ren tekst, én tanke per linje.\n\n' +
     facts
   );
 }

@@ -107,7 +107,9 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
           <LeadScoreTabs
             aiTab={
               co.ai_summary ? (
-                <p style={{ fontSize: '0.86rem', color: 'var(--text-secondary)' }}>{co.ai_summary}</p>
+                <p style={{ fontSize: '0.9rem', lineHeight: 1.7, color: 'var(--text-secondary)', whiteSpace: 'pre-line' }}>
+                  {co.ai_summary}
+                </p>
               ) : (
                 <p className="muted" style={{ fontSize: '0.86rem' }}>
                   Ingen AI-vurdering ennå. {isAdmin ? 'Bruk «Oppdater fra registrene» under.' : 'Neste skann beregner en.'}
