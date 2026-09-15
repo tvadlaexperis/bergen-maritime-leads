@@ -90,7 +90,7 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 18, alignItems: 'start' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 18, alignItems: 'stretch' }}>
         {/* Key facts */}
         <div className="box">
           <div className="box-header"><span className="box-title">Nøkkelinfo</span></div>
