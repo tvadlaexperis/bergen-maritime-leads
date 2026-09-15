@@ -6,7 +6,7 @@ import { getCurrentUser } from '@/lib/auth';
 import { isValidOrgnr, proffUrl, brregUrl } from '@/lib/brreg';
 import { getCompanyNews, type NewsItem } from '@/lib/news';
 import { fmtNok, fmtPct, fmtInt, dateLabel, agoLabel } from '@/app/format';
-import ScoreBadge, { bandFor } from '@/app/components/ScoreBadge';
+import { bandFor } from '@/app/components/ScoreBadge';
 import AdminControls from './AdminControls';
 
 export const dynamic = 'force-dynamic';
@@ -52,7 +52,6 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 16, flexWrap: 'wrap', marginTop: 6 }}>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
             <h1 style={{ fontSize: '1.5rem', fontWeight: 800, letterSpacing: '-0.02em' }}>{co.name}</h1>
-            <ScoreBadge score={co.lead_score} />
             {co.under_liquidation === 1 && <span className="muted">(under avvikling)</span>}
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-end' }}>
