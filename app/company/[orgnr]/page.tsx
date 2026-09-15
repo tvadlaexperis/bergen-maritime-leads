@@ -69,15 +69,14 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
                 Brønnøysund ↗
               </a>
             </p>
-            <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
-              <span className="muted" style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: '0.82rem' }}>
-                <PinIcon /> {[co.address, co.postnummer, co.poststed].filter(Boolean).join(', ') || '—'}
-              </span>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
+              <PinIcon />
               {co.phone && (
-                <span className="muted" style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: '0.82rem' }}>
-                  <PhoneIcon /> {co.phone}
-                </span>
+                <span className="muted" style={{ fontSize: '0.82rem' }}>{co.phone}</span>
               )}
+              <span className="muted" style={{ fontSize: '0.82rem' }}>
+                {[co.address, co.postnummer, co.poststed].filter(Boolean).join(', ') || '—'}
+              </span>
             </div>
           </div>
         </div>
@@ -284,20 +283,6 @@ function PinIcon() {
         strokeLinejoin="round"
       />
       <circle cx="12" cy="9.5" r="2.3" fill="none" stroke="currentColor" strokeWidth="1.6" />
-    </svg>
-  );
-}
-
-function PhoneIcon() {
-  return (
-    <svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true" style={{ flexShrink: 0 }}>
-      <path
-        d="M6.6 10.8c1.4 2.8 3.8 5.2 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.25c1.1.36 2.3.56 3.5.56a1 1 0 0 1 1 1V20a1 1 0 0 1-1 1C10.6 21 3 13.4 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1c0 1.2.2 2.4.56 3.5a1 1 0 0 1-.25 1z"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.6"
-        strokeLinejoin="round"
-      />
     </svg>
   );
 }
