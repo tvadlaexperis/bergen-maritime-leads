@@ -413,6 +413,31 @@ a {
   color: var(--accent-strong);
 }
 
+.news-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--surface-raised);
+  transition: border-color 0.15s, background 0.15s;
+}
+.news-card:hover {
+  border-color: var(--accent-border);
+  background: var(--accent-soft);
+}
+.news-card-title {
+  font-size: 0.86rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
 /* ── Forms ── */
 .field {
   display: flex;
