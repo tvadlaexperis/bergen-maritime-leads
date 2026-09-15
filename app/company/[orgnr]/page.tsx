@@ -58,92 +58,43 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
               {co.matched_group ? ` · ${co.matched_group}` : ''}
             </p>
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-end' }}>
-            <p style={{ fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-              {co.website && (
-                <a href={co.website} target="_blank" rel="noopener noreferrer" className="link-accent">
-                  Nettsted ↗
-                </a>
-              )}
-              {co.phone && (
-                <span className="muted" title={co.phone} style={{ display: 'inline-flex' }}>
-                  <PhoneIcon />
-                </span>
-              )}
-              <span
-                className="muted"
-                title={[co.address, co.postnummer, co.poststed].filter(Boolean).join(', ') || undefined}
-                style={{ display: 'inline-flex' }}
-              >
-                <PinIcon />
+          <p style={{ fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+            {co.website && (
+              <a href={co.website} target="_blank" rel="noopener noreferrer" className="link-accent">
+                Nettsted ↗
+              </a>
+            )}
+            {co.phone && (
+              <span className="muted" title={co.phone} style={{ display: 'inline-flex' }}>
+                <PhoneIcon />
               </span>
-              <a href={proffUrl(co.orgnr)} target="_blank" rel="noopener noreferrer" className="link-accent">
-                proff.no ↗
-              </a>
-              <a href={brregUrl(co.orgnr)} target="_blank" rel="noopener noreferrer" className="link-accent">
-                Brønnøysund ↗
-              </a>
-            </p>
-            <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
-              <Fact label="Registrert" value={dateLabel(co.registered_at)} />
-              <Fact label="Siste årsregnskap" value={co.last_annual_report ?? '—'} />
-            </div>
-          </div>
+            )}
+            <span
+              className="muted"
+              title={[co.address, co.postnummer, co.poststed].filter(Boolean).join(', ') || undefined}
+              style={{ display: 'inline-flex' }}
+            >
+              <PinIcon />
+            </span>
+            <a href={proffUrl(co.orgnr)} target="_blank" rel="noopener noreferrer" className="link-accent">
+              proff.no ↗
+            </a>
+            <a href={brregUrl(co.orgnr)} target="_blank" rel="noopener noreferrer" className="link-accent">
+              Brønnøysund ↗
+            </a>
+          </p>
         </div>
         <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', marginTop: 10 }}>
           <Fact label="Ansatte" value={fmtInt(co.employees)} />
           <Fact label="Omsetning (siste)" value={fmtNok(co.revenue_latest, { compact: true })} />
           <Fact label="Vekst å/å" value={co.revenue_growth_pct != null ? fmtPct(co.revenue_growth_pct, 0) : '—'} />
           <Fact label="Driftsmargin" value={co.operating_margin_pct != null ? fmtPct(co.operating_margin_pct, 0) : '—'} />
+          <Fact label="Registrert" value={dateLabel(co.registered_at)} />
+          <Fact label="Siste årsregnskap" value={co.last_annual_report ?? '—'} />
         </div>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 18, alignItems: 'stretch' }}>
-        {/* Financial history */}
-        <div className="box">
-          <div className="box-header">
-            <span className="box-title">Regnskapstall ({financials.length} år)</span>
-            <span className="muted">Regnskapsregisteret</span>
-          </div>
-          <div style={{ overflowX: 'auto' }}>
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>År</th>
-                  <th className="col-right">Driftsinntekter</th>
-                  <th className="col-right">Driftsresultat</th>
-                  <th className="col-right">Årsresultat</th>
-                  <th className="col-right">Egenkapital</th>
-                  <th className="col-right">Sum eiendeler</th>
-                </tr>
-              </thead>
-              <tbody>
-                {financials.map((f) => (
-                  <tr key={f.id}>
-                    <td className="num">{f.year}</td>
-                    <td className="col-right num">{fmtNok(f.revenue, { compact: true })}</td>
-                    <td className="col-right num" style={{ color: f.operating_result != null ? (f.operating_result >= 0 ? 'var(--positive)' : 'var(--negative)') : undefined }}>
-                      {fmtNok(f.operating_result, { compact: true })}
-                    </td>
-                    <td className="col-right num" style={{ color: f.profit != null ? (f.profit >= 0 ? 'var(--positive)' : 'var(--negative)') : undefined }}>
-                      {fmtNok(f.profit, { compact: true })}
-                    </td>
-                    <td className="col-right num">{fmtNok(f.equity, { compact: true })}</td>
-                    <td className="col-right num">{fmtNok(f.total_assets, { compact: true })}</td>
-                  </tr>
-                ))}
-                {financials.length === 0 && (
-                  <tr>
-                    <td colSpan={6} className="muted" style={{ textAlign: 'center', padding: 28 }}>
-                      Ingen regnskapstall hentet ennå.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
         {/* Score panel */}
         <div className="box">
           <LeadScoreTabs
@@ -200,6 +151,51 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
               )
             }
           />
+        </div>
+
+        {/* Financial history */}
+        <div className="box">
+          <div className="box-header">
+            <span className="box-title">Regnskapstall ({financials.length} år)</span>
+            <span className="muted">Regnskapsregisteret</span>
+          </div>
+          <div style={{ overflowX: 'auto' }}>
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>År</th>
+                  <th className="col-right">Driftsinntekter</th>
+                  <th className="col-right">Driftsresultat</th>
+                  <th className="col-right">Årsresultat</th>
+                  <th className="col-right">Egenkapital</th>
+                  <th className="col-right">Sum eiendeler</th>
+                </tr>
+              </thead>
+              <tbody>
+                {financials.map((f) => (
+                  <tr key={f.id}>
+                    <td className="num">{f.year}</td>
+                    <td className="col-right num">{fmtNok(f.revenue, { compact: true })}</td>
+                    <td className="col-right num" style={{ color: f.operating_result != null ? (f.operating_result >= 0 ? 'var(--positive)' : 'var(--negative)') : undefined }}>
+                      {fmtNok(f.operating_result, { compact: true })}
+                    </td>
+                    <td className="col-right num" style={{ color: f.profit != null ? (f.profit >= 0 ? 'var(--positive)' : 'var(--negative)') : undefined }}>
+                      {fmtNok(f.profit, { compact: true })}
+                    </td>
+                    <td className="col-right num">{fmtNok(f.equity, { compact: true })}</td>
+                    <td className="col-right num">{fmtNok(f.total_assets, { compact: true })}</td>
+                  </tr>
+                ))}
+                {financials.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="muted" style={{ textAlign: 'center', padding: 28 }}>
+                      Ingen regnskapstall hentet ennå.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
 
