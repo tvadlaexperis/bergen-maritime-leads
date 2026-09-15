@@ -34,6 +34,7 @@ export default function AdminControls(props: {
   status: CompanyStatus;
   notes: string;
   contacts: Contacts;
+  embedded?: boolean;
 }) {
   const router = useRouter();
   const [busy, startTransition] = useTransition();
@@ -42,10 +43,8 @@ export default function AdminControls(props: {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
-  return (
-    <div className="box" style={{ borderColor: 'var(--accent-border)' }}>
-      <div className="box-header"><span className="box-title">Admin</span></div>
-      <div className="box-pad" style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+  const body = (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
           <button
             className="btn btn-primary btn-sm"
@@ -125,6 +124,21 @@ export default function AdminControls(props: {
           )}
         </div>
       </div>
+  );
+
+  if (props.embedded) {
+    return (
+      <div style={{ borderTop: '1px solid var(--border)', paddingTop: 18, marginTop: 4 }}>
+        <span className="muted" style={{ fontSize: '0.78rem', fontWeight: 700 }}>Admin</span>
+        <div style={{ marginTop: 14 }}>{body}</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="box" style={{ borderColor: 'var(--accent-border)' }}>
+      <div className="box-header"><span className="box-title">Admin</span></div>
+      <div className="box-pad">{body}</div>
     </div>
   );
 }

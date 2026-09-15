@@ -195,67 +195,72 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
         </div>
       </div>
 
-      {/* Contacts */}
-      <div className="box">
-        <div className="box-header"><span className="box-title">Kontakter</span></div>
-        <div className="box-pad" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 14 }}>
-          <ContactFact label="Daglig leder" name={co.ceo_name} />
-          <ContactFact label="Kontaktperson" name={co.contact_name} email={co.contact_email} phone={co.contact_phone} />
-          <ContactFact label="CTO" name={co.cto_name} email={co.cto_email} phone={co.cto_phone} />
-          <ContactFact label="Salgssjef" name={co.sales_name} email={co.sales_email} phone={co.sales_phone} />
-        </div>
-        {!co.ceo_name && !co.contact_name && !co.cto_name && !co.sales_name && (
-          <div className="box-pad muted" style={{ paddingTop: 0, fontSize: '0.82rem' }}>
-            Ingen kontaktinfo registrert ennå.{isAdmin ? ' Legg inn under.' : ''}
+      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 18, alignItems: 'start' }}>
+        {/* Contacts */}
+        <div className="box">
+          <div className="box-header"><span className="box-title">Kontakter</span></div>
+          <div className="box-pad" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 14 }}>
+            <ContactFact label="Daglig leder" name={co.ceo_name} />
+            <ContactFact label="Kontaktperson" name={co.contact_name} email={co.contact_email} phone={co.contact_phone} />
+            <ContactFact label="CTO" name={co.cto_name} email={co.cto_email} phone={co.cto_phone} />
+            <ContactFact label="Salgssjef" name={co.sales_name} email={co.sales_email} phone={co.sales_phone} />
           </div>
-        )}
-      </div>
-
-      {/* News */}
-      <div className="box">
-        <div className="box-header">
-          <span className="box-title">Nyheter</span>
-          <span className="muted">GDELT</span>
-        </div>
-        <div className="box-pad">
-          {news.length === 0 ? (
-            <p className="muted" style={{ fontSize: '0.85rem' }}>Ingen nyhetstreff siste tiden.</p>
-          ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12 }}>
-              {news.map((n: NewsItem) => (
-                <a key={n.url} href={n.url} target="_blank" rel="noopener noreferrer" className="news-card">
-                  <span className="news-card-title">{n.title}</span>
-                  <span className="muted" style={{ fontSize: '0.72rem' }}>
-                    {n.domain}
-                    {n.seenAt ? ` · ${dateLabel(n.seenAt)}` : ''}
-                  </span>
-                </a>
-              ))}
+          {!co.ceo_name && !co.contact_name && !co.cto_name && !co.sales_name && (
+            <div className="box-pad muted" style={{ paddingTop: 0, fontSize: '0.82rem' }}>
+              Ingen kontaktinfo registrert ennå.{isAdmin ? ' Legg inn under.' : ''}
+            </div>
+          )}
+          {isAdmin && base && (
+            <div className="box-pad" style={{ paddingTop: 0 }}>
+              <AdminControls
+                embedded
+                id={base.id}
+                orgnr={base.orgnr}
+                name={base.name}
+                status={base.status}
+                notes={base.notes ?? ''}
+                contacts={{
+                  contact_name: base.contact_name,
+                  contact_email: base.contact_email,
+                  contact_phone: base.contact_phone,
+                  cto_name: base.cto_name,
+                  cto_email: base.cto_email,
+                  cto_phone: base.cto_phone,
+                  sales_name: base.sales_name,
+                  sales_email: base.sales_email,
+                  sales_phone: base.sales_phone,
+                }}
+              />
             </div>
           )}
         </div>
+
+        {/* News */}
+        <div className="box">
+          <div className="box-header">
+            <span className="box-title">Nyheter</span>
+            <span className="muted">GDELT</span>
+          </div>
+          <div className="box-pad">
+            {news.length === 0 ? (
+              <p className="muted" style={{ fontSize: '0.85rem' }}>Ingen nyhetstreff siste tiden.</p>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12 }}>
+                {news.map((n: NewsItem) => (
+                  <a key={n.url} href={n.url} target="_blank" rel="noopener noreferrer" className="news-card">
+                    <span className="news-card-title">{n.title}</span>
+                    <span className="muted" style={{ fontSize: '0.72rem' }}>
+                      {n.domain}
+                      {n.seenAt ? ` · ${dateLabel(n.seenAt)}` : ''}
+                    </span>
+                  </a>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
-      {isAdmin && base && (
-        <AdminControls
-          id={base.id}
-          orgnr={base.orgnr}
-          name={base.name}
-          status={base.status}
-          notes={base.notes ?? ''}
-          contacts={{
-            contact_name: base.contact_name,
-            contact_email: base.contact_email,
-            contact_phone: base.contact_phone,
-            cto_name: base.cto_name,
-            cto_email: base.cto_email,
-            cto_phone: base.cto_phone,
-            sales_name: base.sales_name,
-            sales_email: base.sales_email,
-            sales_phone: base.sales_phone,
-          }}
-        />
-      )}
     </div>
   );
 }
