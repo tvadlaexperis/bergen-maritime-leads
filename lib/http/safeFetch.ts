@@ -67,8 +67,11 @@ export interface SafeFetchOptions {
   headers?: Record<string, string>;
   timeoutMs?: number;
   maxBytes?: number;
-  /** Next.js cache revalidation (seconds). Omit for no-store. */
+  /** Next.js cache revalidation (seconds). Omit for no-store. Ignored for POST. */
   revalidate?: number;
+  /** Defaults to GET. POST bodies are never cached, regardless of `revalidate`. */
+  method?: 'GET' | 'POST';
+  body?: string;
 }
 
 /** Fetches a URL, returning the body text, or null on any failure/violation. */
@@ -97,7 +100,9 @@ export async function safeFetchText(rawUrl: string, opts: SafeFetchOptions = {})
         redirect: 'manual',
         signal: ac.signal,
         headers: opts.headers,
-        ...(opts.revalidate != null
+        method: opts.method,
+        body: opts.method === 'POST' ? opts.body : undefined,
+        ...(opts.revalidate != null && opts.method !== 'POST'
           ? { next: { revalidate: opts.revalidate } }
           : { cache: 'no-store' as const }),
       });

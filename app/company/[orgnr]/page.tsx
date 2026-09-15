@@ -8,6 +8,7 @@ import { getCompanyNews, type NewsItem } from '@/lib/news';
 import { fmtNok, fmtPct, fmtInt, dateLabel, agoLabel } from '@/app/format';
 import { bandFor } from '@/app/components/ScoreBadge';
 import AdminControls from './AdminControls';
+import LeadScoreTabs from './LeadScoreTabs';
 
 export const dynamic = 'force-dynamic';
 
@@ -154,49 +155,60 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
             <span className="box-title">Lead-score</span>
             <span className="muted">{co.computed_at ? `oppdatert ${agoLabel(co.computed_at)}` : 'ikke scoret ennå'}</span>
           </div>
-          <div className="box-pad" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            {co.lead_score != null ? (
-              <>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                  <span className="num" data-band={band} style={{ fontSize: '2.4rem', fontWeight: 800, lineHeight: 1 }}>
-                    {co.lead_score}
-                  </span>
-                  <span className="muted" style={{ fontSize: '0.8rem' }}>
-                    / 100
-                    <br />
-                    {band === 'high' ? 'prioritert lead' : band === 'mid' ? 'verdt en vurdering' : 'lav prioritet'}
-                  </span>
-                </div>
+          <LeadScoreTabs
+            aiTab={
+              co.ai_summary ? (
+                <p style={{ fontSize: '0.86rem', color: 'var(--text-secondary)' }}>{co.ai_summary}</p>
+              ) : (
+                <p className="muted" style={{ fontSize: '0.86rem' }}>
+                  Ingen AI-vurdering ennå. {isAdmin ? 'Bruk «Oppdater fra registrene» under.' : 'Neste skann beregner en.'}
+                </p>
+              )
+            }
+            scoreTab={
+              co.lead_score != null ? (
+                <>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                    <span className="num" data-band={band} style={{ fontSize: '2.4rem', fontWeight: 800, lineHeight: 1 }}>
+                      {co.lead_score}
+                    </span>
+                    <span className="muted" style={{ fontSize: '0.8rem' }}>
+                      / 100
+                      <br />
+                      {band === 'high' ? 'prioritert lead' : band === 'mid' ? 'verdt en vurdering' : 'lav prioritet'}
+                    </span>
+                  </div>
 
-                <div style={{ display: 'grid', gap: 8 }}>
-                  {SUBSCORES.map((s) => {
-                    const v = co[s.key] ?? 0;
-                    return (
-                      <div key={s.key} style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 6, alignItems: 'center' }}>
-                        <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
-                          {s.label} <span className="muted">{s.weight}</span>
-                        </span>
-                        <span className="num muted" style={{ fontSize: '0.76rem', textAlign: 'right' }}>{v}</span>
-                        <span className="meter" style={{ gridColumn: '1 / -1' }}>
-                          <span style={{ width: `${v}%` }} />
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-                {co.reason && <p style={{ fontSize: '0.86rem', color: 'var(--text-secondary)' }}>{co.reason}</p>}
-                {history.length > 1 && (
-                  <p className="muted" style={{ fontSize: '0.72rem' }}>
-                    Historikk: {history.slice().reverse().map((h) => h.lead_score).join(' → ')}
-                  </p>
-                )}
-              </>
-            ) : (
-              <p className="muted">
-                Ingen score ennå. {isAdmin ? 'Bruk «Oppdater fra registrene» under.' : 'Neste skann beregner en.'}
-              </p>
-            )}
-          </div>
+                  <div style={{ display: 'grid', gap: 8 }}>
+                    {SUBSCORES.map((s) => {
+                      const v = co[s.key] ?? 0;
+                      return (
+                        <div key={s.key} style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 6, alignItems: 'center' }}>
+                          <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+                            {s.label} <span className="muted">{s.weight}</span>
+                          </span>
+                          <span className="num muted" style={{ fontSize: '0.76rem', textAlign: 'right' }}>{v}</span>
+                          <span className="meter" style={{ gridColumn: '1 / -1' }}>
+                            <span style={{ width: `${v}%` }} />
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {co.reason && <p style={{ fontSize: '0.86rem', color: 'var(--text-secondary)' }}>{co.reason}</p>}
+                  {history.length > 1 && (
+                    <p className="muted" style={{ fontSize: '0.72rem' }}>
+                      Historikk: {history.slice().reverse().map((h) => h.lead_score).join(' → ')}
+                    </p>
+                  )}
+                </>
+              ) : (
+                <p className="muted">
+                  Ingen score ennå. {isAdmin ? 'Bruk «Oppdater fra registrene» under.' : 'Neste skann beregner en.'}
+                </p>
+              )
+            }
+          />
         </div>
       </div>
 

@@ -10,6 +10,7 @@ import {
   replaceFinancials,
   insertScore,
   setCompanyCeo,
+  setCompanyAiSummary,
   listCompaniesToRefresh,
   listActiveCompanies,
   getCompanyByOrgnr,
@@ -96,6 +97,22 @@ async function enrichCompany(orgnr: string, errors: ScanError[]): Promise<boolea
       latestYear: s.latestYear,
       reason: s.reason,
     });
+
+    // Best-effort — disabled (no GEMINI_API_KEY) or failed calls just leave
+    // the previous summary in place rather than failing the whole scan.
+    const summary = await orchestrator.callTool<string | null>('ai.leadSummary', {
+      name: company.name,
+      poststed: company.poststed,
+      sector: company.matched_label,
+      nace: company.nace1_text,
+      employees: company.employees,
+      revenueLatest: s.revenueLatest,
+      revenueGrowthPct: s.revenueGrowthPct,
+      operatingMarginPct: s.operatingMarginPct,
+      leadScore: s.leadScore,
+      band: s.band,
+    });
+    if (summary.ok && summary.data) await setCompanyAiSummary(company.id, summary.data);
   } else {
     errors.push({ scope: `score ${orgnr}`, message: scored.error });
   }
