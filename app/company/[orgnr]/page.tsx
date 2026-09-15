@@ -11,6 +11,7 @@ import type { LeadAnalysis, ScoreVerdict, SignalLevel } from '@/lib/orchestrator
 import AdminControls from './AdminControls';
 import ContactsEditForm from './ContactsEditForm';
 import LeadScoreTabs from './LeadScoreTabs';
+import NotesBox from './NotesBox';
 
 export const dynamic = 'force-dynamic';
 
@@ -309,7 +310,6 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
                   orgnr={base.orgnr}
                   name={base.name}
                   status={base.status}
-                  notes={base.notes ?? ''}
                   website={base.website}
                 />
               </div>
@@ -342,6 +342,8 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
           </div>
         </div>
       </div>
+
+      {isAdmin && base && <NotesBox id={base.id} notes={base.notes ?? ''} />}
     </div>
   );
 }
