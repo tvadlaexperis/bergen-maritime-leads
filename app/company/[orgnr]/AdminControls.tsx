@@ -9,7 +9,6 @@ import {
   setStatusAction,
   deleteCompanyAction,
   updateNotesAction,
-  updateContactsAction,
   type ActionState,
 } from '@/app/admin/actions';
 
@@ -33,13 +32,11 @@ export default function AdminControls(props: {
   name: string;
   status: CompanyStatus;
   notes: string;
-  contacts: Contacts;
   embedded?: boolean;
 }) {
   const router = useRouter();
   const [busy, startTransition] = useTransition();
   const [notesState, notesAction] = useFormState(updateNotesAction, initial);
-  const [contactsState, contactsAction] = useFormState(updateContactsAction, initial);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
@@ -91,21 +88,6 @@ export default function AdminControls(props: {
           </div>
         </form>
 
-        <form action={contactsAction} style={{ display: 'grid', gap: 10 }}>
-          <input type="hidden" name="id" value={props.id} />
-          <span className="muted" style={{ fontSize: '0.78rem' }}>
-            Kontaktpersoner <span>(fylles inn manuelt — finnes ikke i registrene)</span>
-          </span>
-          <ContactRow label="Kontaktperson" name="contact_name" email="contact_email" phone="contact_phone" contacts={props.contacts} />
-          <ContactRow label="CTO" name="cto_name" email="cto_email" phone="cto_phone" contacts={props.contacts} />
-          <ContactRow label="Salgssjef" name="sales_name" email="sales_email" phone="sales_phone" contacts={props.contacts} />
-          {contactsState.error && <p className="form-error">{contactsState.error}</p>}
-          {contactsState.ok && <p className="form-ok">{contactsState.ok}</p>}
-          <div>
-            <button type="submit" className="btn btn-primary btn-sm" disabled={busy}>Lagre kontakter</button>
-          </div>
-        </form>
-
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           {confirmDelete ? (
             <>
@@ -139,37 +121,6 @@ export default function AdminControls(props: {
     <div className="box" style={{ borderColor: 'var(--accent-border)' }}>
       <div className="box-header"><span className="box-title">Admin</span></div>
       <div className="box-pad">{body}</div>
-    </div>
-  );
-}
-
-function ContactRow({
-  label,
-  name,
-  email,
-  phone,
-  contacts,
-}: {
-  label: string;
-  name: keyof Contacts;
-  email: keyof Contacts;
-  phone: keyof Contacts;
-  contacts: Contacts;
-}) {
-  return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 8 }}>
-      <label className="field">
-        {label}
-        <input name={name} type="text" defaultValue={contacts[name] ?? ''} />
-      </label>
-      <label className="field">
-        E-post
-        <input name={email} type="email" defaultValue={contacts[email] ?? ''} />
-      </label>
-      <label className="field">
-        Telefon
-        <input name={phone} type="text" defaultValue={contacts[phone] ?? ''} />
-      </label>
     </div>
   );
 }

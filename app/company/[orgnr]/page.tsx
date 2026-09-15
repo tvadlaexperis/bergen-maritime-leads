@@ -8,6 +8,7 @@ import { getCompanyNews, type NewsItem } from '@/lib/news';
 import { fmtNok, fmtPct, fmtInt, dateLabel } from '@/app/format';
 import { bandFor } from '@/app/components/ScoreBadge';
 import AdminControls from './AdminControls';
+import ContactsEditForm from './ContactsEditForm';
 import LeadScoreTabs from './LeadScoreTabs';
 
 export const dynamic = 'force-dynamic';
@@ -233,27 +234,34 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
             </div>
           )}
           {isAdmin && base && (
-            <div className="box-pad" style={{ paddingTop: 0 }}>
-              <AdminControls
-                embedded
-                id={base.id}
-                orgnr={base.orgnr}
-                name={base.name}
-                status={base.status}
-                notes={base.notes ?? ''}
-                contacts={{
-                  contact_name: base.contact_name,
-                  contact_email: base.contact_email,
-                  contact_phone: base.contact_phone,
-                  cto_name: base.cto_name,
-                  cto_email: base.cto_email,
-                  cto_phone: base.cto_phone,
-                  sales_name: base.sales_name,
-                  sales_email: base.sales_email,
-                  sales_phone: base.sales_phone,
-                }}
-              />
-            </div>
+            <>
+              <div className="box-pad" style={{ paddingTop: 0 }}>
+                <ContactsEditForm
+                  id={base.id}
+                  contacts={{
+                    contact_name: base.contact_name,
+                    contact_email: base.contact_email,
+                    contact_phone: base.contact_phone,
+                    cto_name: base.cto_name,
+                    cto_email: base.cto_email,
+                    cto_phone: base.cto_phone,
+                    sales_name: base.sales_name,
+                    sales_email: base.sales_email,
+                    sales_phone: base.sales_phone,
+                  }}
+                />
+              </div>
+              <div className="box-pad" style={{ paddingTop: 0 }}>
+                <AdminControls
+                  embedded
+                  id={base.id}
+                  orgnr={base.orgnr}
+                  name={base.name}
+                  status={base.status}
+                  notes={base.notes ?? ''}
+                />
+              </div>
+            </>
           )}
         </div>
 
