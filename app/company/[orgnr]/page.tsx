@@ -38,11 +38,6 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
   ]);
   const isAdmin = user?.role === 'admin';
   const band = bandFor(co.lead_score);
-  const nace = [
-    co.nace1_code && { code: co.nace1_code, text: co.nace1_text },
-    co.nace2_code && { code: co.nace2_code, text: co.nace2_text },
-    co.nace3_code && { code: co.nace3_code, text: co.nace3_text },
-  ].filter(Boolean) as { code: string; text: string | null }[];
 
   return (
     <div className="page-scroll" style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
@@ -62,9 +57,6 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
               {co.poststed ? ` · ${co.poststed}` : ''}
               {co.matched_group ? ` · ${co.matched_group}` : ''}
             </p>
-            <p style={{ fontSize: '0.82rem', marginTop: 4 }}>
-              {nace.map((n) => `${n.code} ${n.text ?? ''}`).join(' · ') || '—'}
-            </p>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-end' }}>
             <p style={{ fontSize: '0.82rem', display: 'flex', gap: 12, flexWrap: 'wrap' }}>
@@ -81,12 +73,11 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
               </a>
             </p>
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
-              <PinIcon />
               {co.phone && (
                 <span className="muted" style={{ fontSize: '0.82rem' }}>{co.phone}</span>
               )}
-              <span className="muted" style={{ fontSize: '0.82rem' }}>
-                {[co.address, co.postnummer, co.poststed].filter(Boolean).join(', ') || '—'}
+              <span className="muted" style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: '0.82rem' }}>
+                <PinIcon /> {[co.address, co.postnummer, co.poststed].filter(Boolean).join(', ') || '—'}
               </span>
             </div>
             <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
