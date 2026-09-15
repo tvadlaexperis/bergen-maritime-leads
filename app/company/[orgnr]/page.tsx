@@ -54,12 +54,20 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
           <ScoreBadge score={co.lead_score} />
           {co.under_liquidation === 1 && <span className="muted">(under avvikling)</span>}
         </div>
-        <p className="muted" style={{ fontSize: '0.82rem', marginTop: 4 }}>
-          Org.nr {co.orgnr}
-          {co.org_form ? ` · ${co.org_form}` : ''}
-          {co.poststed ? ` · ${co.poststed}` : ''}
-          {co.matched_group ? ` · ${co.matched_group}` : ''}
-        </p>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 16, flexWrap: 'wrap', marginTop: 4 }}>
+          <p className="muted" style={{ fontSize: '0.82rem' }}>
+            Org.nr {co.orgnr}
+            {co.org_form ? ` · ${co.org_form}` : ''}
+            {co.poststed ? ` · ${co.poststed}` : ''}
+            {co.matched_group ? ` · ${co.matched_group}` : ''}
+          </p>
+          <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
+            <Fact label="Ansatte" value={fmtInt(co.employees)} />
+            <Fact label="Omsetning (siste)" value={fmtNok(co.revenue_latest, { compact: true })} />
+            <Fact label="Vekst å/å" value={co.revenue_growth_pct != null ? fmtPct(co.revenue_growth_pct, 0) : '—'} />
+            <Fact label="Driftsmargin" value={co.operating_margin_pct != null ? fmtPct(co.operating_margin_pct, 0) : '—'} />
+          </div>
+        </div>
         <p style={{ fontSize: '0.82rem', marginTop: 6, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
           {co.website && (
             <a href={co.website} target="_blank" rel="noopener noreferrer" className="link-accent">
@@ -77,6 +85,33 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 18, alignItems: 'start' }}>
+        {/* Key facts */}
+        <div className="box">
+          <div className="box-header"><span className="box-title">Nøkkelinfo</span></div>
+          <div className="box-pad" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 14 }}>
+            <Fact label="Bransje (NACE)" value={nace.map((n) => `${n.code} ${n.text ?? ''}`).join(' · ') || '—'} />
+            <Fact label="Adresse" value={[co.address, co.postnummer, co.poststed].filter(Boolean).join(', ') || '—'} />
+            <Fact label="Registrert" value={dateLabel(co.registered_at)} />
+            <Fact label="Siste årsregnskap" value={co.last_annual_report ?? '—'} />
+          </div>
+        </div>
+
+        {/* Contacts */}
+        <div className="box">
+          <div className="box-header"><span className="box-title">Kontakter</span></div>
+          <div className="box-pad" style={{ display: 'grid', gap: 14 }}>
+            <ContactFact label="Daglig leder" name={co.ceo_name} />
+            <ContactFact label="Kontaktperson" name={co.contact_name} email={co.contact_email} phone={co.contact_phone} />
+            <ContactFact label="CTO" name={co.cto_name} email={co.cto_email} phone={co.cto_phone} />
+            <ContactFact label="Salgssjef" name={co.sales_name} email={co.sales_email} phone={co.sales_phone} />
+          </div>
+          {!co.ceo_name && !co.contact_name && !co.cto_name && !co.sales_name && (
+            <div className="box-pad muted" style={{ paddingTop: 0, fontSize: '0.82rem' }}>
+              Ingen kontaktinfo registrert ennå.{isAdmin ? ' Legg inn under.' : ''}
+            </div>
+          )}
+        </div>
+
         {/* Score panel */}
         <div className="box">
           <div className="box-header">
@@ -126,37 +161,6 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
               </p>
             )}
           </div>
-        </div>
-
-        {/* Key facts */}
-        <div className="box">
-          <div className="box-header"><span className="box-title">Nøkkelinfo</span></div>
-          <div className="box-pad" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 14 }}>
-            <Fact label="Ansatte" value={fmtInt(co.employees)} />
-            <Fact label="Omsetning (siste)" value={fmtNok(co.revenue_latest, { compact: true })} />
-            <Fact label="Vekst å/å" value={co.revenue_growth_pct != null ? fmtPct(co.revenue_growth_pct, 0) : '—'} />
-            <Fact label="Driftsmargin" value={co.operating_margin_pct != null ? fmtPct(co.operating_margin_pct, 0) : '—'} />
-            <Fact label="Bransje (NACE)" value={nace.map((n) => `${n.code} ${n.text ?? ''}`).join(' · ') || '—'} />
-            <Fact label="Adresse" value={[co.address, co.postnummer, co.poststed].filter(Boolean).join(', ') || '—'} />
-            <Fact label="Registrert" value={dateLabel(co.registered_at)} />
-            <Fact label="Siste årsregnskap" value={co.last_annual_report ?? '—'} />
-          </div>
-        </div>
-
-        {/* Contacts */}
-        <div className="box">
-          <div className="box-header"><span className="box-title">Kontakter</span></div>
-          <div className="box-pad" style={{ display: 'grid', gap: 14 }}>
-            <ContactFact label="Daglig leder" name={co.ceo_name} />
-            <ContactFact label="Kontaktperson" name={co.contact_name} email={co.contact_email} phone={co.contact_phone} />
-            <ContactFact label="CTO" name={co.cto_name} email={co.cto_email} phone={co.cto_phone} />
-            <ContactFact label="Salgssjef" name={co.sales_name} email={co.sales_email} phone={co.sales_phone} />
-          </div>
-          {!co.ceo_name && !co.contact_name && !co.cto_name && !co.sales_name && (
-            <div className="box-pad muted" style={{ paddingTop: 0, fontSize: '0.82rem' }}>
-              Ingen kontaktinfo registrert ennå.{isAdmin ? ' Legg inn under.' : ''}
-            </div>
-          )}
         </div>
       </div>
 
