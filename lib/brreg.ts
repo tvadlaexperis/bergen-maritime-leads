@@ -94,7 +94,7 @@ export function normalizeEnhet(e: RawEnhet): Company {
   };
 }
 
-function cleanWebsite(raw?: string): string | null {
+export function cleanWebsite(raw?: string): string | null {
   const s = (raw ?? '').trim();
   if (!s) return null;
   if (/^https?:\/\//i.test(s)) return s;

@@ -7,11 +7,13 @@ import { requireAdmin, createMagicLinkToken, type SessionPayload } from '@/lib/a
 import { isRateLimited } from '@/lib/rateLimit';
 import { audit } from '@/lib/audit';
 import { parseOrgnr } from '@/lib/validation';
+import { cleanWebsite } from '@/lib/brreg';
 import {
   getCompany,
   getUserByEmail,
   setCompanyStatus,
   setCompanyNotes,
+  setCompanyWebsite,
   setCompanyContacts,
   deleteCompany,
   type CompanyStatus,
@@ -51,6 +53,21 @@ export async function updateNotesAction(_prev: ActionState, formData: FormData):
   await audit('company.notes', { actor: user.email, target: `company:${id}` });
   revalidatePath('/company');
   return { ok: 'Notater lagret.' };
+}
+
+// Manual override for when Brønnøysund has no `hjemmeside` registered —
+// overwritten again automatically only if the register later reports one
+// (upsertCompany's COALESCE), so this sticks across nightly refreshes.
+export async function updateWebsiteAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const user = await guard('admin-website');
+  const id = Number(formData.get('id'));
+  if (!id || !(await getCompany(id))) return { error: 'Ukjent selskap.' };
+  const raw = String(formData.get('website') ?? '').trim();
+  if (raw && !cleanWebsite(raw)) return { error: 'Ser ikke ut som en gyldig nettadresse.' };
+  await setCompanyWebsite(id, cleanWebsite(raw));
+  await audit('company.website', { actor: user.email, target: `company:${id}` });
+  revalidatePath('/company');
+  return { ok: 'Nettsted lagret.' };
 }
 
 const CONTACT_FIELDS = [

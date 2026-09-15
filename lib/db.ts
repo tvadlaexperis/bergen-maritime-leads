@@ -633,6 +633,14 @@ export async function setCompanyNotes(id: number, notes: string | null): Promise
   await c.execute({ sql: 'UPDATE companies SET notes = ?, updated_at = ? WHERE id = ?', args: [notes, Date.now(), id] });
 }
 
+// Manual override for when Brønnøysund has no `hjemmeside` for a company —
+// upsertCompany's COALESCE keeps this on future refreshes unless the
+// register later reports a website of its own.
+export async function setCompanyWebsite(id: number, website: string | null): Promise<void> {
+  const c = await db();
+  await c.execute({ sql: 'UPDATE companies SET website = ?, updated_at = ? WHERE id = ?', args: [website, Date.now(), id] });
+}
+
 // Auto-filled from Brønnøysund's roller API during enrichment (lib/scan.ts) —
 // the one contact field that comes from an official source rather than admin entry.
 export async function setCompanyCeo(id: number, ceoName: string | null): Promise<void> {

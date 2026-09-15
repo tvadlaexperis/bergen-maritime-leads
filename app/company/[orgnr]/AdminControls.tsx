@@ -9,6 +9,7 @@ import {
   setStatusAction,
   deleteCompanyAction,
   updateNotesAction,
+  updateWebsiteAction,
   type ActionState,
 } from '@/app/admin/actions';
 
@@ -32,11 +33,13 @@ export default function AdminControls(props: {
   name: string;
   status: CompanyStatus;
   notes: string;
+  website: string | null;
   embedded?: boolean;
 }) {
   const router = useRouter();
   const [busy, startTransition] = useTransition();
   const [notesState, notesAction] = useFormState(updateNotesAction, initial);
+  const [websiteState, websiteAction] = useFormState(updateWebsiteAction, initial);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
@@ -74,6 +77,17 @@ export default function AdminControls(props: {
           ))}
           {msg && <span className="muted" style={{ fontSize: '0.78rem' }}>{msg}</span>}
         </div>
+
+        <form action={websiteAction} style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+          <input type="hidden" name="id" value={props.id} />
+          <label className="field" style={{ flex: 1, minWidth: 200 }}>
+            Nettsted <span className="muted">(overstyrer — brukes når Brønnøysund mangler det)</span>
+            <input type="text" name="website" placeholder="https://…" defaultValue={props.website ?? ''} />
+          </label>
+          <button type="submit" className="btn btn-primary btn-sm" disabled={busy}>Lagre nettsted</button>
+          {websiteState.error && <p className="form-error" style={{ margin: 0 }}>{websiteState.error}</p>}
+          {websiteState.ok && <p className="form-ok" style={{ margin: 0 }}>{websiteState.ok}</p>}
+        </form>
 
         <form action={notesAction} style={{ display: 'grid', gap: 8 }}>
           <input type="hidden" name="id" value={props.id} />

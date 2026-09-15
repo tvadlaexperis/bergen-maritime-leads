@@ -259,6 +259,7 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
                   name={base.name}
                   status={base.status}
                   notes={base.notes ?? ''}
+                  website={base.website}
                 />
               </div>
             </>
