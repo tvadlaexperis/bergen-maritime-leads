@@ -65,12 +65,6 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
                   Nettsted ↗
                 </a>
               )}
-              <a href={proffUrl(co.orgnr)} target="_blank" rel="noopener noreferrer" className="link-accent">
-                proff.no ↗
-              </a>
-              <a href={brregUrl(co.orgnr)} target="_blank" rel="noopener noreferrer" className="link-accent">
-                Brønnøysund ↗
-              </a>
               {co.phone && (
                 <span className="muted" title={co.phone} style={{ display: 'inline-flex' }}>
                   <PhoneIcon />
@@ -83,6 +77,12 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
               >
                 <PinIcon />
               </span>
+              <a href={proffUrl(co.orgnr)} target="_blank" rel="noopener noreferrer" className="link-accent">
+                proff.no ↗
+              </a>
+              <a href={brregUrl(co.orgnr)} target="_blank" rel="noopener noreferrer" className="link-accent">
+                Brønnøysund ↗
+              </a>
             </p>
             <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
               <Fact label="Registrert" value={dateLabel(co.registered_at)} />
