@@ -111,9 +111,7 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
           <LeadScoreTabs
             aiTab={
               co.ai_summary ? (
-                <p style={{ fontSize: '0.9rem', lineHeight: 1.7, color: 'var(--text-secondary)', whiteSpace: 'pre-line' }}>
-                  {co.ai_summary}
-                </p>
+                <AiSummary text={co.ai_summary} />
               ) : (
                 <p className="muted" style={{ fontSize: '0.86rem' }}>
                   Ingen AI-vurdering ennå. {isAdmin ? 'Bruk «Oppdater fra registrene» under.' : 'Neste skann beregner en.'}
@@ -325,6 +323,25 @@ function PhoneIcon() {
         strokeLinejoin="round"
       />
     </svg>
+  );
+}
+
+// The AI prompt (lib/orchestrator/providers/ai.ts) asks for a lead sentence
+// followed by short one-per-line key-figure points — render that shape as a
+// real bullet list instead of a wall of text.
+function AiSummary({ text }: { text: string }) {
+  const [lead, ...points] = text.split('\n').map((l) => l.trim()).filter(Boolean);
+  return (
+    <div style={{ fontSize: '0.9rem', lineHeight: 1.6, color: 'var(--text-secondary)' }}>
+      {lead && <p style={{ margin: 0 }}>{lead}</p>}
+      {points.length > 0 && (
+        <ul style={{ margin: '10px 0 0', paddingLeft: '1.2em', display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {points.map((p, i) => (
+            <li key={i}>{p}</li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
 
