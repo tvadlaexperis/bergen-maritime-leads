@@ -49,10 +49,21 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
         <Link href="/" className="muted" style={{ fontSize: '0.8rem' }}>
           ← Alle selskaper
         </Link>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 16, flexWrap: 'wrap', marginTop: 6 }}>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
-            <h1 style={{ fontSize: '1.5rem', fontWeight: 800, letterSpacing: '-0.02em' }}>{co.name}</h1>
-            {co.under_liquidation === 1 && <span className="muted">(under avvikling)</span>}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap', marginTop: 6 }}>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
+              <h1 style={{ fontSize: '1.5rem', fontWeight: 800, letterSpacing: '-0.02em' }}>{co.name}</h1>
+              {co.under_liquidation === 1 && <span className="muted">(under avvikling)</span>}
+            </div>
+            <p className="muted" style={{ fontSize: '0.82rem', marginTop: 6 }}>
+              Org.nr {co.orgnr}
+              {co.org_form ? ` · ${co.org_form}` : ''}
+              {co.poststed ? ` · ${co.poststed}` : ''}
+              {co.matched_group ? ` · ${co.matched_group}` : ''}
+            </p>
+            <p style={{ fontSize: '0.82rem', marginTop: 4 }}>
+              {nace.map((n) => `${n.code} ${n.text ?? ''}`).join(' · ') || '—'}
+            </p>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-end' }}>
             <p style={{ fontSize: '0.82rem', display: 'flex', gap: 12, flexWrap: 'wrap' }}>
@@ -77,23 +88,10 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
                 {[co.address, co.postnummer, co.poststed].filter(Boolean).join(', ') || '—'}
               </span>
             </div>
-          </div>
-        </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap', marginTop: 10 }}>
-          <div>
-            <p className="muted" style={{ fontSize: '0.82rem' }}>
-              Org.nr {co.orgnr}
-              {co.org_form ? ` · ${co.org_form}` : ''}
-              {co.poststed ? ` · ${co.poststed}` : ''}
-              {co.matched_group ? ` · ${co.matched_group}` : ''}
-            </p>
-            <p style={{ fontSize: '0.82rem', marginTop: 4 }}>
-              {nace.map((n) => `${n.code} ${n.text ?? ''}`).join(' · ') || '—'}
-            </p>
-          </div>
-          <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
-            <Fact label="Registrert" value={dateLabel(co.registered_at)} />
-            <Fact label="Siste årsregnskap" value={co.last_annual_report ?? '—'} />
+            <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
+              <Fact label="Registrert" value={dateLabel(co.registered_at)} />
+              <Fact label="Siste årsregnskap" value={co.last_annual_report ?? '—'} />
+            </div>
           </div>
         </div>
         <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', marginTop: 10 }}>
