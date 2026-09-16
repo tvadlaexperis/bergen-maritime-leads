@@ -218,9 +218,24 @@ export async function runScan(opts: RunScanOptions = {}): Promise<ScanResult> {
   return { scanId, companiesFound, companiesUpdated, financialsFetched, errors, tookMs: Date.now() - started };
 }
 
+// Concurrent refreshes for the same company (e.g. the auto-refresh trigger
+// racing a manual click within the same warm instance) used to interleave
+// their writes — financials from one run landing alongside the AI analysis
+// from another, out of sync with each other. De-dupe by orgnr so overlapping
+// callers share a single in-flight run instead.
+const inFlightRefresh = new Map<string, Promise<{ ok: boolean; errors: ScanError[] }>>();
+
+export function refreshCompany(orgnr: string): Promise<{ ok: boolean; errors: ScanError[] }> {
+  const existing = inFlightRefresh.get(orgnr);
+  if (existing) return existing;
+  const p = doRefreshCompany(orgnr).finally(() => inFlightRefresh.delete(orgnr));
+  inFlightRefresh.set(orgnr, p);
+  return p;
+}
+
 // Enrich a single company on demand (admin "refresh" button, or after a manual
 // add). Also runs discovery-less so it's fast.
-export async function refreshCompany(orgnr: string): Promise<{ ok: boolean; errors: ScanError[] }> {
+async function doRefreshCompany(orgnr: string): Promise<{ ok: boolean; errors: ScanError[] }> {
   const errors: ScanError[] = [];
   try {
     // Pull the latest facts from the register too, in case employees changed.
