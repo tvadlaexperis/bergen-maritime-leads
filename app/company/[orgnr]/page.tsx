@@ -93,7 +93,7 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
               {co.matched_group ? ` · ${co.matched_group}` : ''}
             </p>
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-end' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'flex-end' }}>
             <p style={{ fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
               {co.phone && (
                 <a href={`tel:${co.phone.replace(/\s/g, '')}`} title={co.phone} className="link-accent" style={{ display: 'inline-flex' }}>
