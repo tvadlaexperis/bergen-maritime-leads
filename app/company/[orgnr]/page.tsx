@@ -11,6 +11,7 @@ import type { LeadAnalysis, ScoreVerdict, SignalLevel } from '@/lib/orchestrator
 import AdminControls from './AdminControls';
 import AutoRefreshTrigger from './AutoRefreshTrigger';
 import ContactsEditForm from './ContactsEditForm';
+import FinancialsTabs from './FinancialsTabs';
 import LeadScoreTabs from './LeadScoreTabs';
 import NotesBox from './NotesBox';
 
@@ -247,24 +248,7 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
             <span className="box-title">Regnskapstall ({financials.length} år)</span>
             <span className="muted">Regnskapsregisteret</span>
           </div>
-          <div className="box-pad" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            {financials.length === 0 ? (
-              <p className="muted" style={{ fontSize: '0.85rem' }}>Ingen regnskapstall hentet ennå.</p>
-            ) : (
-              financials.map((f, i) => (
-                <div key={f.id} style={{ display: 'flex', flexDirection: 'column', gap: 8, ...(i > 0 ? { borderTop: '1px solid var(--border)', paddingTop: 16 } : {}) }}>
-                  <span className="muted" style={{ fontSize: '0.72rem', fontWeight: 700 }}>{f.year}</span>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 12 }}>
-                    <Fact label="Driftsinntekter" value={fmtNok(f.revenue, { compact: true })} />
-                    <Fact label="Driftsresultat" value={fmtNok(f.operating_result, { compact: true })} />
-                    <Fact label="Årsresultat" value={fmtNok(f.profit, { compact: true })} />
-                    <Fact label="Egenkapital" value={fmtNok(f.equity, { compact: true })} />
-                    <Fact label="Sum eiendeler" value={fmtNok(f.total_assets, { compact: true })} />
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
+          <FinancialsTabs financials={financials} />
         </div>
       </div>
 
