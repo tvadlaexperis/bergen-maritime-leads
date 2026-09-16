@@ -18,6 +18,7 @@ import {
   listCompaniesToRefresh,
   listActiveCompanies,
   getCompanyByOrgnr,
+  listFinancials,
   type Company,
 } from './db';
 import { KOMMUNER, NACE_CODES, matchNace } from '../data/maritime-sectors.mjs';
@@ -81,9 +82,31 @@ async function enrichCompany(orgnr: string, errors: ScanError[]): Promise<boolea
     fetched = await replaceFinancials(company.id, financials);
   }
 
+  // Brønnøysund's regnskap endpoint often returns only the single most
+  // recent filing per call, not the company's full history — so scoring off
+  // `financials` (this call's result) alone made revenue growth look
+  // undocumented even when the DB had accumulated two-plus years across
+  // earlier refreshes. Read back the full stored history instead.
+  const history = await listFinancials(company.id);
+  const allFinancials: CompanyFinancials[] = history
+    .slice()
+    .sort((a, b) => b.year - a.year)
+    .map((f) => ({
+      year: f.year,
+      currency: f.currency,
+      revenue: f.revenue,
+      operatingResult: f.operating_result,
+      pretaxResult: f.pretax_result,
+      profit: f.profit,
+      equity: f.equity,
+      totalAssets: f.total_assets,
+      totalDebt: f.total_debt,
+      employees: null,
+    }));
+
   const scored = await orchestrator.callTool<LeadScoreResult>('score.compute', {
     employees: company.employees,
-    financials,
+    financials: allFinancials,
   });
   if (scored.ok) {
     const s = scored.data;
@@ -120,10 +143,7 @@ async function enrichCompany(orgnr: string, errors: ScanError[]): Promise<boolea
         sector: company.matched_label,
         nace: company.nace1_text,
         employees: company.employees,
-        financials: financials
-          .slice()
-          .sort((a, b) => b.year - a.year)
-          .map((f) => ({ year: f.year, revenue: f.revenue, operatingResult: f.operatingResult, profit: f.profit })),
+        financials: allFinancials.map((f) => ({ year: f.year, revenue: f.revenue, operatingResult: f.operatingResult, profit: f.profit })),
         leadScore: s.leadScore,
         band: s.band,
         news: news.map((n) => ({ title: n.title, date: n.seenAt, domain: n.domain })),
