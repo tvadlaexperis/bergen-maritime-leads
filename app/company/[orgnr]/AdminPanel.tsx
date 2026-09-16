@@ -63,7 +63,7 @@ export function AdminPanelModal({ children }: { children: ReactNode }) {
         style={{ width: '100%', maxWidth: 480, maxHeight: '75vh', overflowY: 'auto' }}
       >
         <div className="box-header">
-          <span className="box-title">Admin</span>
+          <span className="box-title">Oppdater info</span>
           <button type="button" className="chip" onClick={() => setOpen(false)} aria-label="Lukk">
             ✕
           </button>

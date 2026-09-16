@@ -252,13 +252,6 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
           />
         </div>
 
-        {/* Financial history */}
-        <div className="box">
-          <FinancialsTabs financials={financials} />
-        </div>
-      </div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 18, alignItems: 'start' }}>
         {/* Contacts */}
         <div className="box">
           <div className="box-header"><span className="box-title">Kontakter</span></div>
@@ -302,34 +295,43 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
             />
           )}
         </div>
-
-        {/* News */}
-        <div className="box">
-          <div className="box-header">
-            <span className="box-title">Nyheter</span>
-            <span className="muted">GDELT</span>
-          </div>
-          <div className="box-pad">
-            {news.length === 0 ? (
-              <p className="muted" style={{ fontSize: '0.85rem' }}>Ingen nyhetstreff siste tiden.</p>
-            ) : (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12 }}>
-                {news.map((n: NewsItem) => (
-                  <a key={n.url} href={n.url} target="_blank" rel="noopener noreferrer" className="news-card">
-                    <span className="news-card-title">{n.title}</span>
-                    <span className="muted" style={{ fontSize: '0.72rem' }}>
-                      {n.domain}
-                      {n.seenAt ? ` · ${dateLabel(n.seenAt)}` : ''}
-                    </span>
-                  </a>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
       </div>
 
-      {isAdmin && base && <NotesBox id={base.id} notes={base.notes ?? ''} />}
+      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 18, alignItems: 'start' }}>
+        {/* Financial history */}
+        <div className="box">
+          <FinancialsTabs financials={financials} />
+        </div>
+
+        {/* News + Notater, stacked in the right column */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+          <div className="box">
+            <div className="box-header">
+              <span className="box-title">Nyheter</span>
+              <span className="muted">GDELT</span>
+            </div>
+            <div className="box-pad">
+              {news.length === 0 ? (
+                <p className="muted" style={{ fontSize: '0.85rem' }}>Ingen nyhetstreff siste tiden.</p>
+              ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12 }}>
+                  {news.map((n: NewsItem) => (
+                    <a key={n.url} href={n.url} target="_blank" rel="noopener noreferrer" className="news-card">
+                      <span className="news-card-title">{n.title}</span>
+                      <span className="muted" style={{ fontSize: '0.72rem' }}>
+                        {n.domain}
+                        {n.seenAt ? ` · ${dateLabel(n.seenAt)}` : ''}
+                      </span>
+                    </a>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {isAdmin && base && <NotesBox id={base.id} notes={base.notes ?? ''} />}
+        </div>
+      </div>
 
       {isAdmin && base && (
         <AdminPanelModal>
