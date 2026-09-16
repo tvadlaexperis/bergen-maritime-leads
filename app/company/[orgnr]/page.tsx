@@ -9,6 +9,7 @@ import { fmtNok, fmtPct, fmtInt, dateLabel } from '@/app/format';
 import { bandFor } from '@/app/components/ScoreBadge';
 import type { LeadAnalysis, ScoreVerdict, SignalLevel } from '@/lib/orchestrator/providers/ai';
 import AdminControls from './AdminControls';
+import AutoRefreshTrigger from './AutoRefreshTrigger';
 import ContactsEditForm from './ContactsEditForm';
 import LeadScoreTabs from './LeadScoreTabs';
 import NotesBox from './NotesBox';
@@ -65,6 +66,12 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
       (co.employees != null ? 1 : 0) +
       (co.ceo_name || co.contact_name || co.cto_name || co.sales_name ? 1 : 0),
   );
+  // Auto-refresh once for an admin viewing a company that's never been
+  // analyzed, instead of making them wait for the nightly cron's rotating
+  // batch to reach it. The staleness check stops this from re-firing on
+  // every view of a company whose analysis keeps failing.
+  const needsAutoRefresh =
+    isAdmin && !co.ai_analysis && (!co.last_refreshed_at || Date.now() - co.last_refreshed_at > 60 * 60 * 1000);
 
   return (
     <div className="page-scroll" style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
@@ -136,6 +143,7 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
           <AiConfidenceBadge confidence={aiConfidence} generatedAt={co.ai_analysis_at} /> {analysis.conclusion}
         </p>
       )}
+      {needsAutoRefresh && <AutoRefreshTrigger orgnr={co.orgnr} />}
 
       <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 18, alignItems: 'stretch' }}>
         {/* Score panel */}
