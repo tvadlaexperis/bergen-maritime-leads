@@ -93,41 +93,48 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
               {co.matched_group ? ` · ${co.matched_group}` : ''}
             </p>
           </div>
-          <p style={{ fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-            {co.phone && (
-              <a href={`tel:${co.phone.replace(/\s/g, '')}`} title={co.phone} className="link-accent" style={{ display: 'inline-flex' }}>
-                <PhoneIcon />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4, alignItems: 'flex-end' }}>
+            <p style={{ fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+              {co.phone && (
+                <a href={`tel:${co.phone.replace(/\s/g, '')}`} title={co.phone} className="link-accent" style={{ display: 'inline-flex' }}>
+                  <PhoneIcon />
+                </a>
+              )}
+              <a
+                href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+                  [co.address, co.postnummer, co.poststed].filter(Boolean).join(', '),
+                )}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                title={[co.address, co.postnummer, co.poststed].filter(Boolean).join(', ') || undefined}
+                className="link-accent"
+                style={{ display: 'inline-flex' }}
+              >
+                <PinIcon />
               </a>
-            )}
-            <a
-              href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-                [co.address, co.postnummer, co.poststed].filter(Boolean).join(', '),
-              )}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              title={[co.address, co.postnummer, co.poststed].filter(Boolean).join(', ') || undefined}
-              className="link-accent"
-              style={{ display: 'inline-flex' }}
-            >
-              <PinIcon />
-            </a>
-            <span className="muted">|</span>
-            <a href={proffUrl(co.orgnr)} target="_blank" rel="noopener noreferrer" className="link-accent">
-              proff.no ↗
-            </a>
-            <a href={brregUrl(co.orgnr)} target="_blank" rel="noopener noreferrer" className="link-accent">
-              Brønnøysund ↗
-            </a>
-            {co.website ? (
-              <a href={co.website} target="_blank" rel="noopener noreferrer" className="link-accent">
-                Nettsted ↗
+              <span className="muted">|</span>
+              <a href={proffUrl(co.orgnr)} target="_blank" rel="noopener noreferrer" className="link-accent">
+                proff.no ↗
               </a>
-            ) : (
-              <span className="muted" title="Ikke registrert i Brønnøysund">
-                Nettsted ↗
+              <a href={brregUrl(co.orgnr)} target="_blank" rel="noopener noreferrer" className="link-accent">
+                Brønnøysund ↗
+              </a>
+              {co.website ? (
+                <a href={co.website} target="_blank" rel="noopener noreferrer" className="link-accent">
+                  Nettsted ↗
+                </a>
+              ) : (
+                <span className="muted" title="Ikke registrert i Brønnøysund">
+                  Nettsted ↗
+                </span>
+              )}
+            </p>
+            {co.ceo_name && (
+              <span className="muted" style={{ fontSize: '0.82rem' }}>
+                Daglig leder: <span style={{ color: 'var(--text-primary)' }}>{co.ceo_name}</span>
               </span>
             )}
-          </p>
+          </div>
         </div>
         <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', marginTop: 10 }}>
           <Fact label="Ansatte" value={fmtInt(co.employees)} />
@@ -264,14 +271,13 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
               </thead>
               <tbody>
                 {co.phone && <ContactRow label="Sentralbord" name={null} phone={co.phone} />}
-                <ContactRow label="Daglig leder" name={co.ceo_name} />
                 <ContactRow label="Kontaktperson" name={co.contact_name} email={co.contact_email} phone={co.contact_phone} />
                 <ContactRow label="CTO" name={co.cto_name} email={co.cto_email} phone={co.cto_phone} />
                 <ContactRow label="Salgssjef" name={co.sales_name} email={co.sales_email} phone={co.sales_phone} />
               </tbody>
             </table>
           </div>
-          {!co.ceo_name && !co.contact_name && !co.cto_name && !co.sales_name && (
+          {!co.contact_name && !co.cto_name && !co.sales_name && (
             <div className="box-pad muted" style={{ paddingTop: 0, fontSize: '0.82rem' }}>
               Ingen kontaktinfo registrert ennå.{isAdmin ? ' Legg inn under.' : ''}
             </div>
