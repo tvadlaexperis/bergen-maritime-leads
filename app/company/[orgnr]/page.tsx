@@ -329,13 +329,20 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
             </div>
           </div>
 
-          {isAdmin && base && <NotesBox id={base.id} notes={base.notes ?? ''} />}
+          {isAdmin && base && <NotesBox notes={base.notes ?? ''} />}
         </div>
       </div>
 
       {isAdmin && base && (
         <AdminPanelModal>
-          <AdminControls id={base.id} orgnr={base.orgnr} name={base.name} status={base.status} website={base.website} />
+          <AdminControls
+            id={base.id}
+            orgnr={base.orgnr}
+            name={base.name}
+            status={base.status}
+            website={base.website}
+            notes={base.notes ?? ''}
+          />
         </AdminPanelModal>
       )}
     </div>

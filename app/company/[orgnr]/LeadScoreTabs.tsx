@@ -31,7 +31,7 @@ export default function LeadScoreTabs({ tabs }: { tabs: TabDef[] }) {
           ))}
         </div>
       </div>
-      <div className="box-pad" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <div className="box-pad" style={{ display: 'flex', flexDirection: 'column', gap: 14, minHeight: 280 }}>
         {current?.content}
       </div>
     </>

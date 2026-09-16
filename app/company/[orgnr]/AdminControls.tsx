@@ -9,6 +9,7 @@ import {
   setStatusAction,
   deleteCompanyAction,
   updateWebsiteAction,
+  updateNotesAction,
   type ActionState,
 } from '@/app/admin/actions';
 
@@ -32,10 +33,12 @@ export default function AdminControls(props: {
   name: string;
   status: CompanyStatus;
   website: string | null;
+  notes: string;
 }) {
   const router = useRouter();
   const [busy, startTransition] = useTransition();
   const [websiteState, websiteAction] = useFormState(updateWebsiteAction, initial);
+  const [notesState, notesAction] = useFormState(updateNotesAction, initial);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
@@ -83,6 +86,19 @@ export default function AdminControls(props: {
           <button type="submit" className="btn btn-primary btn-sm" disabled={busy}>Lagre nettsted</button>
           {websiteState.error && <p className="form-error" style={{ margin: 0 }}>{websiteState.error}</p>}
           {websiteState.ok && <p className="form-ok" style={{ margin: 0 }}>{websiteState.ok}</p>}
+        </form>
+
+        <form action={notesAction} style={{ display: 'grid', gap: 8 }}>
+          <input type="hidden" name="id" value={props.id} />
+          <label className="field">
+            Notater <span className="muted">(intern — vises kun her)</span>
+            <textarea name="notes" rows={3} defaultValue={props.notes} />
+          </label>
+          {notesState.error && <p className="form-error">{notesState.error}</p>}
+          {notesState.ok && <p className="form-ok">{notesState.ok}</p>}
+          <div>
+            <button type="submit" className="btn btn-primary btn-sm" disabled={busy}>Lagre notater</button>
+          </div>
         </form>
 
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
