@@ -12,9 +12,12 @@ export default function FinancialsTabs({ financials }: { financials: Financial[]
 
   if (financials.length === 0) {
     return (
-      <div className="box-pad">
-        <p className="muted" style={{ fontSize: '0.85rem' }}>Ingen regnskapstall hentet ennå.</p>
-      </div>
+      <>
+        <div className="box-header"><span className="box-title">Regnskapstall</span></div>
+        <div className="box-pad">
+          <p className="muted" style={{ fontSize: '0.85rem' }}>Ingen regnskapstall hentet ennå.</p>
+        </div>
+      </>
     );
   }
 
@@ -22,42 +25,45 @@ export default function FinancialsTabs({ financials }: { financials: Financial[]
   const current = financials.find((f) => f.year === selectedYear) ?? financials[0];
 
   return (
-    <div className="box-pad" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-      <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-        {visible.map((f) => (
-          <button
-            key={f.year}
-            type="button"
-            className={`chip-tab${f.year === current.year ? ' active' : ''}`}
-            onClick={() => setSelectedYear(f.year)}
-          >
-            {f.year}
-          </button>
-        ))}
-        {visibleCount < financials.length && (
-          <button
-            type="button"
-            className="chip-tab"
-            onClick={() => {
-              const next = financials[visibleCount];
-              setVisibleCount((n) => n + 1);
-              setSelectedYear(next.year);
-            }}
-            aria-label={`Vis ${financials[visibleCount].year}`}
-            title={`Vis ${financials[visibleCount].year}`}
-          >
-            ›
-          </button>
-        )}
+    <>
+      <div className="box-header">
+        <span className="box-title">Regnskapstall</span>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          {visible.map((f) => (
+            <button
+              key={f.year}
+              type="button"
+              className={`chip-tab${f.year === current.year ? ' active' : ''}`}
+              onClick={() => setSelectedYear(f.year)}
+            >
+              {f.year}
+            </button>
+          ))}
+          {visibleCount < financials.length && (
+            <button
+              type="button"
+              className="chip-tab"
+              onClick={() => {
+                const next = financials[visibleCount];
+                setVisibleCount((n) => n + 1);
+                setSelectedYear(next.year);
+              }}
+              aria-label={`Vis ${financials[visibleCount].year}`}
+              title={`Vis ${financials[visibleCount].year}`}
+            >
+              ›
+            </button>
+          )}
+        </div>
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 12 }}>
+      <div className="box-pad" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 12 }}>
         <Fact label="Driftsinntekter" value={fmtNok(current.revenue, { compact: true })} />
         <Fact label="Driftsresultat" value={fmtNok(current.operating_result, { compact: true })} />
         <Fact label="Årsresultat" value={fmtNok(current.profit, { compact: true })} />
         <Fact label="Egenkapital" value={fmtNok(current.equity, { compact: true })} />
         <Fact label="Sum eiendeler" value={fmtNok(current.total_assets, { compact: true })} />
       </div>
-    </div>
+    </>
   );
 }
 

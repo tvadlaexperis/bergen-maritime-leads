@@ -244,10 +244,6 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
 
         {/* Financial history */}
         <div className="box">
-          <div className="box-header">
-            <span className="box-title">Regnskapstall ({financials.length} år)</span>
-            <span className="muted">Regnskapsregisteret</span>
-          </div>
           <FinancialsTabs financials={financials} />
         </div>
       </div>
@@ -267,6 +263,7 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
                 </tr>
               </thead>
               <tbody>
+                {co.phone && <ContactRow label="Sentralbord" name={null} phone={co.phone} />}
                 <ContactRow label="Daglig leder" name={co.ceo_name} />
                 <ContactRow label="Kontaktperson" name={co.contact_name} email={co.contact_email} phone={co.contact_phone} />
                 <ContactRow label="CTO" name={co.cto_name} email={co.cto_email} phone={co.cto_phone} />
