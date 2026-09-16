@@ -9,17 +9,11 @@ export default async function FxTicker() {
   return (
     <div className="fx-ticker" aria-label="NOK exchange rates">
       {rates.map((r) => {
-        const up = (r.changePct ?? 0) >= 0;
+        const dir = r.changePct == null ? undefined : r.changePct >= 0 ? 'up' : 'down';
         return (
           <span key={r.code} className="fx-item">
             <span className="fx-code">{r.code}</span>
-            <span className="fx-val">{r.value.toFixed(2).replace('.', ',')}</span>
-            {r.changePct != null && (
-              <span className="fx-chg" data-dir={up ? 'up' : 'down'}>
-                {up ? '+' : ''}
-                {r.changePct.toFixed(2).replace('.', ',')} %
-              </span>
-            )}
+            <span className="fx-val" data-dir={dir}>{r.value.toFixed(2).replace('.', ',')}</span>
           </span>
         );
       })}

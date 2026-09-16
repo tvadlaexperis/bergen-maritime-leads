@@ -213,15 +213,10 @@ a {
   color: var(--text-primary);
   font-weight: 600;
 }
-.fx-chg {
-  font-family: var(--font-mono);
-  font-variant-numeric: tabular-nums;
-  font-size: 0.72rem;
-}
-.fx-chg[data-dir='up'] {
+.fx-val[data-dir='up'] {
   color: var(--positive);
 }
-.fx-chg[data-dir='down'] {
+.fx-val[data-dir='down'] {
   color: var(--negative);
 }
 
