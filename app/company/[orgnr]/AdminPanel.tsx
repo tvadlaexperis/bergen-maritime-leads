@@ -21,7 +21,7 @@ function usePanel() {
 export function AdminPanelToggle() {
   const { setOpen } = usePanel();
   return (
-    <button type="button" className="chip" onClick={() => setOpen(true)}>
+    <button type="button" className="btn btn-primary btn-sm" onClick={() => setOpen(true)}>
       Oppdater info
     </button>
   );
