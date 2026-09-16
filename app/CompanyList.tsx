@@ -301,7 +301,6 @@ export default function CompanyList({
             Score
           </button>
           <span style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 10 }}>
-            <span className="hit-badge">Treff {filtered.length}</span>
             {activeFilterCount > 0 && (
               <>
                 <span className="muted" style={{ fontSize: '0.76rem' }}>
@@ -312,6 +311,7 @@ export default function CompanyList({
                 </button>
               </>
             )}
+            <span className="hit-badge">Treff {filtered.length}</span>
           </span>
         </div>
 
