@@ -13,6 +13,8 @@ import {
   insertScore,
   setCompanyCeo,
   setCompanyAiAnalysis,
+  setCompanyWebsite,
+  setWebsiteSearchAttempted,
   listCompaniesToRefresh,
   listActiveCompanies,
   getCompanyByOrgnr,
@@ -132,6 +134,18 @@ async function enrichCompany(orgnr: string, errors: ScanError[]): Promise<boolea
     if (analysis.ok && analysis.data) await setCompanyAiAnalysis(company.id, JSON.stringify(analysis.data));
   } else {
     errors.push({ scope: `score ${orgnr}`, message: scored.error });
+  }
+
+  // Paid Google Search-grounded lookup, so this must run at most once per
+  // company ever — never on a later refresh, even if it found nothing.
+  if (!company.website && !company.website_search_attempted_at) {
+    const found = await orchestrator.callTool<string | null>(
+      'ai.findWebsite',
+      { name: company.name, orgnr: company.orgnr, poststed: company.poststed },
+      20_000,
+    );
+    await setWebsiteSearchAttempted(company.id);
+    if (found.ok && found.data) await setCompanyWebsite(company.id, found.data);
   }
 
   await markCompanyRefreshed(orgnr);

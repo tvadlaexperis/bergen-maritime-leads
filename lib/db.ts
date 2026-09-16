@@ -60,6 +60,7 @@ export interface Company {
   ai_summary_at: number | null;
   ai_analysis: string | null; // JSON-encoded LeadAnalysis (lib/orchestrator/providers/ai.ts)
   ai_analysis_at: number | null;
+  website_search_attempted_at: number | null;
   discovered_at: number;
   last_refreshed_at: number | null;
   updated_at: number;
@@ -157,6 +158,7 @@ const CONTACT_COLUMNS = [
   'ai_summary_at INTEGER',
   'ai_analysis TEXT',
   'ai_analysis_at INTEGER',
+  'website_search_attempted_at INTEGER',
 ];
 
 async function addContactColumns(): Promise<void> {
@@ -222,6 +224,7 @@ async function ensureSchema(): Promise<void> {
         sales_name TEXT, sales_email TEXT, sales_phone TEXT,
         ai_summary TEXT, ai_summary_at INTEGER,
         ai_analysis TEXT, ai_analysis_at INTEGER,
+        website_search_attempted_at INTEGER,
         discovered_at INTEGER NOT NULL,
         last_refreshed_at INTEGER,
         updated_at INTEGER NOT NULL
@@ -661,6 +664,17 @@ export async function setCompanyAiAnalysis(id: number, analysisJson: string): Pr
   await c.execute({
     sql: 'UPDATE companies SET ai_analysis = ?, ai_analysis_at = ? WHERE id = ?',
     args: [analysisJson, Date.now(), id],
+  });
+}
+
+// Marks that we've already run the paid Google Search-grounded website
+// lookup (ai.findWebsite) for this company, whether or not it found one —
+// so it runs at most once per company ever, not on every refresh.
+export async function setWebsiteSearchAttempted(id: number): Promise<void> {
+  const c = await db();
+  await c.execute({
+    sql: 'UPDATE companies SET website_search_attempted_at = ? WHERE id = ?',
+    args: [Date.now(), id],
   });
 }
 

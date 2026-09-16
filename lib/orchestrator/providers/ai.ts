@@ -1,5 +1,6 @@
 import type { Provider } from '../types';
 import { safeFetchText } from '../../http/safeFetch';
+import { cleanWebsite } from '../../brreg';
 
 // Gemini Flash builds the structured "Om selskapet" analysis (customer-fit
 // score factors, buying signals, recommended entry point). Free-tier
@@ -194,12 +195,69 @@ async function requestAnalysis(input: LeadAnalysisInput): Promise<LeadAnalysis |
   return isValidAnalysis(parsed) ? parsed : null;
 }
 
+export interface FindWebsiteInput {
+  name: string;
+  orgnr: string;
+  poststed: string | null;
+}
+
+// Uses Gemini's google_search grounding tool — a real web search, not a
+// guess — to find a company's official site when Brønnøysund has none.
+// Billed per search query Google executes (unlike the free-tier ai.analyze
+// call above), so callers must only invoke this once per company ever
+// (lib/scan.ts checks website_search_attempted_at before calling it).
+async function requestWebsite(input: FindWebsiteInput): Promise<string | null> {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) return null;
+
+  const prompt =
+    `Finn den offisielle nettsiden til det norske selskapet "${input.name}" (org.nr ${input.orgnr})` +
+    `${input.poststed ? `, med forretningsadresse i ${input.poststed}` : ''}. ` +
+    'Bruk søk til å bekrefte at du finner riktig selskaps EGEN offisielle nettside — ikke en oppføring hos ' +
+    'proff.no, 1881.no, LinkedIn, Facebook eller en lignende katalog-/tredjepartstjeneste. ' +
+    'Svar KUN med selve URL-en (f.eks. https://firma.no) uten noen annen tekst eller forklaring. ' +
+    'Hvis du ikke finner en offisiell nettside med rimelig sikkerhet, svar nøyaktig ordet UKJENT.';
+
+  const body = await safeFetchText(URL, {
+    allowHosts: [HOST],
+    method: 'POST',
+    timeoutMs: 20_000,
+    headers: {
+      'Content-Type': 'application/json',
+      'x-goog-api-key': apiKey,
+    },
+    body: JSON.stringify({
+      model: GEMINI_MODEL,
+      input: [{ type: 'text', text: prompt }],
+      tools: [{ type: 'google_search' }],
+    }),
+  });
+  if (!body) return null;
+
+  let data: unknown;
+  try {
+    data = JSON.parse(body);
+  } catch {
+    return null;
+  }
+  const outputStep = (data as { steps?: { type: string; content?: { text?: string }[] }[] }).steps?.find(
+    (step) => step.type === 'model_output',
+  );
+  const text = outputStep?.content
+    ?.map((block) => block.text ?? '')
+    .join('')
+    .trim();
+  if (!text || text.toUpperCase().includes('UKJENT')) return null;
+  return cleanWebsite(text);
+}
+
 export const aiProvider: Provider = {
   id: 'ai',
-  tools: ['analyze'],
+  tools: ['analyze', 'findWebsite'],
   isEnabled: () => !!process.env.GEMINI_API_KEY,
   async call(tool, args) {
-    if (tool !== 'analyze') throw new Error(`ai: unknown tool ${tool}`);
-    return requestAnalysis(args as unknown as LeadAnalysisInput);
+    if (tool === 'analyze') return requestAnalysis(args as unknown as LeadAnalysisInput);
+    if (tool === 'findWebsite') return requestWebsite(args as unknown as FindWebsiteInput);
+    throw new Error(`ai: unknown tool ${tool}`);
   },
 };
