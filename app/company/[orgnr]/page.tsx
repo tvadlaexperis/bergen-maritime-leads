@@ -9,6 +9,7 @@ import { fmtNok, fmtPct, fmtInt, dateLabel } from '@/app/format';
 import { bandFor } from '@/app/components/ScoreBadge';
 import type { LeadAnalysis, ScoreVerdict, SignalLevel } from '@/lib/orchestrator/providers/ai';
 import AdminControls from './AdminControls';
+import { AdminPanelProvider, AdminPanelToggle, AdminPanelModal } from './AdminPanel';
 import AutoRefreshTrigger from './AutoRefreshTrigger';
 import ContactsEditForm from './ContactsEditForm';
 import FinancialsTabs from './FinancialsTabs';
@@ -75,6 +76,7 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
     isAdmin && !co.ai_analysis && (!co.last_refreshed_at || Date.now() - co.last_refreshed_at > 60 * 60 * 1000);
 
   return (
+    <AdminPanelProvider>
     <div className="page-scroll" style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
       <div>
         <Link href="/" className="muted" style={{ fontSize: '0.8rem' }}>
@@ -134,6 +136,7 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
                 Daglig leder: <span style={{ color: 'var(--text-primary)' }}>{co.ceo_name}</span>
               </span>
             )}
+            {isAdmin && <AdminPanelToggle />}
           </div>
         </div>
         <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', marginTop: 10 }}>
@@ -283,32 +286,20 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
             </div>
           )}
           {isAdmin && base && (
-            <>
-              <ContactsEditForm
-                id={base.id}
-                contacts={{
-                  contact_name: base.contact_name,
-                  contact_email: base.contact_email,
-                  contact_phone: base.contact_phone,
-                  cto_name: base.cto_name,
-                  cto_email: base.cto_email,
-                  cto_phone: base.cto_phone,
-                  sales_name: base.sales_name,
-                  sales_email: base.sales_email,
-                  sales_phone: base.sales_phone,
-                }}
-              />
-              <div className="box-pad" style={{ paddingTop: 0 }}>
-                <AdminControls
-                  embedded
-                  id={base.id}
-                  orgnr={base.orgnr}
-                  name={base.name}
-                  status={base.status}
-                  website={base.website}
-                />
-              </div>
-            </>
+            <ContactsEditForm
+              id={base.id}
+              contacts={{
+                contact_name: base.contact_name,
+                contact_email: base.contact_email,
+                contact_phone: base.contact_phone,
+                cto_name: base.cto_name,
+                cto_email: base.cto_email,
+                cto_phone: base.cto_phone,
+                sales_name: base.sales_name,
+                sales_email: base.sales_email,
+                sales_phone: base.sales_phone,
+              }}
+            />
           )}
         </div>
 
@@ -339,7 +330,14 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
       </div>
 
       {isAdmin && base && <NotesBox id={base.id} notes={base.notes ?? ''} />}
+
+      {isAdmin && base && (
+        <AdminPanelModal>
+          <AdminControls id={base.id} orgnr={base.orgnr} name={base.name} status={base.status} website={base.website} />
+        </AdminPanelModal>
+      )}
     </div>
+    </AdminPanelProvider>
   );
 }
 
