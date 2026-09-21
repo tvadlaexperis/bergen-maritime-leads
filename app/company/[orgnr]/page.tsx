@@ -86,7 +86,7 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
           <div>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
               <h1 style={{ fontSize: '1.5rem', fontWeight: 800, letterSpacing: '-0.02em' }}>{co.name}</h1>
-              {co.under_liquidation === 1 && <span className="muted">(under avvikling)</span>}
+              {co.under_liquidation === 1 && <span className="liquidation-badge">Under avvikling</span>}
             </div>
             <p className="muted" style={{ fontSize: '0.82rem', marginTop: 6 }}>
               Org.nr {co.orgnr}

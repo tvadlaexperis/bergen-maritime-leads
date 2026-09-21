@@ -757,6 +757,22 @@ a {
   vertical-align: middle;
 }
 
+/* ── Under avvikling — a warning, not a neutral fact, so it gets --negative
+   rather than muted grey text a reader can skim past ── */
+.liquidation-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 7px;
+  border-radius: var(--radius-pill);
+  border: 1px solid color-mix(in srgb, var(--negative) 40%, transparent);
+  background: color-mix(in srgb, var(--negative) 10%, transparent);
+  color: var(--negative);
+  font-size: 0.68rem;
+  font-weight: 700;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
 /* ── Meter bars for the sub-scores ── */
 .meter {
   height: 6px;

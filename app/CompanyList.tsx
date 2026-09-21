@@ -476,7 +476,7 @@ export default function CompanyList({
                       {r.name}
                     </Link>
                     {r.manual_entry === 1 && <span className="muted" style={{ marginLeft: 6 }}>· lagt til</span>}
-                    {r.under_liquidation === 1 && <span className="muted" style={{ marginLeft: 6 }}>· under avvikling</span>}
+                    {r.under_liquidation === 1 && <span className="liquidation-badge">Under avvikling</span>}
                     {r.ceo_changed_at != null && (
                       <span className="ceo-changed-badge" title={`Byttet daglig leder ${dateLabel(r.ceo_changed_at)}`}>
                         Ny ledelse
