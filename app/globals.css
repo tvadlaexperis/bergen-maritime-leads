@@ -741,6 +741,22 @@ a {
   border-style: dashed;
 }
 
+/* ── Leadership-change signal — a sales trigger, not a score, so it stays on
+   the blue accent rather than the score band's --signal amber ── */
+.ceo-changed-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 7px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--accent-border);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 0.68rem;
+  font-weight: 700;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
 /* ── Meter bars for the sub-scores ── */
 .meter {
   height: 6px;

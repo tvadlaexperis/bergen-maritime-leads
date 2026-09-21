@@ -75,7 +75,10 @@ async function enrichCompany(orgnr: string, errors: ScanError[]): Promise<boolea
   if (!fin.ok) errors.push({ scope: `regnskap ${orgnr}`, message: fin.error });
 
   const roller = await orchestrator.callTool<string | null>('brreg.getRoller', { orgnr }, 12_000);
-  if (roller.ok) await setCompanyCeo(company.id, roller.data);
+  if (roller.ok) {
+    const ceoChanged = company.ceo_name != null && roller.data != null && roller.data !== company.ceo_name;
+    await setCompanyCeo(company.id, roller.data, ceoChanged);
+  }
 
   let fetched = 0;
   if (financials.length) {

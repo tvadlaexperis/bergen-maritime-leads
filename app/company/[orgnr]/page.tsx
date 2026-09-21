@@ -134,6 +134,11 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
             {co.ceo_name && (
               <span className="muted" style={{ fontSize: '0.82rem' }}>
                 Daglig leder: <span style={{ color: 'var(--text-primary)' }}>{co.ceo_name}</span>
+                {co.ceo_changed_at != null && (
+                  <span className="ceo-changed-badge" title={`Byttet daglig leder ${dateLabel(co.ceo_changed_at)}`}>
+                    Ny ledelse
+                  </span>
+                )}
               </span>
             )}
             {isAdmin && <AdminPanelToggle />}

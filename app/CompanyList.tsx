@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import type { CompanyWithScore } from '@/lib/db';
-import { fmtNok, fmtPct, fmtInt } from './format';
+import { fmtNok, fmtPct, fmtInt, dateLabel } from './format';
 import ScoreBadge from './components/ScoreBadge';
 
 type SizeFilter = 'all' | 'under10' | '5-15' | '10' | '50';
@@ -477,6 +477,11 @@ export default function CompanyList({
                     </Link>
                     {r.manual_entry === 1 && <span className="muted" style={{ marginLeft: 6 }}>· lagt til</span>}
                     {r.under_liquidation === 1 && <span className="muted" style={{ marginLeft: 6 }}>· under avvikling</span>}
+                    {r.ceo_changed_at != null && (
+                      <span className="ceo-changed-badge" title={`Byttet daglig leder ${dateLabel(r.ceo_changed_at)}`}>
+                        Ny ledelse
+                      </span>
+                    )}
                   </td>
                   <td style={{ whiteSpace: 'nowrap' }} className="muted">{r.matched_group ?? '—'}</td>
                   <td className="col-right num">{fmtInt(r.employees)}</td>
