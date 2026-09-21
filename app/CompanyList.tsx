@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import type { CompanyWithScore } from '@/lib/db';
 import { fmtNok, fmtPct, fmtInt, dateLabel } from './format';
@@ -480,16 +480,18 @@ export default function CompanyList({
                 {COLUMNS.map((col) => {
                   const activeCol = col.key === sortKey;
                   return (
-                    <th
-                      key={col.key}
-                      className={col.align === 'right' ? 'col-right' : undefined}
-                      aria-sort={activeCol ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}
-                    >
-                      <button type="button" className="th-sort" onClick={() => toggleSort(col)}>
-                        {col.label}
-                        <span className="sort-ind">{activeCol ? (sortDir === 'asc' ? '▲' : '▼') : '↕'}</span>
-                      </button>
-                    </th>
+                    <Fragment key={col.key}>
+                      <th
+                        className={col.align === 'right' ? 'col-right' : undefined}
+                        aria-sort={activeCol ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}
+                      >
+                        <button type="button" className="th-sort" onClick={() => toggleSort(col)}>
+                          {col.label}
+                          <span className="sort-ind">{activeCol ? (sortDir === 'asc' ? '▲' : '▼') : '↕'}</span>
+                        </button>
+                      </th>
+                      {col.key === 'name' && <th>Status</th>}
+                    </Fragment>
                   );
                 })}
               </tr>
@@ -514,6 +516,8 @@ export default function CompanyList({
                       {r.name}
                     </Link>
                     {r.manual_entry === 1 && <span className="muted" style={{ marginLeft: 6 }}>· lagt til</span>}
+                  </td>
+                  <td style={{ whiteSpace: 'nowrap' }}>
                     {r.under_liquidation === 1 && <span className="liquidation-badge">Under avvikling</span>}
                     {r.ceo_changed_at != null && (
                       <span className="ceo-changed-badge" title={`Byttet daglig leder ${dateLabel(r.ceo_changed_at)}`}>
@@ -538,7 +542,7 @@ export default function CompanyList({
               ))}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="muted" style={{ textAlign: 'center', padding: 28 }}>
+                  <td colSpan={9} className="muted" style={{ textAlign: 'center', padding: 28 }}>
                     {lockFavorites && favorites.size === 0
                       ? 'Ingen favoritter ennå. Klikk ☆ ved et selskap for å legge det til.'
                       : 'Ingen selskaper matcher filtrene.'}
