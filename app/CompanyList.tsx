@@ -5,11 +5,13 @@ import Link from 'next/link';
 import type { CompanyWithScore } from '@/lib/db';
 import { fmtNok, fmtPct, fmtInt, dateLabel } from './format';
 import ScoreBadge from './components/ScoreBadge';
+import SignalBadge, { parseBuyingSignalLevel } from './components/SignalBadge';
 
 type SizeFilter = 'all' | 'under10' | '5-15' | '10' | '50';
 type ScoreFilter = 'all' | '40' | '66';
 type GrowthFilter = 'all' | '0' | '10' | '25';
-type FilterTab = 'segment' | 'bransje' | 'selskapsform' | 'kommune' | 'size' | 'growth' | 'score';
+type SignalFilter = 'all' | 'high';
+type FilterTab = 'segment' | 'bransje' | 'selskapsform' | 'kommune' | 'size' | 'growth' | 'score' | 'signal';
 type SortKey = 'name' | 'group' | 'employees' | 'revenue' | 'growth' | 'score';
 type SortDir = 'asc' | 'desc';
 
@@ -24,6 +26,7 @@ interface StoredFilters {
   minSize: SizeFilter;
   minGrowth: GrowthFilter;
   minScore: ScoreFilter;
+  signalFilter: SignalFilter;
   filterTab: FilterTab;
   search: string;
 }
@@ -36,6 +39,7 @@ const DEFAULT_FILTERS: StoredFilters = {
   minSize: 'all',
   minGrowth: 'all',
   minScore: 'all',
+  signalFilter: 'all',
   filterTab: 'segment',
   search: '',
 };
@@ -78,6 +82,7 @@ export default function CompanyList({
   const [minSize, setMinSize] = useState<SizeFilter>(DEFAULT_FILTERS.minSize);
   const [minGrowth, setMinGrowth] = useState<GrowthFilter>(DEFAULT_FILTERS.minGrowth);
   const [minScore, setMinScore] = useState<ScoreFilter>(DEFAULT_FILTERS.minScore);
+  const [signalFilter, setSignalFilter] = useState<SignalFilter>(DEFAULT_FILTERS.signalFilter);
   const [filterTab, setFilterTab] = useState<FilterTab>(DEFAULT_FILTERS.filterTab);
   const [search, setSearch] = useState<string>(DEFAULT_FILTERS.search);
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
@@ -99,6 +104,7 @@ export default function CompanyList({
         if (saved.minSize) setMinSize(saved.minSize);
         if (saved.minGrowth) setMinGrowth(saved.minGrowth);
         if (saved.minScore) setMinScore(saved.minScore);
+        if (saved.signalFilter) setSignalFilter(saved.signalFilter);
         if (saved.filterTab) setFilterTab(saved.filterTab);
         if (saved.search) setSearch(saved.search);
       }
@@ -126,6 +132,7 @@ export default function CompanyList({
       minSize,
       minGrowth,
       minScore,
+      signalFilter,
       filterTab,
       search,
     };
@@ -134,7 +141,7 @@ export default function CompanyList({
     } catch {
       // ignore write failures
     }
-  }, [group, bransje, orgForm, kommuneFilter, minSize, minGrowth, minScore, filterTab, search]);
+  }, [group, bransje, orgForm, kommuneFilter, minSize, minGrowth, minScore, signalFilter, filterTab, search]);
 
   useEffect(() => {
     if (!loadedFavorites.current) return;
@@ -162,6 +169,7 @@ export default function CompanyList({
     minSize !== DEFAULT_FILTERS.minSize,
     minGrowth !== DEFAULT_FILTERS.minGrowth,
     minScore !== DEFAULT_FILTERS.minScore,
+    signalFilter !== DEFAULT_FILTERS.signalFilter,
     search !== DEFAULT_FILTERS.search,
   ].filter(Boolean).length;
 
@@ -173,6 +181,7 @@ export default function CompanyList({
     setMinSize(DEFAULT_FILTERS.minSize);
     setMinGrowth(DEFAULT_FILTERS.minGrowth);
     setMinScore(DEFAULT_FILTERS.minScore);
+    setSignalFilter(DEFAULT_FILTERS.signalFilter);
     setSearch(DEFAULT_FILTERS.search);
   }
 
@@ -181,6 +190,10 @@ export default function CompanyList({
   const bransjer = useMemo(() => uniqSorted(rows.map((r) => r.nace1_text)), [rows]);
   const orgForms = useMemo(() => uniqSorted(rows.map((r) => r.org_form)), [rows]);
   const kommuner = useMemo(() => uniqSorted(rows.map((r) => r.kommune)), [rows]);
+  // Keyed by id, not embedded on the row, so `rows` stays exactly what the
+  // server sent — parsing 600+ small JSON blobs is negligible either way.
+  const signalById = useMemo(() => new Map(rows.map((r) => [r.id, parseBuyingSignalLevel(r.ai_analysis)])), [rows]);
+  const hasSignalData = useMemo(() => [...signalById.values()].some((v) => v != null), [signalById]);
 
   function toggleSort(col: (typeof COLUMNS)[number]) {
     if (col.key === sortKey) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
@@ -209,6 +222,7 @@ export default function CompanyList({
       if (minGrowth === '25' && (growth == null || growth <= 25)) return false;
       if (minScore === '40' && (r.lead_score ?? -1) < 40) return false;
       if (minScore === '66' && (r.lead_score ?? -1) < 66) return false;
+      if (signalFilter === 'high' && signalById.get(r.id) !== 'høy') return false;
       if (q) {
         const haystack = `${r.name} ${r.matched_group ?? ''} ${r.nace1_text ?? ''} ${r.org_form ?? ''}`.toLowerCase();
         if (!haystack.includes(q)) return false;
@@ -226,7 +240,7 @@ export default function CompanyList({
       if (typeof av === 'string') return mul * av.localeCompare(bv as string, 'nb');
       return mul * ((av as number) - (bv as number));
     });
-  }, [rows, group, bransje, orgForm, kommuneFilter, minSize, minGrowth, minScore, search, favorites, lockFavorites, sortKey, sortDir]);
+  }, [rows, group, bransje, orgForm, kommuneFilter, minSize, minGrowth, minScore, signalFilter, signalById, search, favorites, lockFavorites, sortKey, sortDir]);
 
   return (
     <div className="page-fill" style={{ gap: 16 }}>
@@ -299,6 +313,13 @@ export default function CompanyList({
           >
             {minScore !== 'all' && <span className="chip-tab-dot" />}
             Score
+          </button>
+          <button
+            className={`chip-tab${filterTab === 'signal' ? ' active' : ''}`}
+            onClick={() => setFilterTab('signal')}
+          >
+            {signalFilter !== 'all' && <span className="chip-tab-dot" />}
+            Kjøpssignal
           </button>
           <span style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 10 }}>
             {activeFilterCount > 0 && (
@@ -430,6 +451,23 @@ export default function CompanyList({
             </button>
           </div>
         )}
+
+        {filterTab === 'signal' && (
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+            <button className={`chip${signalFilter === 'all' ? ' active' : ''}`} onClick={() => setSignalFilter('all')}>
+              Alle
+            </button>
+            <button className={`chip${signalFilter === 'high' ? ' active' : ''}`} onClick={() => setSignalFilter('high')}>
+              Sterkt kjøpssignal
+            </button>
+            {!hasSignalData && (
+              <span className="muted" style={{ fontSize: '0.76rem' }}>
+                Ingen kjøpssignal-data ennå — kommer fra AI-analysen som kjøres på selskapene etter
+                hvert som den roterende skanningen når dem.
+              </span>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="box" style={{ flex: 1, minHeight: 0 }}>
@@ -482,6 +520,7 @@ export default function CompanyList({
                         Ny ledelse
                       </span>
                     )}
+                    <SignalBadge level={signalById.get(r.id) ?? null} />
                   </td>
                   <td style={{ whiteSpace: 'nowrap' }} className="muted">{r.matched_group ?? '—'}</td>
                   <td className="col-right num">{fmtInt(r.employees)}</td>
