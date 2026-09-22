@@ -12,7 +12,7 @@ type ScoreFilter = 'all' | '40' | '66';
 type GrowthFilter = 'all' | '0' | '10' | '25';
 type SignalFilter = 'all' | 'high';
 type FilterTab = 'segment' | 'bransje' | 'selskapsform' | 'kommune' | 'size' | 'growth' | 'score' | 'signal';
-type SortKey = 'name' | 'group' | 'employees' | 'revenue' | 'growth' | 'score';
+type SortKey = 'name' | 'group' | 'employees' | 'revenue' | 'growth' | 'margin' | 'score';
 type SortDir = 'asc' | 'desc';
 
 const STORAGE_KEY = 'bml.companyList.filters.v1';
@@ -60,6 +60,7 @@ const COLUMNS: {
   { key: 'employees', label: 'Ansatte', align: 'right', firstDir: 'desc', value: (r) => r.employees },
   { key: 'revenue', label: 'Omsetning', align: 'right', firstDir: 'desc', value: (r) => r.revenue_latest },
   { key: 'growth', label: 'Vekst å/å', align: 'right', firstDir: 'desc', value: (r) => r.revenue_growth_pct },
+  { key: 'margin', label: 'Driftsmargin', align: 'right', firstDir: 'desc', value: (r) => r.operating_margin_pct },
   { key: 'score', label: 'Lead', align: 'right', firstDir: 'desc', value: (r) => r.lead_score },
 ];
 
@@ -535,6 +536,12 @@ export default function CompanyList({
                   >
                     {r.revenue_growth_pct != null ? fmtPct(r.revenue_growth_pct, 0) : '—'}
                   </td>
+                  <td
+                    className="col-right num"
+                    style={{ whiteSpace: 'nowrap', color: r.operating_margin_pct != null ? (r.operating_margin_pct >= 0 ? 'var(--positive)' : 'var(--negative)') : undefined }}
+                  >
+                    {r.operating_margin_pct != null ? fmtPct(r.operating_margin_pct, 0) : '—'}
+                  </td>
                   <td className="col-right">
                     <ScoreBadge score={r.lead_score} reason={r.reason} />
                   </td>
@@ -542,7 +549,7 @@ export default function CompanyList({
               ))}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={9} className="muted" style={{ textAlign: 'center', padding: 28 }}>
+                  <td colSpan={10} className="muted" style={{ textAlign: 'center', padding: 28 }}>
                     {lockFavorites && favorites.size === 0
                       ? 'Ingen favoritter ennå. Klikk ☆ ved et selskap for å legge det til.'
                       : 'Ingen selskaper matcher filtrene.'}
