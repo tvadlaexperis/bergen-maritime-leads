@@ -1,6 +1,7 @@
 import type { Provider } from '../types';
 import { safeFetchText } from '../../http/safeFetch';
 import { cleanWebsite } from '../../brreg';
+import { stripHtml, findLikelyContactPages } from '../../website';
 
 // Gemini Flash builds the structured "Om selskapet" analysis (customer-fit
 // score factors, buying signals, recommended entry point). Free-tier
@@ -251,13 +252,135 @@ async function requestWebsite(input: FindWebsiteInput): Promise<string | null> {
   return cleanWebsite(text);
 }
 
+// --- Contact extraction from a company's own website ----------------------
+// Brønnøysund only ever exposes the statutory daglig leder — a "Kontakter"
+// section that's otherwise limited to admin-typed fields is thin for a
+// maritime company whose own "about us" page lists a dozen named crew/
+// technical/sales contacts with direct emails. This reads the site itself
+// (not a paid search — we already know the URL from ai.findWebsite) and asks
+// Gemini to turn the page text into structured contacts. Runs every
+// enrichment cycle (like ai.analyze), not once-per-company like findWebsite,
+// since staff listed on a team page turn over.
+
+export interface ExtractedContact {
+  name: string;
+  role: string | null;
+  email: string | null;
+  phone: string | null;
+}
+
+const CONTACTS_SCHEMA = {
+  type: 'object',
+  properties: {
+    contacts: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          name: { type: 'string' },
+          role: { type: ['string', 'null'] },
+          email: { type: ['string', 'null'] },
+          phone: { type: ['string', 'null'] },
+        },
+        required: ['name', 'role', 'email', 'phone'],
+      },
+    },
+  },
+  required: ['contacts'],
+} as const;
+
+function isValidContacts(v: unknown): v is { contacts: ExtractedContact[] } {
+  if (!v || typeof v !== 'object') return false;
+  return Array.isArray((v as { contacts?: unknown }).contacts);
+}
+
+// Deliberately no `allowHosts` — this is an arbitrary company's own domain,
+// exactly the case safeFetchText's SSRF guard (private-IP/DNS check) exists
+// for, unlike the calls above to our own trusted Gemini host.
+async function fetchPageText(url: string): Promise<string | null> {
+  return safeFetchText(url, { timeoutMs: 8_000, revalidate: 21_600, headers: { Accept: 'text/html' } });
+}
+
+async function requestContacts(name: string, website: string): Promise<ExtractedContact[]> {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) return [];
+
+  const homepageHtml = await fetchPageText(website);
+  if (!homepageHtml) return [];
+
+  const subpageUrls = findLikelyContactPages(homepageHtml, website, 2);
+  const pages = [{ url: website, html: homepageHtml }];
+  for (const url of subpageUrls) {
+    const html = await fetchPageText(url);
+    if (html) pages.push({ url, html });
+  }
+
+  const combinedText = pages
+    .map((p) => `--- ${p.url} ---\n${stripHtml(p.html).slice(0, 8_000)}`)
+    .join('\n\n')
+    .slice(0, 20_000);
+  if (!combinedText.trim()) return [];
+
+  const prompt =
+    `Du leser tekst hentet fra det norske selskapet "${name}" sin egen nettside, for å finne navngitte ` +
+    'ansatte/kontaktpersoner og deres rolle, e-post og telefon.\n\n' +
+    'REGLER (svært viktig):\n' +
+    '- Ta KUN med personer som er eksplisitt navngitt på siden med et virkelig person-navn — ikke ' +
+    'avdelinger, skjemaer eller "Kontakt oss"-bokser.\n' +
+    '- Mangler e-post eller telefon for en person, sett feltet til null. Ikke gjett eller finn på noe.\n' +
+    '- Ikke ta med generiske firma-adresser (post@, info@, sentralbord) som om de var en person.\n' +
+    '- Finner du ingen navngitte personer i teksten, returner en tom liste.\n\n' +
+    combinedText;
+
+  const body = await safeFetchText(URL, {
+    allowHosts: [HOST],
+    method: 'POST',
+    timeoutMs: 25_000,
+    headers: {
+      'Content-Type': 'application/json',
+      'x-goog-api-key': apiKey,
+    },
+    body: JSON.stringify({
+      model: GEMINI_MODEL,
+      input: [{ type: 'text', text: prompt }],
+      response_format: { type: 'text', mime_type: 'application/json', schema: CONTACTS_SCHEMA },
+    }),
+  });
+  if (!body) return [];
+
+  let data: unknown;
+  try {
+    data = JSON.parse(body);
+  } catch {
+    return [];
+  }
+  const outputStep = (data as { steps?: { type: string; content?: { text?: string }[] }[] }).steps?.find(
+    (step) => step.type === 'model_output',
+  );
+  const outputText = outputStep?.content?.map((block) => block.text ?? '').join('');
+  if (!outputText) return [];
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(outputText);
+  } catch {
+    return [];
+  }
+  if (!isValidContacts(parsed)) return [];
+  return parsed.contacts.filter((ct) => ct.name?.trim()).slice(0, 20);
+}
+
 export const aiProvider: Provider = {
   id: 'ai',
-  tools: ['analyze', 'findWebsite'],
+  tools: ['analyze', 'findWebsite', 'extractContacts'],
   isEnabled: () => !!process.env.GEMINI_API_KEY,
   async call(tool, args) {
     if (tool === 'analyze') return requestAnalysis(args as unknown as LeadAnalysisInput);
     if (tool === 'findWebsite') return requestWebsite(args as unknown as FindWebsiteInput);
+    if (tool === 'extractContacts') {
+      const { name, website } = args as { name: string; website: string };
+      return requestContacts(name, website);
+    }
     throw new Error(`ai: unknown tool ${tool}`);
   },
 };

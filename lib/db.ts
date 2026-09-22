@@ -84,6 +84,20 @@ export interface Financial {
   fetched_at: number;
 }
 
+// Best-effort contacts scraped from a company's own website (lib/website.ts +
+// ai.extractContacts) — distinct from the admin-typed Kontaktperson/CTO/
+// Salgssjef fields on `companies`, which a human explicitly entered and that
+// a re-scrape should never silently overwrite.
+export interface WebsiteContact {
+  id: number;
+  company_id: number;
+  name: string;
+  role: string | null;
+  email: string | null;
+  phone: string | null;
+  fetched_at: number;
+}
+
 export interface CompanyScore {
   id: number;
   company_id: number;
@@ -277,6 +291,17 @@ async function ensureSchema(): Promise<void> {
         computed_at INTEGER NOT NULL
       );
       CREATE INDEX IF NOT EXISTS idx_scores_company_computed ON company_scores(company_id, computed_at);
+
+      CREATE TABLE IF NOT EXISTS company_contacts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        role TEXT,
+        email TEXT,
+        phone TEXT,
+        fetched_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_contacts_company ON company_contacts(company_id);
 
       CREATE TABLE IF NOT EXISTS scans (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -495,6 +520,33 @@ export async function listFinancials(companyId: number): Promise<Financial[]> {
     args: [companyId],
   });
   return res.rows as unknown as Financial[];
+}
+
+export async function listWebsiteContacts(companyId: number): Promise<WebsiteContact[]> {
+  const c = await db();
+  const res = await c.execute({
+    sql: 'SELECT * FROM company_contacts WHERE company_id = ? ORDER BY id',
+    args: [companyId],
+  });
+  return res.rows as unknown as WebsiteContact[];
+}
+
+// Full delete+reinsert on every enrichment cycle, unlike replaceFinancials'
+// per-year upsert — a team page reflects who works there *now*, not a
+// history worth accumulating, so a departed contact should simply disappear.
+export async function replaceWebsiteContacts(
+  companyId: number,
+  contacts: { name: string; role: string | null; email: string | null; phone: string | null }[],
+): Promise<void> {
+  const c = await db();
+  const now = Date.now();
+  await c.execute({ sql: 'DELETE FROM company_contacts WHERE company_id = ?', args: [companyId] });
+  for (const ct of contacts) {
+    await c.execute({
+      sql: 'INSERT INTO company_contacts (company_id, name, role, email, phone, fetched_at) VALUES (?, ?, ?, ?, ?, ?)',
+      args: [companyId, ct.name, ct.role, ct.email, ct.phone, now],
+    });
+  }
 }
 
 export async function getScoreHistory(companyId: number, limit = 20): Promise<CompanyScore[]> {

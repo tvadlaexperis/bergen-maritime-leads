@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
-import { getCompanyByOrgnr, getCompany, listFinancials, getScoreHistory, listSiblingCompanies } from '@/lib/db';
+import { getCompanyByOrgnr, getCompany, listFinancials, getScoreHistory, listSiblingCompanies, listWebsiteContacts } from '@/lib/db';
 import { getCurrentUser } from '@/lib/auth';
 import { isValidOrgnr, proffUrl, brregUrl } from '@/lib/brreg';
 import { getCompanyNews, type NewsItem } from '@/lib/news';
@@ -53,12 +53,13 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
   if (!co) notFound();
 
   const base = await getCompany(co.id);
-  const [financials, history, user, news, siblings] = await Promise.all([
+  const [financials, history, user, news, siblings, websiteContacts] = await Promise.all([
     listFinancials(co.id),
     getScoreHistory(co.id, 12),
     getCurrentUser(),
     getCompanyNews(co.name),
     co.parent_orgnr ? listSiblingCompanies(co.parent_orgnr, co.orgnr) : Promise.resolve([]),
+    listWebsiteContacts(co.id),
   ]);
   const isAdmin = user?.role === 'admin';
   const band = bandFor(co.lead_score);
@@ -278,8 +279,11 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
 
         {/* Contacts */}
         <div className="box">
-          <div className="box-header"><span className="box-title">Kontakter</span></div>
-          <div style={{ overflowX: 'auto' }}>
+          <div className="box-header">
+            <span className="box-title">Kontakter</span>
+            {websiteContacts.length > 0 && <span className="muted">nettside</span>}
+          </div>
+          <div style={{ overflow: 'auto', maxHeight: 320 }}>
             <table className="table">
               <thead>
                 <tr>
@@ -290,14 +294,18 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
                 </tr>
               </thead>
               <tbody>
+                {co.ceo_name && <ContactRow label="Daglig leder" name={co.ceo_name} />}
                 {co.phone && <ContactRow label="Sentralbord" name={null} phone={co.phone} />}
                 <ContactRow label="Kontaktperson" name={co.contact_name} email={co.contact_email} phone={co.contact_phone} />
                 <ContactRow label="CTO" name={co.cto_name} email={co.cto_email} phone={co.cto_phone} />
                 <ContactRow label="Salgssjef" name={co.sales_name} email={co.sales_email} phone={co.sales_phone} />
+                {websiteContacts.map((wc) => (
+                  <ContactRow key={wc.id} label={wc.role ?? 'Ansatt'} name={wc.name} email={wc.email} phone={wc.phone} sourced />
+                ))}
               </tbody>
             </table>
           </div>
-          {!co.contact_name && !co.cto_name && !co.sales_name && (
+          {!co.contact_name && !co.cto_name && !co.sales_name && websiteContacts.length === 0 && (
             <div className="box-pad muted" style={{ paddingTop: 0, fontSize: '0.82rem' }}>
               Ingen kontaktinfo registrert ennå.{isAdmin ? ' Legg inn under.' : ''}
             </div>
@@ -552,15 +560,25 @@ function ContactRow({
   name,
   email,
   phone,
+  sourced,
 }: {
   label: string;
   name: string | null;
   email?: string | null;
   phone?: string | null;
+  /** True for a contact scraped from the company's own website, not admin-entered or from Brreg. */
+  sourced?: boolean;
 }) {
   return (
     <tr>
-      <td className="muted">{label}</td>
+      <td className="muted">
+        {label}
+        {sourced && (
+          <span className="muted" style={{ fontSize: '0.72rem' }} title="Hentet fra selskapets egen nettside">
+            {' '}· nettside
+          </span>
+        )}
+      </td>
       <td>{name ?? <span className="muted">—</span>}</td>
       <td>{email ? <a href={`mailto:${email}`} className="link-accent">{email}</a> : <span className="muted">—</span>}</td>
       <td>{phone ? <a href={`tel:${phone.replace(/\s/g, '')}`} className="link-accent">{phone}</a> : <span className="muted">—</span>}</td>

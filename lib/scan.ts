@@ -16,6 +16,7 @@ import {
   setCompanyAiAnalysis,
   setCompanyWebsite,
   setWebsiteSearchAttempted,
+  replaceWebsiteContacts,
   listCompaniesToRefresh,
   listActiveCompanies,
   getCompanyByOrgnr,
@@ -168,6 +169,7 @@ async function enrichCompany(orgnr: string, errors: ScanError[]): Promise<boolea
 
   // Paid Google Search-grounded lookup, so this must run at most once per
   // company ever — never on a later refresh, even if it found nothing.
+  let website = company.website;
   if (!company.website && !company.website_search_attempted_at) {
     const found = await orchestrator.callTool<string | null>(
       'ai.findWebsite',
@@ -175,7 +177,23 @@ async function enrichCompany(orgnr: string, errors: ScanError[]): Promise<boolea
       20_000,
     );
     await setWebsiteSearchAttempted(company.id);
-    if (found.ok && found.data) await setCompanyWebsite(company.id, found.data);
+    if (found.ok && found.data) {
+      await setCompanyWebsite(company.id, found.data);
+      website = found.data;
+    }
+  }
+
+  // Best-effort scrape of the company's own "about us"/contact/team pages —
+  // free-form Gemini call, not the paid search above, so it's fine to run on
+  // every refresh (staff on a team page turn over; a stale list is worse
+  // than none).
+  if (website) {
+    const contacts = await orchestrator.callTool<{ name: string; role: string | null; email: string | null; phone: string | null }[]>(
+      'ai.extractContacts',
+      { name: company.name, website },
+      35_000,
+    );
+    if (contacts.ok) await replaceWebsiteContacts(company.id, contacts.data);
   }
 
   await markCompanyRefreshed(orgnr);
