@@ -728,13 +728,24 @@ export async function deleteCompany(id: number): Promise<void> {
   await c.execute({ sql: 'DELETE FROM companies WHERE id = ?', args: [id] });
 }
 
-// The `limit` companies refreshed longest ago (never-refreshed first) — so a
-// small nightly batch cycles through the whole list over a few days.
+// Daily discovery (lib/scan.ts discover()) refreshes `last_annual_report`
+// (the year Brønnøysund has on file) for every company, regardless of the
+// enrichment batch size below — so we already know which companies have a
+// newer filing than what's in `financials` before spending a slot on them.
+// Those go first; everyone else falls back to oldest-refreshed-first, so a
+// small nightly batch still cycles through the whole list over a few weeks
+// instead of wasting slots re-fetching accounts that haven't changed.
 export async function listCompaniesToRefresh(limit: number): Promise<Company[]> {
   const c = await db();
   const res = await c.execute({
-    sql: `SELECT * FROM companies WHERE status = 'active'
-          ORDER BY (last_refreshed_at IS NOT NULL), last_refreshed_at ASC, name COLLATE NOCASE LIMIT ?`,
+    sql: `SELECT co.* FROM companies co
+          LEFT JOIN (SELECT company_id, MAX(year) AS max_year FROM financials GROUP BY company_id) f
+            ON f.company_id = co.id
+          WHERE co.status = 'active'
+          ORDER BY
+            (co.last_annual_report IS NOT NULL AND CAST(co.last_annual_report AS INTEGER) > COALESCE(f.max_year, 0)) DESC,
+            (co.last_refreshed_at IS NOT NULL), co.last_refreshed_at ASC, co.name COLLATE NOCASE
+          LIMIT ?`,
     args: [limit],
   });
   return res.rows as unknown as Company[];

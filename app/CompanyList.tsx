@@ -536,7 +536,7 @@ export default function CompanyList({
                     {r.revenue_growth_pct != null ? fmtPct(r.revenue_growth_pct, 0) : '—'}
                   </td>
                   <td className="col-right">
-                    <ScoreBadge score={r.lead_score} />
+                    <ScoreBadge score={r.lead_score} reason={r.reason} />
                   </td>
                 </tr>
               ))}
