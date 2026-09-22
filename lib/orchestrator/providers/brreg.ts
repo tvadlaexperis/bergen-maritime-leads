@@ -5,8 +5,10 @@ import {
   parseEnhetPage,
   parseRegnskap,
   parseDagligLeder,
+  parseKonsernstruktur,
   type Company,
   type EnhetPage,
+  type KonsernInfo,
 } from '../../brreg';
 import type { CompanyFinancials } from '../../types';
 
@@ -19,6 +21,7 @@ import type { CompanyFinancials } from '../../types';
 
 const ENHET_BASE = `https://${BRREG_ENHET_HOST}/enhetsregisteret/api/enheter`;
 const REGNSKAP_BASE = `https://${BRREG_ENHET_HOST}/regnskapsregisteret/regnskap`;
+const KONSERN_BASE = `https://${BRREG_ENHET_HOST}/enhetsregisteret/api/konsernstruktur`;
 const PAGE_SIZE = 100;
 const MAX_PAGES = 15; // safety cap — a single kommune+NACE slice is well under this
 
@@ -75,9 +78,17 @@ async function getDagligLeder(orgnr: string): Promise<string | null> {
   return parseDagligLeder(json);
 }
 
+// 404 (not part of any group) is the common case and comes back as `null`
+// from getJson, same as any other "nothing here" response.
+async function getKonsern(orgnr: string): Promise<KonsernInfo | null> {
+  const json = await getJson(`${KONSERN_BASE}/${encodeURIComponent(orgnr)}`);
+  if (!json) return null;
+  return parseKonsernstruktur(json, orgnr);
+}
+
 export const brregProvider: Provider = {
   id: 'brreg',
-  tools: ['searchEnheter', 'getEnhet', 'getRegnskap', 'getRoller'],
+  tools: ['searchEnheter', 'getEnhet', 'getRegnskap', 'getRoller', 'getKonsern'],
   isEnabled: () => true,
   async call(tool, args) {
     if (tool === 'searchEnheter') {
@@ -92,6 +103,9 @@ export const brregProvider: Provider = {
     }
     if (tool === 'getRoller') {
       return getDagligLeder(String((args as { orgnr: string }).orgnr));
+    }
+    if (tool === 'getKonsern') {
+      return getKonsern(String((args as { orgnr: string }).orgnr));
     }
     throw new Error(`brreg: unknown tool ${tool}`);
   },

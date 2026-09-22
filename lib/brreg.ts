@@ -201,6 +201,47 @@ export function parseDagligLeder(json: unknown): string | null {
   return full || null;
 }
 
+// --- Konsernstruktur (corporate group structure) --------------------------
+// The API always returns the tree rooted at the ULTIMATE parent, regardless
+// of which member's orgnr you queried with — so the target company can be
+// anywhere in it (including being the root itself, if it has no parent).
+// 404 (no group at all) is handled upstream by safeFetchText returning null.
+
+export interface KonsernInfo {
+  parentOrgnr: string | null;
+  parentName: string | null;
+}
+
+interface RawKonsernNode {
+  organisasjonsnummer?: string;
+  navn?: string;
+  parentOrganisasjonsnummer?: string;
+  parentNavn?: string;
+  children?: RawKonsernNode[];
+}
+
+function findInTree(node: RawKonsernNode, targetOrgnr: string): RawKonsernNode | null {
+  if (node.organisasjonsnummer === targetOrgnr) return node;
+  for (const child of node.children ?? []) {
+    const hit = findInTree(child, targetOrgnr);
+    if (hit) return hit;
+  }
+  return null;
+}
+
+export function parseKonsernstruktur(json: unknown, targetOrgnr: string): KonsernInfo | null {
+  const root = json as RawKonsernNode;
+  if (!root?.organisasjonsnummer) return null;
+
+  const found = findInTree(root, targetOrgnr);
+  if (!found) return null;
+
+  return {
+    parentOrgnr: found.parentOrganisasjonsnummer ?? null,
+    parentName: found.parentNavn ?? null,
+  };
+}
+
 // --- Misc --------------------------------------------------------------
 
 /** Norwegian organisasjonsnummer: 9 digits, mod-11 check digit. */

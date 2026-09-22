@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { normalizeEnhet, parseEnhetPage, parseRegnskap, parseDagligLeder, isValidOrgnr } from './brreg';
+import { normalizeEnhet, parseEnhetPage, parseRegnskap, parseDagligLeder, parseKonsernstruktur, isValidOrgnr } from './brreg';
 import { matchNace } from '../data/maritime-sectors.mjs';
 
 const rawEnhet = {
@@ -128,6 +128,48 @@ describe('parseDagligLeder', () => {
     expect(parseDagligLeder({ rollegrupper: [{ type: { kode: 'STYR' }, roller: [] }] })).toBeNull();
     expect(parseDagligLeder({})).toBeNull();
     expect(parseDagligLeder(null)).toBeNull();
+  });
+});
+
+describe('parseKonsernstruktur', () => {
+  const tree = {
+    organisasjonsnummer: '926118056',
+    navn: 'ODFJELL RIG OWNING LTD',
+    children: [
+      {
+        organisasjonsnummer: '984669151',
+        navn: 'ODFJELL DRILLING AS',
+        parentOrganisasjonsnummer: '926118056',
+        parentNavn: 'ODFJELL RIG OWNING LTD',
+        children: [
+          {
+            organisasjonsnummer: '883462092',
+            navn: 'DEEP SEA MANAGEMENT AS',
+            parentOrganisasjonsnummer: '984669151',
+            parentNavn: 'ODFJELL DRILLING AS',
+          },
+        ],
+      },
+    ],
+  };
+
+  it('finds the immediate parent of a nested member', () => {
+    const info = parseKonsernstruktur(tree, '883462092');
+    expect(info).toEqual({ parentOrgnr: '984669151', parentName: 'ODFJELL DRILLING AS' });
+  });
+
+  it('returns a null parent when the queried company is the root', () => {
+    const info = parseKonsernstruktur(tree, '926118056');
+    expect(info).toEqual({ parentOrgnr: null, parentName: null });
+  });
+
+  it('returns null when the target orgnr is not in the tree at all', () => {
+    expect(parseKonsernstruktur(tree, '000000000')).toBeNull();
+  });
+
+  it('returns null for malformed input', () => {
+    expect(parseKonsernstruktur({}, '883462092')).toBeNull();
+    expect(parseKonsernstruktur(null, '883462092')).toBeNull();
   });
 });
 

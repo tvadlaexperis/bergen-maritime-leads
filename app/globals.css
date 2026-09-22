@@ -789,6 +789,22 @@ a {
   vertical-align: middle;
 }
 
+/* ── Corporate-group cross-sell flag — informational, not a warning or a buy
+   signal, so it reuses the same blue accent as "Ny ledelse" ── */
+.konsern-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 7px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--accent-border);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 0.68rem;
+  font-weight: 700;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
 /* ── Meter bars for the sub-scores ── */
 .meter {
   height: 6px;

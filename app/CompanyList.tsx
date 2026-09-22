@@ -195,6 +195,20 @@ export default function CompanyList({
   // server sent — parsing 600+ small JSON blobs is negligible either way.
   const signalById = useMemo(() => new Map(rows.map((r) => [r.id, parseBuyingSignalLevel(r.ai_analysis)])), [rows]);
   const hasSignalData = useMemo(() => [...signalById.values()].some((v) => v != null), [signalById]);
+  // Companies sharing a parent_orgnr, grouped from the same rows we already
+  // have — no extra query. Only worth flagging when at least one sibling is
+  // also in our own list (a lone subsidiary with an unlisted parent isn't a
+  // cross-sell opportunity within this tool).
+  const siblingsByParent = useMemo(() => {
+    const map = new Map<string, CompanyWithScore[]>();
+    for (const r of rows) {
+      if (!r.parent_orgnr) continue;
+      const arr = map.get(r.parent_orgnr) ?? [];
+      arr.push(r);
+      map.set(r.parent_orgnr, arr);
+    }
+    return map;
+  }, [rows]);
 
   function toggleSort(col: (typeof COLUMNS)[number]) {
     if (col.key === sortKey) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
@@ -498,7 +512,9 @@ export default function CompanyList({
               </tr>
             </thead>
             <tbody>
-              {filtered.map((r, i) => (
+              {filtered.map((r, i) => {
+                const siblings = r.parent_orgnr ? (siblingsByParent.get(r.parent_orgnr) ?? []).filter((s) => s.id !== r.id) : [];
+                return (
                 <tr key={r.id}>
                   <td className="num muted">{i + 1}</td>
                   <td>
@@ -526,6 +542,14 @@ export default function CompanyList({
                       </span>
                     )}
                     <SignalBadge level={signalById.get(r.id) ?? null} />
+                    {siblings.length > 0 && (
+                      <span
+                        className="konsern-badge"
+                        title={`Konsern: ${r.parent_name ?? r.parent_orgnr} — også i lista: ${siblings.map((s) => s.name).join(', ')}`}
+                      >
+                        Konsern ({siblings.length})
+                      </span>
+                    )}
                   </td>
                   <td style={{ whiteSpace: 'nowrap' }} className="muted">{r.matched_group ?? '—'}</td>
                   <td className="col-right num">{fmtInt(r.employees)}</td>
@@ -546,7 +570,8 @@ export default function CompanyList({
                     <ScoreBadge score={r.lead_score} reason={r.reason} />
                   </td>
                 </tr>
-              ))}
+                );
+              })}
               {filtered.length === 0 && (
                 <tr>
                   <td colSpan={10} className="muted" style={{ textAlign: 'center', padding: 28 }}>

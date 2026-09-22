@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
-import { getCompanyByOrgnr, getCompany, listFinancials, getScoreHistory } from '@/lib/db';
+import { getCompanyByOrgnr, getCompany, listFinancials, getScoreHistory, listSiblingCompanies } from '@/lib/db';
 import { getCurrentUser } from '@/lib/auth';
 import { isValidOrgnr, proffUrl, brregUrl } from '@/lib/brreg';
 import { getCompanyNews, type NewsItem } from '@/lib/news';
@@ -53,11 +53,12 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
   if (!co) notFound();
 
   const base = await getCompany(co.id);
-  const [financials, history, user, news] = await Promise.all([
+  const [financials, history, user, news, siblings] = await Promise.all([
     listFinancials(co.id),
     getScoreHistory(co.id, 12),
     getCurrentUser(),
     getCompanyNews(co.name),
+    co.parent_orgnr ? listSiblingCompanies(co.parent_orgnr, co.orgnr) : Promise.resolve([]),
   ]);
   const isAdmin = user?.role === 'admin';
   const band = bandFor(co.lead_score);
@@ -94,6 +95,24 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
               {co.poststed ? ` · ${co.poststed}` : ''}
               {co.matched_group ? ` · ${co.matched_group}` : ''}
             </p>
+            {co.parent_orgnr && (
+              <p className="muted" style={{ fontSize: '0.82rem', marginTop: 4 }}>
+                Del av konsernet <span style={{ color: 'var(--text-primary)' }}>{co.parent_name ?? co.parent_orgnr}</span>
+                {siblings.length > 0 && (
+                  <>
+                    {' '}· {siblings.length} {siblings.length === 1 ? 'annet selskap' : 'andre selskaper'} i denne oversikten:{' '}
+                    {siblings.map((s, i) => (
+                      <span key={s.orgnr}>
+                        {i > 0 && ', '}
+                        <Link href={`/company/${s.orgnr}`} className="link-accent">
+                          {s.name}
+                        </Link>
+                      </span>
+                    ))}
+                  </>
+                )}
+              </p>
+            )}
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'flex-end' }}>
             <p style={{ fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>

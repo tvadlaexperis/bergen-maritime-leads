@@ -1,7 +1,7 @@
 import { orchestrator } from './orchestrator/boot';
 import type { LeadScoreResult } from './orchestrator/providers/score';
 import type { LeadAnalysis } from './orchestrator/providers/ai';
-import type { Company as RawCompany } from './brreg';
+import type { Company as RawCompany, KonsernInfo } from './brreg';
 import { getCompanyNews } from './news';
 import type { CompanyFinancials } from './types';
 import {
@@ -12,6 +12,7 @@ import {
   replaceFinancials,
   insertScore,
   setCompanyCeo,
+  setCompanyParent,
   setCompanyAiAnalysis,
   setCompanyWebsite,
   setWebsiteSearchAttempted,
@@ -79,6 +80,11 @@ async function enrichCompany(orgnr: string, errors: ScanError[]): Promise<boolea
     const ceoChanged = company.ceo_name != null && roller.data != null && roller.data !== company.ceo_name;
     await setCompanyCeo(company.id, roller.data, ceoChanged);
   }
+
+  // null just means "not part of any corporate group" (the common case) —
+  // not a fetch failure, so it's not pushed to errors.
+  const konsern = await orchestrator.callTool<KonsernInfo | null>('brreg.getKonsern', { orgnr }, 12_000);
+  if (konsern.ok) await setCompanyParent(company.id, konsern.data?.parentOrgnr ?? null, konsern.data?.parentName ?? null);
 
   let fetched = 0;
   if (financials.length) {
