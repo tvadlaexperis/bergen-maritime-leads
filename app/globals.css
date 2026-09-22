@@ -256,7 +256,10 @@ a {
   flex: 1;
   min-height: 0;
   width: 100%;
-  max-width: 1120px;
+  /* Wide enough for the company list's growing column count (status, driftsresultat,
+     driftsmargin, sist oppdatert, …) without forcing .box-scroll's horizontal scrollbar
+     on a normal desktop viewport. */
+  max-width: 1440px;
   margin: 0 auto;
   display: flex;
   flex-direction: column;
