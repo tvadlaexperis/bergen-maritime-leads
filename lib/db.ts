@@ -95,6 +95,7 @@ export interface CompanyScore {
   revenue_latest: number | null;
   revenue_prev: number | null;
   revenue_growth_pct: number | null;
+  operating_result_latest: number | null;
   operating_margin_pct: number | null;
   latest_year: number | null;
   reason: string | null;
@@ -120,6 +121,7 @@ export interface CompanyWithScore extends Company {
   revenue_latest: number | null;
   revenue_prev: number | null;
   revenue_growth_pct: number | null;
+  operating_result_latest: number | null;
   operating_margin_pct: number | null;
   latest_year: number | null;
   reason: string | null;
@@ -167,17 +169,19 @@ const CONTACT_COLUMNS = [
   'website_search_attempted_at INTEGER',
 ];
 
-async function addContactColumns(): Promise<void> {
+async function addColumnsIfMissing(table: string, columns: string[]): Promise<void> {
   const c = getClient();
-  for (const col of CONTACT_COLUMNS) {
+  for (const col of columns) {
     try {
-      await c.execute(`ALTER TABLE companies ADD COLUMN ${col}`);
+      await c.execute(`ALTER TABLE ${table} ADD COLUMN ${col}`);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       if (!/duplicate column name/i.test(msg)) throw e;
     }
   }
 }
+
+const SCORE_COLUMNS = ['operating_result_latest REAL'];
 
 async function ensureSchema(): Promise<void> {
   if (!schemaReady) {
@@ -266,6 +270,7 @@ async function ensureSchema(): Promise<void> {
         revenue_latest REAL,
         revenue_prev REAL,
         revenue_growth_pct REAL,
+        operating_result_latest REAL,
         operating_margin_pct REAL,
         latest_year INTEGER,
         reason TEXT,
@@ -302,7 +307,8 @@ async function ensureSchema(): Promise<void> {
       );
     `,
       )
-      .then(() => addContactColumns())
+      .then(() => addColumnsIfMissing('companies', CONTACT_COLUMNS))
+      .then(() => addColumnsIfMissing('company_scores', SCORE_COLUMNS))
       .then(() => ensureSeeded());
   }
   return schemaReady;
@@ -367,6 +373,7 @@ interface Snapshot {
       revenue_latest: number | null;
       revenue_prev: number | null;
       revenue_growth_pct: number | null;
+      operating_result_latest?: number | null;
       operating_margin_pct: number | null;
       latest_year: number | null;
       reason: string | null;
@@ -414,9 +421,9 @@ async function loadSnapshot(c: Client): Promise<void> {
     if (entry.score) {
       const s = entry.score;
       await c.execute({
-        sql: `INSERT INTO company_scores (company_id, lead_score, size_score, revenue_score, growth_score, profitability_score, revenue_latest, revenue_prev, revenue_growth_pct, operating_margin_pct, latest_year, reason, computed_at)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        args: [id, s.lead_score, s.size_score, s.revenue_score, s.growth_score, s.profitability_score, s.revenue_latest, s.revenue_prev, s.revenue_growth_pct, s.operating_margin_pct, s.latest_year, s.reason, now],
+        sql: `INSERT INTO company_scores (company_id, lead_score, size_score, revenue_score, growth_score, profitability_score, revenue_latest, revenue_prev, revenue_growth_pct, operating_result_latest, operating_margin_pct, latest_year, reason, computed_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        args: [id, s.lead_score, s.size_score, s.revenue_score, s.growth_score, s.profitability_score, s.revenue_latest, s.revenue_prev, s.revenue_growth_pct, s.operating_result_latest ?? null, s.operating_margin_pct, s.latest_year, s.reason, now],
       });
     }
   }
@@ -453,7 +460,7 @@ const SCORE_JOIN = `
   )`;
 const SCORE_COLS = `
   sc.lead_score, sc.size_score, sc.revenue_score, sc.growth_score, sc.profitability_score,
-  sc.revenue_latest, sc.revenue_prev, sc.revenue_growth_pct, sc.operating_margin_pct,
+  sc.revenue_latest, sc.revenue_prev, sc.revenue_growth_pct, sc.operating_result_latest, sc.operating_margin_pct,
   sc.latest_year, sc.reason, sc.computed_at`;
 
 export async function listCompaniesWithScore(): Promise<CompanyWithScore[]> {
@@ -626,6 +633,7 @@ export interface NewScoreInput {
   revenueLatest: number | null;
   revenuePrev: number | null;
   revenueGrowthPct: number | null;
+  operatingResultLatest: number | null;
   operatingMarginPct: number | null;
   latestYear: number | null;
   reason: string;
@@ -634,9 +642,9 @@ export interface NewScoreInput {
 export async function insertScore(s: NewScoreInput): Promise<void> {
   const c = await db();
   await c.execute({
-    sql: `INSERT INTO company_scores (company_id, lead_score, size_score, revenue_score, growth_score, profitability_score, revenue_latest, revenue_prev, revenue_growth_pct, operating_margin_pct, latest_year, reason, computed_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    args: [s.companyId, s.leadScore, s.sizeScore, s.revenueScore, s.growthScore, s.profitabilityScore, s.revenueLatest, s.revenuePrev, s.revenueGrowthPct, s.operatingMarginPct, s.latestYear, s.reason, Date.now()],
+    sql: `INSERT INTO company_scores (company_id, lead_score, size_score, revenue_score, growth_score, profitability_score, revenue_latest, revenue_prev, revenue_growth_pct, operating_result_latest, operating_margin_pct, latest_year, reason, computed_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    args: [s.companyId, s.leadScore, s.sizeScore, s.revenueScore, s.growthScore, s.profitabilityScore, s.revenueLatest, s.revenuePrev, s.revenueGrowthPct, s.operatingResultLatest, s.operatingMarginPct, s.latestYear, s.reason, Date.now()],
   });
 }
 

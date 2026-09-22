@@ -23,6 +23,7 @@ describe('computeLeadScore', () => {
     });
     expect(r.band).toBe('high');
     expect(r.revenueGrowthPct).toBeCloseTo(20, 0);
+    expect(r.operatingResultLatest).toBe(40_000_000);
     expect(r.operatingMarginPct).toBeCloseTo(8.33, 1);
     expect(r.leadScore).toBeGreaterThan(66);
   });

@@ -12,7 +12,7 @@ type ScoreFilter = 'all' | '40' | '66';
 type GrowthFilter = 'all' | '0' | '10' | '25';
 type SignalFilter = 'all' | 'high';
 type FilterTab = 'segment' | 'bransje' | 'selskapsform' | 'kommune' | 'size' | 'growth' | 'score' | 'signal';
-type SortKey = 'name' | 'group' | 'employees' | 'revenue' | 'growth' | 'margin' | 'score' | 'updated';
+type SortKey = 'name' | 'group' | 'employees' | 'revenue' | 'growth' | 'result' | 'margin' | 'score' | 'updated';
 type SortDir = 'asc' | 'desc';
 
 const STORAGE_KEY = 'bml.companyList.filters.v1';
@@ -60,6 +60,7 @@ const COLUMNS: {
   { key: 'employees', label: 'Ansatte', align: 'right', firstDir: 'desc', value: (r) => r.employees },
   { key: 'revenue', label: 'Omsetning', align: 'right', firstDir: 'desc', value: (r) => r.revenue_latest },
   { key: 'growth', label: 'Vekst å/å', align: 'right', firstDir: 'desc', value: (r) => r.revenue_growth_pct },
+  { key: 'result', label: 'Driftsresultat', align: 'right', firstDir: 'desc', value: (r) => r.operating_result_latest },
   { key: 'margin', label: 'Driftsmargin', align: 'right', firstDir: 'desc', value: (r) => r.operating_margin_pct },
   { key: 'score', label: 'Lead', align: 'right', firstDir: 'desc', value: (r) => r.lead_score },
   { key: 'updated', label: 'Sist oppdatert', align: 'right', firstDir: 'desc', value: (r) => r.last_refreshed_at },
@@ -563,6 +564,12 @@ export default function CompanyList({
                   </td>
                   <td
                     className="col-right num"
+                    style={{ whiteSpace: 'nowrap', color: r.operating_result_latest != null ? (r.operating_result_latest >= 0 ? 'var(--positive)' : 'var(--negative)') : undefined }}
+                  >
+                    {fmtNok(r.operating_result_latest, { compact: true })}
+                  </td>
+                  <td
+                    className="col-right num"
                     style={{ whiteSpace: 'nowrap', color: r.operating_margin_pct != null ? (r.operating_margin_pct >= 0 ? 'var(--positive)' : 'var(--negative)') : undefined }}
                   >
                     {r.operating_margin_pct != null ? fmtPct(r.operating_margin_pct, 0) : '—'}
@@ -578,7 +585,7 @@ export default function CompanyList({
               })}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={11} className="muted" style={{ textAlign: 'center', padding: 28 }}>
+                  <td colSpan={12} className="muted" style={{ textAlign: 'center', padding: 28 }}>
                     {lockFavorites && favorites.size === 0
                       ? 'Ingen favoritter ennå. Klikk ☆ ved et selskap for å legge det til.'
                       : 'Ingen selskaper matcher filtrene.'}

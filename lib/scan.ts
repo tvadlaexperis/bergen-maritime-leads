@@ -129,6 +129,7 @@ async function enrichCompany(orgnr: string, errors: ScanError[]): Promise<boolea
       revenueLatest: s.revenueLatest,
       revenuePrev: s.revenuePrev,
       revenueGrowthPct: s.revenueGrowthPct,
+      operatingResultLatest: s.operatingResultLatest,
       operatingMarginPct: s.operatingMarginPct,
       latestYear: s.latestYear,
       reason: s.reason,

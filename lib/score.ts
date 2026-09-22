@@ -24,6 +24,7 @@ export interface LeadScoreResult {
   revenueLatest: number | null;
   revenuePrev: number | null;
   revenueGrowthPct: number | null;
+  operatingResultLatest: number | null;
   operatingMarginPct: number | null;
   latestYear: number | null;
   reason: string;
@@ -96,9 +97,10 @@ export function computeLeadScore(input: LeadScoreInput): LeadScoreResult {
     revenueLatest != null && revenuePrev != null && revenuePrev > 0
       ? ((revenueLatest - revenuePrev) / revenuePrev) * 100
       : null;
+  const operatingResultLatest = latest?.operatingResult ?? null;
   const operatingMarginPct =
-    latest?.operatingResult != null && revenueLatest != null && revenueLatest > 0
-      ? (latest.operatingResult / revenueLatest) * 100
+    operatingResultLatest != null && revenueLatest != null && revenueLatest > 0
+      ? (operatingResultLatest / revenueLatest) * 100
       : null;
 
   const sizeScore = round(sizeScoreFrom(input.employees));
@@ -122,6 +124,7 @@ export function computeLeadScore(input: LeadScoreInput): LeadScoreResult {
     revenueLatest,
     revenuePrev,
     revenueGrowthPct,
+    operatingResultLatest,
     operatingMarginPct,
     latestYear: latest?.year ?? null,
     reason: buildReason({
