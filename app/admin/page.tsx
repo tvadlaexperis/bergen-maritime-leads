@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import type { Metadata } from 'next';
 import { getCurrentUser } from '@/lib/auth';
-import { countActiveCompanies, listScans, listAudit } from '@/lib/db';
+import { countActiveCompanies, getDataCoverage, listScans, listAudit } from '@/lib/db';
 import { agoLabel, dateLabel } from '@/app/format';
 import { NACE_CODES, KOMMUNER } from '@/data/maritime-sectors.mjs';
 import RunScanButton from './RunScanButton';
@@ -16,19 +16,22 @@ export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 export const metadata: Metadata = { title: 'Admin' };
 
-// Which of the two full-width panels shows below the header — a query param
+type View = 'skann' | 'logg' | 'dekning';
+
+// Which of the full-width panels shows below the header — a query param
 // rather than client state, so the toggle is a plain link and the page stays
 // a Server Component (no new client wrapper needed just to switch panels).
 export default async function AdminPage({ searchParams }: { searchParams: { view?: string } }) {
   const user = await getCurrentUser();
   if (!user || user.role !== 'admin') redirect('/login?next=/admin');
 
-  const showLog = searchParams.view === 'logg';
+  const view: View = searchParams.view === 'logg' ? 'logg' : searchParams.view === 'dekning' ? 'dekning' : 'skann';
 
-  const [activeCount, scans, auditRows] = await Promise.all([
+  const [activeCount, scans, auditRows, coverage] = await Promise.all([
     countActiveCompanies(),
     listScans(12),
     listAudit(40),
+    getDataCoverage(),
   ]);
 
   return (
@@ -40,16 +43,60 @@ export default async function AdminPage({ searchParams }: { searchParams: { view
         </div>
         <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
           <AdminToolsMenu />
-          <Link href={showLog ? '/admin' : '/admin?view=logg'} className={`btn btn-ghost btn-sm${showLog ? ' active' : ''}`}>
-            Logg
-          </Link>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <Link href="/admin" className={`btn btn-ghost btn-sm${view === 'skann' ? ' active' : ''}`}>
+              Skann
+            </Link>
+            <Link href="/admin?view=dekning" className={`btn btn-ghost btn-sm${view === 'dekning' ? ' active' : ''}`}>
+              Datadekning
+            </Link>
+            <Link href="/admin?view=logg" className={`btn btn-ghost btn-sm${view === 'logg' ? ' active' : ''}`}>
+              Logg
+            </Link>
+          </div>
         </div>
       </div>
 
-      {/* Full width, full height — Skann and Logg are the two boards checked
-          daily, but rarely both at once, so one replaces the other rather
-          than splitting the width permanently. */}
-      {showLog ? (
+      {/* Full width, full height — only one panel shows at a time rather than
+          splitting the width permanently, since these are rarely needed
+          side by side. */}
+      {view === 'dekning' ? (
+        <div className="box" style={{ flex: 1, minHeight: 0 }}>
+          <div className="box-header">
+            <span className="box-title">Datadekning</span>
+            <span className="muted">hvor mye vet vi om de {coverage.total} selskapene</span>
+          </div>
+          <div className="box-scroll">
+            <div className="box-pad" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              {(
+                [
+                  { label: 'Regnskap hentet (Brreg)', value: coverage.withFinancials },
+                  { label: 'Vekst beregnbar (2+ regnskapsår)', value: coverage.withGrowth },
+                  { label: 'AI-vurdering generert', value: coverage.withAiAnalysis },
+                  { label: 'Nettside funnet', value: coverage.withWebsite },
+                  { label: 'Kontakter hentet fra nettside', value: coverage.withWebsiteContacts },
+                  { label: 'Daglig leder (Brreg)', value: coverage.withCeo },
+                  { label: 'Del av konsern (Brreg)', value: coverage.withParent },
+                  { label: 'Manuell kontaktinfo lagt inn', value: coverage.withManualContact },
+                ] as const
+              ).map((row) => {
+                const pct = coverage.total > 0 ? Math.round((row.value / coverage.total) * 100) : 0;
+                return (
+                  <div key={row.label}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', marginBottom: 4 }}>
+                      <span>{row.label}</span>
+                      <span className="muted num">{row.value} / {coverage.total} · {pct} %</span>
+                    </div>
+                    <div className="meter">
+                      <span style={{ width: `${pct}%` }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      ) : view === 'logg' ? (
         <div className="box" style={{ flex: 1, minHeight: 0 }}>
           <div className="box-header">
             <span className="box-title">Logg</span>

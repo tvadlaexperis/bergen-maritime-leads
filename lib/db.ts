@@ -507,6 +507,52 @@ export async function countActiveCompanies(): Promise<number> {
   return Number((res.rows[0] as unknown as { n: number }).n);
 }
 
+export interface DataCoverage {
+  total: number;
+  withFinancials: number;
+  withGrowth: number;
+  withAiAnalysis: number;
+  withWebsite: number;
+  withWebsiteContacts: number;
+  withCeo: number;
+  withParent: number;
+  withManualContact: number;
+}
+
+// One query, not `listCompaniesWithScore()` + counting in JS — this is a
+// dashboard tile that admin/page.tsx renders on every load, so it should
+// cost roughly what countActiveCompanies() already costs, not a full
+// 621-row-with-joins fetch just to read a handful of coverage numbers.
+export async function getDataCoverage(): Promise<DataCoverage> {
+  const c = await db();
+  const res = await c.execute(`
+    SELECT
+      COUNT(*) AS total,
+      COUNT(CASE WHEN EXISTS (SELECT 1 FROM financials f WHERE f.company_id = co.id) THEN 1 END) AS with_financials,
+      COUNT(CASE WHEN (SELECT COUNT(DISTINCT year) FROM financials f WHERE f.company_id = co.id) >= 2 THEN 1 END) AS with_growth,
+      COUNT(CASE WHEN co.ai_analysis IS NOT NULL THEN 1 END) AS with_ai_analysis,
+      COUNT(CASE WHEN co.website IS NOT NULL THEN 1 END) AS with_website,
+      COUNT(CASE WHEN EXISTS (SELECT 1 FROM company_contacts cc WHERE cc.company_id = co.id) THEN 1 END) AS with_website_contacts,
+      COUNT(CASE WHEN co.ceo_name IS NOT NULL THEN 1 END) AS with_ceo,
+      COUNT(CASE WHEN co.parent_orgnr IS NOT NULL THEN 1 END) AS with_parent,
+      COUNT(CASE WHEN co.contact_name IS NOT NULL OR co.cto_name IS NOT NULL OR co.sales_name IS NOT NULL THEN 1 END) AS with_manual_contact
+    FROM companies co
+    WHERE co.status = 'active'
+  `);
+  const r = res.rows[0] as unknown as Record<string, number>;
+  return {
+    total: Number(r.total),
+    withFinancials: Number(r.with_financials),
+    withGrowth: Number(r.with_growth),
+    withAiAnalysis: Number(r.with_ai_analysis),
+    withWebsite: Number(r.with_website),
+    withWebsiteContacts: Number(r.with_website_contacts),
+    withCeo: Number(r.with_ceo),
+    withParent: Number(r.with_parent),
+    withManualContact: Number(r.with_manual_contact),
+  };
+}
+
 export async function listCompaniesWithScore(): Promise<CompanyWithScore[]> {
   const c = await db();
   const res = await c.execute(`
