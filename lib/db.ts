@@ -583,10 +583,23 @@ const COVERAGE_WHERE: Record<CoverageCategory, string> = {
   manual: '(co.contact_name IS NOT NULL OR co.cto_name IS NOT NULL OR co.sales_name IS NOT NULL)',
 };
 
-export async function listCompaniesForCoverage(category: CoverageCategory): Promise<{ orgnr: string; name: string }[]> {
+export type CoverageMode = 'har' | 'mangler';
+
+export function isCoverageMode(v: string): v is CoverageMode {
+  return v === 'har' || v === 'mangler';
+}
+
+export async function listCompaniesForCoverage(
+  category: CoverageCategory,
+  mode: CoverageMode = 'har',
+): Promise<{ orgnr: string; name: string }[]> {
   const c = await db();
+  // Parens around the whole fragment matter — e.g. growth's fragment is a
+  // numeric subquery compared with >= 2; NOT must wrap the full comparison,
+  // not just the subquery, or it'd coerce the count to a boolean first.
+  const where = mode === 'har' ? COVERAGE_WHERE[category] : `NOT (${COVERAGE_WHERE[category]})`;
   const res = await c.execute(
-    `SELECT orgnr, name FROM companies co WHERE co.status = 'active' AND ${COVERAGE_WHERE[category]} ORDER BY name COLLATE NOCASE`,
+    `SELECT orgnr, name FROM companies co WHERE co.status = 'active' AND ${where} ORDER BY name COLLATE NOCASE`,
   );
   return res.rows as unknown as { orgnr: string; name: string }[];
 }
