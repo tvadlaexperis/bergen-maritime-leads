@@ -298,9 +298,13 @@ function isValidContacts(v: unknown): v is { contacts: ExtractedContact[] } {
 // exactly the case safeFetchText's SSRF guard (private-IP/DNS check) exists
 // for, unlike the calls above to our own trusted Gemini host.
 async function fetchPageText(url: string): Promise<string | null> {
-  return safeFetchText(url, { timeoutMs: 8_000, revalidate: 21_600, headers: { Accept: 'text/html' } });
+  return safeFetchText(url, { timeoutMs: 6_000, revalidate: 21_600, headers: { Accept: 'text/html' } });
 }
 
+// Kept to one subpage, fetched alongside the homepage rather than after —
+// this runs inside the cron's shared 60s budget for the whole batch
+// (lib/scan.ts), so every second here is a second some other company in the
+// same run doesn't get.
 async function requestContacts(name: string, website: string): Promise<ExtractedContact[]> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) return [];
@@ -308,12 +312,13 @@ async function requestContacts(name: string, website: string): Promise<Extracted
   const homepageHtml = await fetchPageText(website);
   if (!homepageHtml) return [];
 
-  const subpageUrls = findLikelyContactPages(homepageHtml, website, 2);
+  const subpageUrls = findLikelyContactPages(homepageHtml, website, 1);
+  const subpageHtmls = await Promise.all(subpageUrls.map((url) => fetchPageText(url)));
   const pages = [{ url: website, html: homepageHtml }];
-  for (const url of subpageUrls) {
-    const html = await fetchPageText(url);
+  subpageUrls.forEach((url, i) => {
+    const html = subpageHtmls[i];
     if (html) pages.push({ url, html });
-  }
+  });
 
   const combinedText = pages
     .map((p) => `--- ${p.url} ---\n${stripHtml(p.html).slice(0, 8_000)}`)
@@ -335,7 +340,7 @@ async function requestContacts(name: string, website: string): Promise<Extracted
   const body = await safeFetchText(URL, {
     allowHosts: [HOST],
     method: 'POST',
-    timeoutMs: 25_000,
+    timeoutMs: 20_000,
     headers: {
       'Content-Type': 'application/json',
       'x-goog-api-key': apiKey,

@@ -261,19 +261,40 @@ export async function runScan(opts: RunScanOptions = {}): Promise<ScanResult> {
     }
   }
 
-  // Enrichment pass.
+  // Enrichment pass. The candidate list can safely be larger than what a run
+  // will actually get through — the deadline guard below caps real work, so
+  // a bigger pool just means we never run dry before time does.
   const batch = opts.full
     ? await listActiveCompanies()
-    : await listCompaniesToRefresh(opts.limit && opts.limit > 0 ? opts.limit : Number(process.env.SCAN_BATCH) || 40);
+    : await listCompaniesToRefresh(opts.limit && opts.limit > 0 ? opts.limit : Number(process.env.SCAN_BATCH) || 150);
 
-  for (let i = 0; i < batch.length; i++) {
-    try {
-      const did = await enrichCompany(batch[i].orgnr, errors);
-      if (did) financialsFetched++;
-    } catch (e) {
-      errors.push({ scope: `enrich ${batch[i].orgnr}`, message: e instanceof Error ? e.message : String(e) });
-    }
-    if (i < batch.length - 1) await sleep(120);
+  // The cron route caps the whole function at 60s (app/api/cron/scan/route.ts
+  // maxDuration) — a fully sequential, one-at-a-time loop through 40
+  // companies (each doing several external calls: regnskap, roller,
+  // konsern, ai.analyze, a website scrape for contacts) was regularly
+  // getting hard-killed by Vercel partway through, silently, with no
+  // finishScan() and nothing recorded for whatever was in flight. Running a
+  // few companies concurrently multiplies real throughput inside the same
+  // budget, and stopping new work once close to the deadline means a scan
+  // always finishes cleanly and its counts in the admin "Siste skann" table
+  // reflect what actually happened, instead of Vercel finishing it for us.
+  const ENRICH_CONCURRENCY = 5;
+  const ENRICH_DEADLINE_MS = 45_000;
+
+  for (let i = 0; i < batch.length; i += ENRICH_CONCURRENCY) {
+    if (Date.now() - started > ENRICH_DEADLINE_MS) break;
+    const chunk = batch.slice(i, i + ENRICH_CONCURRENCY);
+    const results = await Promise.all(
+      chunk.map(async (co) => {
+        try {
+          return await enrichCompany(co.orgnr, errors);
+        } catch (e) {
+          errors.push({ scope: `enrich ${co.orgnr}`, message: e instanceof Error ? e.message : String(e) });
+          return false;
+        }
+      }),
+    );
+    financialsFetched += results.filter(Boolean).length;
   }
 
   await finishScan(scanId, { companiesFound, companiesUpdated, financialsFetched, errors });

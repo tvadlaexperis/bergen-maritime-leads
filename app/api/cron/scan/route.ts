@@ -20,7 +20,14 @@ export async function GET(req: NextRequest) {
   const limitParam = Number(p.get('limit'));
   const limit = Number.isFinite(limitParam) && limitParam > 0 ? limitParam : undefined;
   const full = p.get('full') === '1';
-  const skipDiscovery = p.get('discovery') === '0';
+  // Discovery (13 kommune×NACE searches against Brreg) costs a fixed
+  // 15-30s+ out of the 60s function budget on every run, crowding out the
+  // enrichment batch — but Bergen's maritime company universe barely
+  // changes day to day. Run it only once a week (Mondays UTC) by default,
+  // so the other six nightly runs spend nearly the whole budget on
+  // enrichment instead. `?discovery=0|1` always overrides this explicitly.
+  const discoveryParam = p.get('discovery');
+  const skipDiscovery = discoveryParam != null ? discoveryParam === '0' : new Date().getUTCDay() !== 1;
 
   const started = Date.now();
   const result = await runScan({ limit, full, skipDiscovery });
