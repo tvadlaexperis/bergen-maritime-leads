@@ -89,7 +89,6 @@ export default async function AdminPage({
               { key: 'contacts', label: 'Kontakter hentet fra nettside', value: coverage.withWebsiteContacts },
               { key: 'ceo', label: 'Daglig leder (Brreg)', value: coverage.withCeo },
               { key: 'parent', label: 'Del av konsern (Brreg)', value: coverage.withParent },
-              { key: 'manual', label: 'Manuell kontaktinfo lagt inn', value: coverage.withManualContact },
             ] as const;
             const selectedLabel = rows.find((r) => r.key === category)?.label;
 

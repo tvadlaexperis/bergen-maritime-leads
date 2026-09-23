@@ -516,7 +516,6 @@ export interface DataCoverage {
   withWebsiteContacts: number;
   withCeo: number;
   withParent: number;
-  withManualContact: number;
 }
 
 // One query, not `listCompaniesWithScore()` + counting in JS — this is a
@@ -534,8 +533,7 @@ export async function getDataCoverage(): Promise<DataCoverage> {
       COUNT(CASE WHEN co.website IS NOT NULL THEN 1 END) AS with_website,
       COUNT(CASE WHEN EXISTS (SELECT 1 FROM company_contacts cc WHERE cc.company_id = co.id) THEN 1 END) AS with_website_contacts,
       COUNT(CASE WHEN co.ceo_name IS NOT NULL THEN 1 END) AS with_ceo,
-      COUNT(CASE WHEN co.parent_orgnr IS NOT NULL THEN 1 END) AS with_parent,
-      COUNT(CASE WHEN co.contact_name IS NOT NULL OR co.cto_name IS NOT NULL OR co.sales_name IS NOT NULL THEN 1 END) AS with_manual_contact
+      COUNT(CASE WHEN co.parent_orgnr IS NOT NULL THEN 1 END) AS with_parent
     FROM companies co
     WHERE co.status = 'active'
   `);
@@ -549,7 +547,6 @@ export async function getDataCoverage(): Promise<DataCoverage> {
     withWebsiteContacts: Number(r.with_website_contacts),
     withCeo: Number(r.with_ceo),
     withParent: Number(r.with_parent),
-    withManualContact: Number(r.with_manual_contact),
   };
 }
 
@@ -561,7 +558,6 @@ export const COVERAGE_CATEGORIES = [
   'contacts',
   'ceo',
   'parent',
-  'manual',
 ] as const;
 export type CoverageCategory = (typeof COVERAGE_CATEGORIES)[number];
 
@@ -580,7 +576,6 @@ const COVERAGE_WHERE: Record<CoverageCategory, string> = {
   contacts: 'EXISTS (SELECT 1 FROM company_contacts cc WHERE cc.company_id = co.id)',
   ceo: 'co.ceo_name IS NOT NULL',
   parent: 'co.parent_orgnr IS NOT NULL',
-  manual: '(co.contact_name IS NOT NULL OR co.cto_name IS NOT NULL OR co.sales_name IS NOT NULL)',
 };
 
 export type CoverageMode = 'har' | 'mangler';
