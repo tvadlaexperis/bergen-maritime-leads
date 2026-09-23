@@ -33,14 +33,16 @@ export default async function AdminPage({ searchParams }: { searchParams: { view
 
   return (
     <div className="page-fill" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', flexShrink: 0 }}>
-        <h1 style={{ fontSize: '1.4rem', fontWeight: 800, letterSpacing: '-0.02em' }}>Admin</h1>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexShrink: 0 }}>
+        <div>
+          <h1 style={{ fontSize: '1.4rem', fontWeight: 800, letterSpacing: '-0.02em' }}>Admin</h1>
+          <Link href="/" className="link-accent" style={{ fontSize: '0.85rem' }}>← Tilbake til listen</Link>
+        </div>
         <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
           <AdminToolsMenu />
           <Link href={showLog ? '/admin' : '/admin?view=logg'} className={`btn btn-ghost btn-sm${showLog ? ' active' : ''}`}>
             Logg
           </Link>
-          <Link href="/" className="link-accent" style={{ fontSize: '0.85rem' }}>← Tilbake til listen</Link>
         </div>
       </div>
 
