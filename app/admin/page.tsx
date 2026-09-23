@@ -88,7 +88,6 @@ export default async function AdminPage({
               { key: 'website', label: 'Nettside funnet', value: coverage.withWebsite },
               { key: 'contacts', label: 'Kontakter hentet fra nettside', value: coverage.withWebsiteContacts },
               { key: 'ceo', label: 'Daglig leder (Brreg)', value: coverage.withCeo },
-              { key: 'parent', label: 'Del av konsern (Brreg)', value: coverage.withParent },
             ] as const;
             const selectedLabel = rows.find((r) => r.key === category)?.label;
 
@@ -116,18 +115,16 @@ export default async function AdminPage({
                           <div className="meter">
                             <span style={{ width: `${pct}%` }} />
                           </div>
-                          <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
+                          <div style={{ display: 'flex', gap: 12, marginTop: 4 }}>
                             <Link
                               href={cardActive && mode === 'har' ? '/admin?view=dekning' : `/admin?view=dekning&kategori=${row.key}&modus=har`}
-                              className={`btn btn-ghost btn-sm${cardActive && mode === 'har' ? ' active' : ''}`}
-                              style={{ flex: 1, fontSize: '0.74rem', padding: '5px 8px' }}
+                              className={`coverage-link${cardActive && mode === 'har' ? ' active' : ''}`}
                             >
                               Har ({row.value})
                             </Link>
                             <Link
                               href={cardActive && mode === 'mangler' ? '/admin?view=dekning' : `/admin?view=dekning&kategori=${row.key}&modus=mangler`}
-                              className={`btn btn-ghost btn-sm${cardActive && mode === 'mangler' ? ' active' : ''}`}
-                              style={{ flex: 1, fontSize: '0.74rem', padding: '5px 8px' }}
+                              className={`coverage-link${cardActive && mode === 'mangler' ? ' active' : ''}`}
                             >
                               Mangler ({missing})
                             </Link>

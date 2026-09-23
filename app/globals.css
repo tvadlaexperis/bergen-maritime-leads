@@ -398,6 +398,30 @@ a {
   background: var(--accent-soft);
   border-color: var(--accent-border);
 }
+
+/* ── Coverage har/mangler toggle — reads as plain text until hovered, so a
+   row of these doesn't compete visually with real buttons elsewhere ── */
+.coverage-link {
+  display: inline-block;
+  padding: 3px 7px;
+  margin: -3px -7px;
+  border-radius: var(--radius-control);
+  border: 1px solid transparent;
+  color: var(--text-secondary);
+  text-decoration: none;
+  font-size: 0.74rem;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.coverage-link:hover {
+  background: var(--surface-hover);
+  border-color: var(--border);
+  color: var(--text-primary);
+}
+.coverage-link.active {
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-color: var(--accent-border);
+}
 .btn-danger {
   background: transparent;
   border-color: color-mix(in srgb, var(--negative) 40%, transparent);
