@@ -2,7 +2,15 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import type { Metadata } from 'next';
 import { getCurrentUser } from '@/lib/auth';
-import { countActiveCompanies, getDataCoverage, listScans, listAudit } from '@/lib/db';
+import {
+  countActiveCompanies,
+  getDataCoverage,
+  listCompaniesForCoverage,
+  isCoverageCategory,
+  type CoverageCategory,
+  listScans,
+  listAudit,
+} from '@/lib/db';
 import { agoLabel, dateLabel } from '@/app/format';
 import { NACE_CODES, KOMMUNER } from '@/data/maritime-sectors.mjs';
 import RunScanButton from './RunScanButton';
@@ -21,17 +29,20 @@ type View = 'skann' | 'logg' | 'dekning';
 // Which of the full-width panels shows below the header — a query param
 // rather than client state, so the toggle is a plain link and the page stays
 // a Server Component (no new client wrapper needed just to switch panels).
-export default async function AdminPage({ searchParams }: { searchParams: { view?: string } }) {
+export default async function AdminPage({ searchParams }: { searchParams: { view?: string; kategori?: string } }) {
   const user = await getCurrentUser();
   if (!user || user.role !== 'admin') redirect('/login?next=/admin');
 
   const view: View = searchParams.view === 'logg' ? 'logg' : searchParams.view === 'dekning' ? 'dekning' : 'skann';
+  const category: CoverageCategory | null =
+    view === 'dekning' && searchParams.kategori && isCoverageCategory(searchParams.kategori) ? searchParams.kategori : null;
 
-  const [activeCount, scans, auditRows, coverage] = await Promise.all([
+  const [activeCount, scans, auditRows, coverage, categoryCompanies] = await Promise.all([
     countActiveCompanies(),
     listScans(12),
     listAudit(40),
     getDataCoverage(),
+    category ? listCompaniesForCoverage(category) : Promise.resolve(null),
   ]);
 
   return (
@@ -61,40 +72,68 @@ export default async function AdminPage({ searchParams }: { searchParams: { view
           splitting the width permanently, since these are rarely needed
           side by side. */}
       {view === 'dekning' ? (
-        <div className="box" style={{ flex: 1, minHeight: 0 }}>
-          <div className="box-header">
-            <span className="box-title">Datadekning</span>
-            <span className="muted">hvor mye vet vi om de {coverage.total} selskapene</span>
-          </div>
-          <div className="box-scroll">
-            <div className="box-pad" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', gap: 16, overflow: 'hidden' }}>
+          <div style={{ flexShrink: 0 }}>
+            <p className="muted" style={{ fontSize: '0.8rem', marginBottom: 14 }}>
+              Hvor mye vet vi om de {coverage.total} selskapene — klikk en kategori for å se hvilke
+            </p>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14 }}>
               {(
                 [
-                  { label: 'Regnskap hentet (Brreg)', value: coverage.withFinancials },
-                  { label: 'Vekst beregnbar (2+ regnskapsår)', value: coverage.withGrowth },
-                  { label: 'AI-vurdering generert', value: coverage.withAiAnalysis },
-                  { label: 'Nettside funnet', value: coverage.withWebsite },
-                  { label: 'Kontakter hentet fra nettside', value: coverage.withWebsiteContacts },
-                  { label: 'Daglig leder (Brreg)', value: coverage.withCeo },
-                  { label: 'Del av konsern (Brreg)', value: coverage.withParent },
-                  { label: 'Manuell kontaktinfo lagt inn', value: coverage.withManualContact },
+                  { key: 'financials', label: 'Regnskap hentet (Brreg)', value: coverage.withFinancials },
+                  { key: 'growth', label: 'Vekst beregnbar (2+ regnskapsår)', value: coverage.withGrowth },
+                  { key: 'ai', label: 'AI-vurdering generert', value: coverage.withAiAnalysis },
+                  { key: 'website', label: 'Nettside funnet', value: coverage.withWebsite },
+                  { key: 'contacts', label: 'Kontakter hentet fra nettside', value: coverage.withWebsiteContacts },
+                  { key: 'ceo', label: 'Daglig leder (Brreg)', value: coverage.withCeo },
+                  { key: 'parent', label: 'Del av konsern (Brreg)', value: coverage.withParent },
+                  { key: 'manual', label: 'Manuell kontaktinfo lagt inn', value: coverage.withManualContact },
                 ] as const
               ).map((row) => {
                 const pct = coverage.total > 0 ? Math.round((row.value / coverage.total) * 100) : 0;
+                const active = category === row.key;
                 return (
-                  <div key={row.label}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', marginBottom: 4 }}>
-                      <span>{row.label}</span>
-                      <span className="muted num">{row.value} / {coverage.total} · {pct} %</span>
-                    </div>
+                  <Link
+                    key={row.key}
+                    href={active ? '/admin?view=dekning' : `/admin?view=dekning&kategori=${row.key}`}
+                    className="box box-pad"
+                    style={{ gap: 8, textDecoration: 'none', color: 'inherit', borderColor: active ? 'var(--accent-border)' : undefined, background: active ? 'var(--accent-soft)' : undefined }}
+                  >
+                    <span className="num" style={{ fontSize: '1.7rem', fontWeight: 800, lineHeight: 1, color: pct >= 50 ? 'var(--positive)' : 'var(--text-muted)' }}>
+                      {pct} %
+                    </span>
+                    <span style={{ fontSize: '0.82rem', fontWeight: 600 }}>{row.label}</span>
                     <div className="meter">
                       <span style={{ width: `${pct}%` }} />
                     </div>
-                  </div>
+                    <span className="muted num" style={{ fontSize: '0.74rem' }}>{row.value} av {coverage.total} selskaper</span>
+                  </Link>
                 );
               })}
             </div>
           </div>
+
+          {category && categoryCompanies && (
+            <div className="box" style={{ flex: 1, minHeight: 0 }}>
+              <div className="box-header">
+                <span className="box-title">{categoryCompanies.length} selskaper</span>
+                <Link href="/admin?view=dekning" className="muted" style={{ fontSize: '0.78rem' }}>✕ lukk</Link>
+              </div>
+              <div className="box-scroll">
+                {categoryCompanies.length === 0 ? (
+                  <p className="muted box-pad" style={{ fontSize: '0.82rem' }}>Ingen selskaper i denne kategorien ennå.</p>
+                ) : (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '4px 16px', padding: '12px 20px' }}>
+                    {categoryCompanies.map((co) => (
+                      <Link key={co.orgnr} href={`/company/${co.orgnr}`} className="link-accent" style={{ fontSize: '0.84rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {co.name}
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       ) : view === 'logg' ? (
         <div className="box" style={{ flex: 1, minHeight: 0 }}>

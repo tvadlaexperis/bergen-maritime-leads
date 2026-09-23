@@ -553,6 +553,44 @@ export async function getDataCoverage(): Promise<DataCoverage> {
   };
 }
 
+export const COVERAGE_CATEGORIES = [
+  'financials',
+  'growth',
+  'ai',
+  'website',
+  'contacts',
+  'ceo',
+  'parent',
+  'manual',
+] as const;
+export type CoverageCategory = (typeof COVERAGE_CATEGORIES)[number];
+
+export function isCoverageCategory(v: string): v is CoverageCategory {
+  return (COVERAGE_CATEGORIES as readonly string[]).includes(v);
+}
+
+// Each value here is a fixed, hardcoded SQL fragment — `category` only ever
+// selects which one by key (validated via isCoverageCategory before this is
+// called), it's never interpolated into the query itself.
+const COVERAGE_WHERE: Record<CoverageCategory, string> = {
+  financials: 'EXISTS (SELECT 1 FROM financials f WHERE f.company_id = co.id)',
+  growth: '(SELECT COUNT(DISTINCT year) FROM financials f WHERE f.company_id = co.id) >= 2',
+  ai: 'co.ai_analysis IS NOT NULL',
+  website: 'co.website IS NOT NULL',
+  contacts: 'EXISTS (SELECT 1 FROM company_contacts cc WHERE cc.company_id = co.id)',
+  ceo: 'co.ceo_name IS NOT NULL',
+  parent: 'co.parent_orgnr IS NOT NULL',
+  manual: '(co.contact_name IS NOT NULL OR co.cto_name IS NOT NULL OR co.sales_name IS NOT NULL)',
+};
+
+export async function listCompaniesForCoverage(category: CoverageCategory): Promise<{ orgnr: string; name: string }[]> {
+  const c = await db();
+  const res = await c.execute(
+    `SELECT orgnr, name FROM companies co WHERE co.status = 'active' AND ${COVERAGE_WHERE[category]} ORDER BY name COLLATE NOCASE`,
+  );
+  return res.rows as unknown as { orgnr: string; name: string }[];
+}
+
 export async function listCompaniesWithScore(): Promise<CompanyWithScore[]> {
   const c = await db();
   const res = await c.execute(`
