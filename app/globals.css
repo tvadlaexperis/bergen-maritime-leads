@@ -349,25 +349,6 @@ a {
   font-size: 0.72rem;
 }
 
-/* ── Collapsible admin section (<details>/<summary> — no JS needed) ── */
-.admin-collapsible > summary {
-  cursor: pointer;
-  list-style: none;
-}
-.admin-collapsible > summary::-webkit-details-marker {
-  display: none;
-}
-.admin-collapsible > summary .muted {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-.admin-collapsible-chevron {
-  transition: transform 0.15s;
-}
-.admin-collapsible[open] > summary .admin-collapsible-chevron {
-  transform: rotate(90deg);
-}
 
 .section-title {
   font-size: 0.72rem;
