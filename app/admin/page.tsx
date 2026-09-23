@@ -11,6 +11,11 @@ import RunScanButton from './RunScanButton';
 import GuestLinkPanel from './GuestLinkPanel';
 
 export const dynamic = 'force-dynamic';
+// Matches the cron route's budget (app/api/cron/scan/route.ts) — without
+// this, the "Kjør skann" button's Server Action would inherit Vercel's much
+// shorter default function duration and get killed well before runScan()'s
+// own 45s enrichment deadline ever kicks in.
+export const maxDuration = 60;
 export const metadata: Metadata = { title: 'Admin' };
 
 export default async function AdminPage() {
