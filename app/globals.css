@@ -393,6 +393,11 @@ a {
   color: var(--text-primary);
   border-color: var(--border-strong);
 }
+.btn-ghost.active {
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-color: var(--accent-border);
+}
 .btn-danger {
   background: transparent;
   border-color: color-mix(in srgb, var(--negative) 40%, transparent);

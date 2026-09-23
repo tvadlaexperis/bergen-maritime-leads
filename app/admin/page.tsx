@@ -16,9 +16,14 @@ export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 export const metadata: Metadata = { title: 'Admin' };
 
-export default async function AdminPage() {
+// Which of the two full-width panels shows below the header — a query param
+// rather than client state, so the toggle is a plain link and the page stays
+// a Server Component (no new client wrapper needed just to switch panels).
+export default async function AdminPage({ searchParams }: { searchParams: { view?: string } }) {
   const user = await getCurrentUser();
   if (!user || user.role !== 'admin') redirect('/login?next=/admin');
+
+  const showLog = searchParams.view === 'logg';
 
   const [activeCount, scans, auditRows] = await Promise.all([
     countActiveCompanies(),
@@ -32,14 +37,60 @@ export default async function AdminPage() {
         <h1 style={{ fontSize: '1.4rem', fontWeight: 800, letterSpacing: '-0.02em' }}>Admin</h1>
         <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
           <AdminToolsMenu />
+          <Link href={showLog ? '/admin' : '/admin?view=logg'} className={`btn btn-ghost btn-sm${showLog ? ' active' : ''}`}>
+            Logg
+          </Link>
           <Link href="/" className="link-accent" style={{ fontSize: '0.85rem' }}>← Tilbake til listen</Link>
         </div>
       </div>
 
-      {/* Skann + Logg side by side, each filling the remaining height with
-          its own internal scroll — these are the two boards checked daily. */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20, flex: 1, minHeight: 0 }}>
-        <div className="box" style={{ minHeight: 0 }}>
+      {/* Full width, full height — Skann and Logg are the two boards checked
+          daily, but rarely both at once, so one replaces the other rather
+          than splitting the width permanently. */}
+      {showLog ? (
+        <div className="box" style={{ flex: 1, minHeight: 0 }}>
+          <div className="box-header">
+            <span className="box-title">Logg</span>
+            <span className="muted">innlogginger &amp; admin-handlinger</span>
+          </div>
+          <div className="box-scroll">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Når</th>
+                  <th>Aktør</th>
+                  <th>Handling</th>
+                  <th>Detalj</th>
+                  <th>IP</th>
+                </tr>
+              </thead>
+              <tbody>
+                {auditRows.map((a) => (
+                  <tr key={a.id}>
+                    <td className="num muted" style={{ whiteSpace: 'nowrap' }}>
+                      {dateLabel(a.at)} {new Date(a.at).toLocaleTimeString('nb-NO', { hour: '2-digit', minute: '2-digit' })}
+                    </td>
+                    <td style={{ whiteSpace: 'nowrap' }}>{a.actor ?? '—'}</td>
+                    <td>
+                      <span className="cat" data-cat={a.action.startsWith('login.fail') || a.action.includes('rate_limited') ? 'financial' : undefined}>
+                        {a.action}
+                      </span>
+                    </td>
+                    <td className="muted">{a.detail ?? a.target ?? ''}</td>
+                    <td className="num muted" style={{ whiteSpace: 'nowrap' }}>{a.ip ?? '—'}</td>
+                  </tr>
+                ))}
+                {auditRows.length === 0 && (
+                  <tr>
+                    <td colSpan={5} className="muted" style={{ textAlign: 'center', padding: 24 }}>Ingen hendelser ennå.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : (
+        <div className="box" style={{ flex: 1, minHeight: 0 }}>
           <div className="box-header">
             <span className="box-title">Skann</span>
             <span className="muted">
@@ -97,49 +148,7 @@ export default async function AdminPage() {
             </table>
           </div>
         </div>
-
-        <div className="box" style={{ minHeight: 0 }}>
-          <div className="box-header">
-            <span className="box-title">Logg</span>
-            <span className="muted">innlogginger &amp; admin-handlinger</span>
-          </div>
-          <div className="box-scroll">
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Når</th>
-                  <th>Aktør</th>
-                  <th>Handling</th>
-                  <th>Detalj</th>
-                  <th>IP</th>
-                </tr>
-              </thead>
-              <tbody>
-                {auditRows.map((a) => (
-                  <tr key={a.id}>
-                    <td className="num muted" style={{ whiteSpace: 'nowrap' }}>
-                      {dateLabel(a.at)} {new Date(a.at).toLocaleTimeString('nb-NO', { hour: '2-digit', minute: '2-digit' })}
-                    </td>
-                    <td style={{ whiteSpace: 'nowrap' }}>{a.actor ?? '—'}</td>
-                    <td>
-                      <span className="cat" data-cat={a.action.startsWith('login.fail') || a.action.includes('rate_limited') ? 'financial' : undefined}>
-                        {a.action}
-                      </span>
-                    </td>
-                    <td className="muted">{a.detail ?? a.target ?? ''}</td>
-                    <td className="num muted" style={{ whiteSpace: 'nowrap' }}>{a.ip ?? '—'}</td>
-                  </tr>
-                ))}
-                {auditRows.length === 0 && (
-                  <tr>
-                    <td colSpan={5} className="muted" style={{ textAlign: 'center', padding: 24 }}>Ingen hendelser ennå.</td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
+      )}
     </div>
   );
 }
