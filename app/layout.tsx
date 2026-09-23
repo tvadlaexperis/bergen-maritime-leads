@@ -8,10 +8,10 @@ import { getThemePref, themeAttr } from '@/lib/theme';
 import { listRecentNotifications, countUnreadNotifications } from '@/lib/db';
 import { Suspense } from 'react';
 import ThemeToggle from './ThemeToggle';
-import LogoutButton from './LogoutButton';
 import NavLinks from './NavLinks';
 import FxTicker from './FxTicker';
 import NotificationsBell from './NotificationsBell';
+import ProfileMenu from './ProfileMenu';
 
 const font = Plus_Jakarta_Sans({ subsets: ['latin'], variable: '--font-sans' });
 
@@ -55,10 +55,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
             {user && <NotificationsBell initial={notifications} initialUnread={unreadCount} />}
             <ThemeToggle initial={theme} />
             {user ? (
-              <>
-                <span className="app-nav-user">{user.displayName}</span>
-                <LogoutButton />
-              </>
+              <ProfileMenu user={{ displayName: user.displayName, email: user.email, role: user.role }} />
             ) : (
               <Link href="/login" className="link-accent">
                 Logg inn

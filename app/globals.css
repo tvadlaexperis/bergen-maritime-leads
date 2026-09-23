@@ -157,11 +157,6 @@ a {
   font-size: 0.85rem;
 }
 
-.app-nav-user {
-  color: var(--text-secondary);
-  white-space: nowrap;
-}
-
 /* ── Section tabs ── */
 .app-tabs {
   display: flex;
@@ -227,9 +222,6 @@ a {
   .app-tab {
     padding: 5px 7px;
     font-size: 0.78rem;
-  }
-  .app-nav-user {
-    display: none;
   }
 }
 @media (max-width: 560px) {
@@ -712,6 +704,47 @@ a {
 }
 .notif-time {
   font-size: 0.7rem;
+}
+
+/* ── Profile menu — reuses .notif-panel for the dropdown shell ── */
+.profile-panel-header {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+}
+.profile-name {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.profile-email {
+  font-size: 0.78rem;
+  margin-top: 2px;
+  word-break: break-all;
+}
+.profile-role-badge {
+  display: inline-block;
+  margin-top: 6px;
+  padding: 1px 7px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--accent-border);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 0.68rem;
+  font-weight: 700;
+}
+.profile-panel-body {
+  padding: 4px 0;
+}
+.profile-panel-link {
+  display: block;
+  padding: 9px 14px;
+  font-size: 0.84rem;
+  color: var(--text-primary);
+  text-decoration: none;
+  border-bottom: 1px solid var(--border);
+}
+.profile-panel-link:hover {
+  background: var(--surface-hover);
 }
 
 /* ── Table ── */
