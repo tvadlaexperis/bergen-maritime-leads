@@ -2,9 +2,8 @@ import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import type { Metadata } from 'next';
 import { getCurrentUser } from '@/lib/auth';
-import { listCompaniesWithScore, listScans, listAudit } from '@/lib/db';
-import { agoLabel, dateLabel, fmtNok, fmtInt } from '@/app/format';
-import ScoreBadge from '@/app/components/ScoreBadge';
+import { countActiveCompanies, listScans, listAudit } from '@/lib/db';
+import { agoLabel, dateLabel } from '@/app/format';
 import { NACE_CODES, KOMMUNER } from '@/data/maritime-sectors.mjs';
 import AddCompanyForm from './AddCompanyForm';
 import RunScanButton from './RunScanButton';
@@ -22,12 +21,11 @@ export default async function AdminPage() {
   const user = await getCurrentUser();
   if (!user || user.role !== 'admin') redirect('/login?next=/admin');
 
-  const [rows, scans, auditRows] = await Promise.all([
-    listCompaniesWithScore(),
+  const [activeCount, scans, auditRows] = await Promise.all([
+    countActiveCompanies(),
     listScans(12),
     listAudit(40),
   ]);
-  const active = rows.filter((r) => r.status === 'active');
 
   return (
     <div className="page-scroll" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -41,7 +39,7 @@ export default async function AdminPage() {
           <span className="box-title">Skann</span>
           <span className="muted">
             nattlig 05:00 UTC · {(KOMMUNER as { name: string }[]).map((k) => k.name).join(', ')} ·{' '}
-            {(NACE_CODES as unknown[]).length} bransjekoder · {active.length} selskaper
+            {(NACE_CODES as unknown[]).length} bransjekoder · {activeCount} selskaper
           </span>
         </div>
         <div className="box-pad" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -101,39 +99,6 @@ export default async function AdminPage() {
       <div className="box">
         <div className="box-header"><span className="box-title">Gjestelenke</span></div>
         <div className="box-pad"><GuestLinkPanel /></div>
-      </div>
-
-      <div className="box">
-        <div className="box-header"><span className="box-title">Alle selskaper ({rows.length})</span></div>
-        <div style={{ overflowX: 'auto' }}>
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Navn</th>
-                <th>Segment</th>
-                <th>Status</th>
-                <th className="col-right">Ansatte</th>
-                <th className="col-right">Omsetning</th>
-                <th className="col-right">Lead</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((r) => (
-                <tr key={r.id}>
-                  <td>
-                    <Link href={`/company/${r.orgnr}`} className="link-accent">{r.name}</Link>
-                    {r.manual_entry === 1 && <span className="muted"> · lagt til</span>}
-                  </td>
-                  <td className="muted" style={{ whiteSpace: 'nowrap' }}>{r.matched_group ?? '—'}</td>
-                  <td className="muted">{r.status}</td>
-                  <td className="col-right num">{fmtInt(r.employees)}</td>
-                  <td className="col-right num">{fmtNok(r.revenue_latest, { compact: true })}</td>
-                  <td className="col-right"><ScoreBadge score={r.lead_score} /></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
       </div>
 
       <div className="box">

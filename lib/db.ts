@@ -499,6 +499,14 @@ const SCORE_COLS = `
   sc.revenue_latest, sc.revenue_prev, sc.revenue_growth_pct, sc.operating_result_latest, sc.operating_margin_pct,
   sc.latest_year, sc.reason, sc.computed_at`;
 
+// Cheap count for a UI subtitle — avoids pulling all 621 rows (with their
+// full score join) just to read .length, as the admin page used to.
+export async function countActiveCompanies(): Promise<number> {
+  const c = await db();
+  const res = await c.execute("SELECT COUNT(*) AS n FROM companies WHERE status = 'active'");
+  return Number((res.rows[0] as unknown as { n: number }).n);
+}
+
 export async function listCompaniesWithScore(): Promise<CompanyWithScore[]> {
   const c = await db();
   const res = await c.execute(`
