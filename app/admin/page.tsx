@@ -51,8 +51,10 @@ export default async function AdminPage() {
             <RunScanButton />
             <p className="muted" style={{ fontSize: '0.72rem' }}>
               «Kjør skann» oppdaterer selskapslisten fra Enhetsregisteret og henter regnskap for en
-              roterende bunt (inntil {process.env.SCAN_BATCH || 150} selskaper, begrenset av en
-              45-sekunders tidsbudsjett per kjøring). «Full oppdatering» henter regnskap for alle.
+              roterende bunt (inntil {process.env.SCAN_BATCH || 150} selskaper, prioritert etter hvem
+              som trenger det mest). «Full oppdatering» bruker samme prioritering uten bunngrensen —
+              begge er likevel begrenset av et 45-sekunders tidsbudsjett per kjøring, så det tar flere
+              kjøringer å nå gjennom alle.
             </p>
           </div>
           <div className="box-header" style={{ borderTop: '1px solid var(--border)', flexShrink: 0 }}>

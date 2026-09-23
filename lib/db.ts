@@ -903,12 +903,6 @@ export async function listCompaniesToRefresh(limit: number): Promise<Company[]> 
   return res.rows as unknown as Company[];
 }
 
-export async function listActiveCompanies(): Promise<Company[]> {
-  const c = await db();
-  const res = await c.execute("SELECT * FROM companies WHERE status = 'active' ORDER BY name COLLATE NOCASE");
-  return res.rows as unknown as Company[];
-}
-
 // --- Scans ---
 
 export async function startScan(): Promise<number> {

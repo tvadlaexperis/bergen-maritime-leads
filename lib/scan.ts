@@ -20,7 +20,6 @@ import {
   listWebsiteContacts,
   addNotification,
   listCompaniesToRefresh,
-  listActiveCompanies,
   getCompanyByOrgnr,
   listFinancials,
   type Company,
@@ -308,9 +307,19 @@ export async function runScan(opts: RunScanOptions = {}): Promise<ScanResult> {
   // Enrichment pass. The candidate list can safely be larger than what a run
   // will actually get through — the deadline guard below caps real work, so
   // a bigger pool just means we never run dry before time does.
-  const batch = opts.full
-    ? await listActiveCompanies()
-    : await listCompaniesToRefresh(opts.limit && opts.limit > 0 ? opts.limit : Number(process.env.SCAN_BATCH) || 150);
+  //
+  // `full` used to mean "every active company, alphabetically" — but the
+  // same 45s deadline still applied, so a single click never actually
+  // reached past the first ~40-60 names starting with A, and clicking it
+  // again just reprocessed exactly those same companies forever (no
+  // staleness ordering to make room for the rest). Routing it through the
+  // same staleness-ordered query instead means each click (or nightly run)
+  // picks up wherever the last one left off, and eventually does cover
+  // everyone — just not in one request, which no ordering could fix given
+  // the serverless time limit.
+  const batch = await listCompaniesToRefresh(
+    opts.full ? Number.MAX_SAFE_INTEGER : opts.limit && opts.limit > 0 ? opts.limit : Number(process.env.SCAN_BATCH) || 150,
+  );
 
   // The cron route caps the whole function at 60s (app/api/cron/scan/route.ts
   // maxDuration) — a fully sequential, one-at-a-time loop through 40
