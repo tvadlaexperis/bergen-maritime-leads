@@ -53,13 +53,15 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
           <div className="app-nav">
             {user && <NavLinks />}
             {user && <NotificationsBell initial={notifications} initialUnread={unreadCount} />}
-            <ThemeToggle initial={theme} />
             {user ? (
-              <ProfileMenu user={{ displayName: user.displayName, email: user.email, role: user.role }} />
+              <ProfileMenu user={{ displayName: user.displayName, email: user.email, role: user.role }} theme={theme} />
             ) : (
-              <Link href="/login" className="link-accent">
-                Logg inn
-              </Link>
+              <>
+                <ThemeToggle initial={theme} />
+                <Link href="/login" className="link-accent">
+                  Logg inn
+                </Link>
+              </>
             )}
           </div>
         </header>

@@ -2,17 +2,22 @@
 
 import { useRef, useState } from 'react';
 import Link from 'next/link';
+import type { ThemePref } from '@/lib/theme';
 import LogoutButton from './LogoutButton';
+import ThemeToggle from './ThemeToggle';
 
 // The old header showed the display name as plain text next to a standalone
 // "Log out" button, with no link to /admin at all — the "Admin" a user
 // might have spotted there was actually just the seeded admin account's
 // display name (literally "Admin"), not a nav link. This folds user info,
-// the actual admin-panel link, and logout into one discoverable place.
+// the actual admin-panel link, theme toggle, and logout into one
+// discoverable place instead of a row of separate icon buttons.
 export default function ProfileMenu({
   user,
+  theme,
 }: {
   user: { displayName: string; email: string; role: 'viewer' | 'admin' };
+  theme: ThemePref;
 }) {
   const [open, setOpen] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -52,6 +57,7 @@ export default function ProfileMenu({
                 Admin-panel
               </Link>
             )}
+            <ThemeToggle initial={theme} variant="menu-item" />
             <div style={{ padding: '8px 14px 10px' }}>
               <LogoutButton />
             </div>
