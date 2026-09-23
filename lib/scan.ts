@@ -17,6 +17,8 @@ import {
   setCompanyWebsite,
   setWebsiteSearchAttempted,
   replaceWebsiteContacts,
+  listWebsiteContacts,
+  addNotification,
   listCompaniesToRefresh,
   listActiveCompanies,
   getCompanyByOrgnr,
@@ -66,26 +68,55 @@ async function discover(errors: ScanError[]): Promise<Map<string, RawCompany>> {
   return found;
 }
 
+// Reads only the level, tolerating malformed/absent JSON — mirrors
+// app/components/SignalBadge.tsx's parser, duplicated here rather than
+// imported so this backend module doesn't reach into app/.
+function parseBuyingSignalLevel(raw: string | null): string | null {
+  if (!raw) return null;
+  try {
+    return (JSON.parse(raw) as { buyingSignal?: { level?: string } })?.buyingSignal?.level ?? null;
+  } catch {
+    return null;
+  }
+}
+
 // --- Enrichment: annual accounts + score for one company -----------------
 
 async function enrichCompany(orgnr: string, errors: ScanError[]): Promise<boolean> {
   const company = await getCompanyByOrgnr(orgnr);
   if (!company) return false;
 
+  // Short, human-readable log of what actually changed this run — surfaced
+  // via the header bell (app/NotificationsBell.tsx). Comparisons below need
+  // the "before" state, so grab it up front rather than after each write.
+  const notes: string[] = [];
+  const priorYears = new Set((await listFinancials(company.id)).map((f) => f.year));
+  const priorContactCount = (await listWebsiteContacts(company.id)).length;
+  const priorSignalLevel = parseBuyingSignalLevel(company.ai_analysis);
+
   const fin = await orchestrator.callTool<CompanyFinancials[]>('brreg.getRegnskap', { orgnr }, 15_000);
   const financials = fin.ok ? fin.data : [];
   if (!fin.ok) errors.push({ scope: `regnskap ${orgnr}`, message: fin.error });
+  const newYears = financials.filter((f) => !priorYears.has(f.year)).map((f) => f.year);
+  if (newYears.length) notes.push(`Nytt regnskap for ${newYears.join(', ')} hentet`);
 
   const roller = await orchestrator.callTool<string | null>('brreg.getRoller', { orgnr }, 12_000);
   if (roller.ok) {
     const ceoChanged = company.ceo_name != null && roller.data != null && roller.data !== company.ceo_name;
     await setCompanyCeo(company.id, roller.data, ceoChanged);
+    if (ceoChanged) notes.push(`Ny daglig leder: ${roller.data}`);
   }
 
   // null just means "not part of any corporate group" (the common case) —
   // not a fetch failure, so it's not pushed to errors.
   const konsern = await orchestrator.callTool<KonsernInfo | null>('brreg.getKonsern', { orgnr }, 12_000);
-  if (konsern.ok) await setCompanyParent(company.id, konsern.data?.parentOrgnr ?? null, konsern.data?.parentName ?? null);
+  if (konsern.ok) {
+    const newParentOrgnr = konsern.data?.parentOrgnr ?? null;
+    if (newParentOrgnr && newParentOrgnr !== company.parent_orgnr) {
+      notes.push(`Del av konsernet ${konsern.data?.parentName ?? newParentOrgnr}`);
+    }
+    await setCompanyParent(company.id, newParentOrgnr, konsern.data?.parentName ?? null);
+  }
 
   let fetched = 0;
   if (financials.length) {
@@ -162,7 +193,12 @@ async function enrichCompany(orgnr: string, errors: ScanError[]): Promise<boolea
       },
       25_000,
     );
-    if (analysis.ok && analysis.data) await setCompanyAiAnalysis(company.id, JSON.stringify(analysis.data));
+    if (analysis.ok && analysis.data) {
+      await setCompanyAiAnalysis(company.id, JSON.stringify(analysis.data));
+      if (analysis.data.buyingSignal.level === 'høy' && priorSignalLevel !== 'høy') {
+        notes.push('Sterkt kjøpssignal oppdaget');
+      }
+    }
   } else {
     errors.push({ scope: `score ${orgnr}`, message: scored.error });
   }
@@ -180,6 +216,7 @@ async function enrichCompany(orgnr: string, errors: ScanError[]): Promise<boolea
     if (found.ok && found.data) {
       await setCompanyWebsite(company.id, found.data);
       website = found.data;
+      notes.push('Nettside funnet');
     }
   }
 
@@ -193,8 +230,15 @@ async function enrichCompany(orgnr: string, errors: ScanError[]): Promise<boolea
       { name: company.name, website },
       35_000,
     );
-    if (contacts.ok) await replaceWebsiteContacts(company.id, contacts.data);
+    if (contacts.ok) {
+      await replaceWebsiteContacts(company.id, contacts.data);
+      if (priorContactCount === 0 && contacts.data.length > 0) {
+        notes.push(`${contacts.data.length} kontakter hentet fra nettsiden`);
+      }
+    }
   }
+
+  if (notes.length) await addNotification(company.id, company.orgnr, company.name, notes.join(' · '));
 
   await markCompanyRefreshed(orgnr);
   return fetched > 0 || financials.length > 0;

@@ -614,8 +614,9 @@ a {
   white-space: nowrap;
 }
 
-/* ── Icon toggle (theme) ── */
+/* ── Icon toggle (theme, notifications) ── */
 .icon-toggle {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -638,15 +639,93 @@ a {
   border-color: var(--accent-border);
 }
 
+/* ── Notifications bell + dropdown ── */
+.notif-badge {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 3px;
+  border-radius: 999px;
+  background: var(--negative);
+  color: #fff;
+  font-size: 0.62rem;
+  font-weight: 800;
+  line-height: 16px;
+  text-align: center;
+}
+.notif-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 340px;
+  max-width: calc(100vw - 32px);
+  max-height: 420px;
+  overflow-y: auto;
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.18);
+  z-index: 20;
+}
+.notif-panel-header {
+  padding: 10px 14px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  background: var(--surface-raised);
+}
+.notif-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.notif-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+  color: inherit;
+  text-decoration: none;
+}
+.notif-item:hover {
+  background: var(--surface-hover);
+}
+.notif-list li:last-child .notif-item {
+  border-bottom: none;
+}
+.notif-company {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+.notif-message {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+}
+.notif-time {
+  font-size: 0.7rem;
+}
+
 /* ── Table ── */
+/* Compact rows so 30+ companies fit in the visible box without scrolling
+   past every few of them — this is a working list scanned quickly, not
+   prose that needs breathing room. */
 .table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.85rem;
+  font-size: 0.8rem;
 }
 .table thead th {
   text-align: left;
-  padding: 8px 14px;
+  padding: 6px 14px;
   font-size: 0.65rem;
   font-weight: 700;
   letter-spacing: 0.07em;
@@ -693,7 +772,8 @@ a {
   opacity: 0.3;
 }
 .table tbody td {
-  padding: 10px 14px;
+  padding: 4px 14px;
+  line-height: 1.3;
   border-bottom: 1px solid var(--border);
   vertical-align: middle;
 }

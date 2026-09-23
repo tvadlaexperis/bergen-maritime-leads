@@ -303,6 +303,17 @@ async function ensureSchema(): Promise<void> {
       );
       CREATE INDEX IF NOT EXISTS idx_contacts_company ON company_contacts(company_id);
 
+      CREATE TABLE IF NOT EXISTS notifications (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        company_id INTEGER REFERENCES companies(id) ON DELETE CASCADE,
+        orgnr TEXT NOT NULL,
+        company_name TEXT NOT NULL,
+        message TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+        read_at INTEGER
+      );
+      CREATE INDEX IF NOT EXISTS idx_notifications_created ON notifications(created_at);
+
       CREATE TABLE IF NOT EXISTS scans (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         started_at INTEGER NOT NULL,
@@ -547,6 +558,50 @@ export async function replaceWebsiteContacts(
       args: [companyId, ct.name, ct.role, ct.email, ct.phone, now],
     });
   }
+}
+
+// A short, human-readable log of what a scan run actually changed — surfaced
+// via the header bell (app/NotificationsBell.tsx) so a salesperson can see
+// "what's new" without diffing a company page themselves. `companyId` is
+// nullable so a row survives even if the company is later deleted (unlikely,
+// but the message/orgnr/name are denormalized specifically so it still reads
+// fine on its own).
+export interface Notification {
+  id: number;
+  company_id: number | null;
+  orgnr: string;
+  company_name: string;
+  message: string;
+  created_at: number;
+  read_at: number | null;
+}
+
+export async function addNotification(companyId: number, orgnr: string, companyName: string, message: string): Promise<void> {
+  const c = await db();
+  await c.execute({
+    sql: 'INSERT INTO notifications (company_id, orgnr, company_name, message, created_at) VALUES (?, ?, ?, ?, ?)',
+    args: [companyId, orgnr, companyName, message, Date.now()],
+  });
+}
+
+export async function listRecentNotifications(limit = 15): Promise<Notification[]> {
+  const c = await db();
+  const res = await c.execute({
+    sql: 'SELECT * FROM notifications ORDER BY created_at DESC, id DESC LIMIT ?',
+    args: [limit],
+  });
+  return res.rows as unknown as Notification[];
+}
+
+export async function countUnreadNotifications(): Promise<number> {
+  const c = await db();
+  const res = await c.execute('SELECT COUNT(*) AS n FROM notifications WHERE read_at IS NULL');
+  return Number((res.rows[0] as unknown as { n: number }).n);
+}
+
+export async function markAllNotificationsRead(): Promise<void> {
+  const c = await db();
+  await c.execute({ sql: 'UPDATE notifications SET read_at = ? WHERE read_at IS NULL', args: [Date.now()] });
 }
 
 export async function getScoreHistory(companyId: number, limit = 20): Promise<CompanyScore[]> {

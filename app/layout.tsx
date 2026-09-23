@@ -5,11 +5,13 @@ import Link from 'next/link';
 import { Plus_Jakarta_Sans } from 'next/font/google';
 import { getCurrentUser } from '@/lib/auth';
 import { getThemePref, themeAttr } from '@/lib/theme';
+import { listRecentNotifications, countUnreadNotifications } from '@/lib/db';
 import { Suspense } from 'react';
 import ThemeToggle from './ThemeToggle';
 import LogoutButton from './LogoutButton';
 import NavLinks from './NavLinks';
 import FxTicker from './FxTicker';
+import NotificationsBell from './NotificationsBell';
 
 const font = Plus_Jakarta_Sans({ subsets: ['latin'], variable: '--font-sans' });
 
@@ -25,6 +27,9 @@ export const metadata: Metadata = {
 export default async function RootLayout({ children }: { children: ReactNode }) {
   const user = await getCurrentUser();
   const theme = getThemePref();
+  const [notifications, unreadCount] = user
+    ? await Promise.all([listRecentNotifications(15), countUnreadNotifications()])
+    : [[], 0];
 
   return (
     <html lang="nb" data-theme={themeAttr(theme)} className={font.variable} suppressHydrationWarning>
@@ -47,6 +52,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
 
           <div className="app-nav">
             {user && <NavLinks />}
+            {user && <NotificationsBell initial={notifications} initialUnread={unreadCount} />}
             <ThemeToggle initial={theme} />
             {user ? (
               <>
