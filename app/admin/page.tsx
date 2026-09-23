@@ -91,15 +91,27 @@ export default async function AdminPage() {
         </div>
       </div>
 
-      <div className="box">
-        <div className="box-header"><span className="box-title">Legg til selskap manuelt</span></div>
-        <div className="box-pad"><AddCompanyForm /></div>
-      </div>
-
-      <div className="box">
-        <div className="box-header"><span className="box-title">Gjestelenke</span></div>
-        <div className="box-pad"><GuestLinkPanel /></div>
-      </div>
+      <details className="box admin-collapsible">
+        <summary className="box-header">
+          <span className="box-title">Flere verktøy</span>
+          <span className="muted">
+            <svg className="admin-collapsible-chevron" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
+              <path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>{' '}
+            Legg til selskap manuelt · Gjestelenke
+          </span>
+        </summary>
+        <div className="box-pad" style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
+          <div>
+            <div className="section-title" style={{ marginBottom: 10 }}>Legg til selskap manuelt</div>
+            <AddCompanyForm />
+          </div>
+          <div>
+            <div className="section-title" style={{ marginBottom: 10 }}>Gjestelenke</div>
+            <GuestLinkPanel />
+          </div>
+        </div>
+      </details>
 
       <div className="box">
         <div className="box-header">
