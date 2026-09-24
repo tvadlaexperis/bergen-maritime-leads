@@ -5,6 +5,8 @@ import { KOMMUNER, NACE_CODES } from '@/data/maritime-sectors.mjs';
 import ScanHeader from './ScanHeader';
 import { groupScanErrors } from '@/lib/scanErrors';
 
+export type ScanTab = 'siste' | 'oversikt';
+
 const TRIGGER_LABEL: Record<ScanDetails['trigger'], string> = {
   cron: 'Nattlig',
   manuell: 'Manuell',
@@ -34,8 +36,16 @@ function parseErrors(raw: string | null): { scope: string; message: string }[] {
 // function's UTC, an hour or two off from what anyone in Bergen expects.
 function whenLabel(ts: number): string {
   const d = new Date(ts);
-  const date = d.toLocaleDateString('nb-NO', { day: 'numeric', month: 'short', timeZone: 'Europe/Oslo' });
-  const time = d.toLocaleTimeString('nb-NO', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Oslo' });
+  const date = d.toLocaleDateString('nb-NO', {
+    day: 'numeric',
+    month: 'short',
+    timeZone: 'Europe/Oslo',
+  });
+  const time = d.toLocaleTimeString('nb-NO', {
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: 'Europe/Oslo',
+  });
   return `${date} ${time}`;
 }
 
@@ -58,12 +68,17 @@ function FreshnessTile({ label, value, total, hint }: { label: string; value: nu
       <span style={{ fontSize: '0.78rem', fontWeight: 600 }}>{label}</span>
       <span className="num" style={{ fontSize: '1.1rem', fontWeight: 800 }}>
         {value}
-        <span className="muted" style={{ fontSize: '0.75rem', fontWeight: 500 }}> / {total}</span>
+        <span className="muted" style={{ fontSize: '0.75rem', fontWeight: 500 }}>
+          {' '}
+          / {total}
+        </span>
       </span>
       <div className="meter">
         <span style={{ width: `${pct}%` }} />
       </div>
-      <span className="muted" style={{ fontSize: '0.7rem' }}>{hint}</span>
+      <span className="muted" style={{ fontSize: '0.7rem' }}>
+        {hint}
+      </span>
     </div>
   );
 }
@@ -75,6 +90,7 @@ export default function ScanPanel({
   selectedScanId,
   aiRemaining,
   aiEnabled,
+  tab,
 }: {
   scans: Scan[];
   freshness: Freshness;
@@ -82,6 +98,7 @@ export default function ScanPanel({
   selectedScanId: number | null;
   aiRemaining: number;
   aiEnabled: boolean;
+  tab: ScanTab;
 }) {
   const aiBatch = Number(process.env.SCAN_AI_BATCH) || 12;
   // Warn up top when the most recent run that reached the AI step was
@@ -91,7 +108,7 @@ export default function ScanPanel({
   const lastAiDetails = lastAiScan ? parseDetails(lastAiScan.details) : null;
   const quotaHint =
     lastAiScan && lastAiDetails && lastAiDetails.ai.analyses === 0
-      ? groupScanErrors(parseErrors(lastAiScan.errors)).find((g) => /fakturering/.test(g.hint ?? ''))?.hint ?? null
+      ? (groupScanErrors(parseErrors(lastAiScan.errors)).find((g) => /fakturering/.test(g.hint ?? ''))?.hint ?? null)
       : null;
   return (
     <div className="box" style={{ flex: 1, minHeight: 0 }}>
@@ -101,6 +118,20 @@ export default function ScanPanel({
         } bransjekoder · ${activeCount} selskaper`}
         aiEnabled={aiEnabled}
         aiRemaining={aiRemaining}
+        tabs={
+          <>
+            <Link href="/admin" className={`btn btn-ghost btn-sm${tab === 'siste' ? ' active' : ''}`} scroll={false}>
+              Siste skann
+            </Link>
+            <Link
+              href="/admin?fane=oversikt"
+              className={`btn btn-ghost btn-sm${tab === 'oversikt' ? ' active' : ''}`}
+              scroll={false}
+            >
+              Oversikt
+            </Link>
+          </>
+        }
         info={
           <>
             Hver kjøring har to trinn innenfor et tidsbudsjett på ca. 55 sekunder. <strong>1. Brønnøysund</strong>{' '}
@@ -113,109 +144,178 @@ export default function ScanPanel({
           </>
         }
       />
-      <div className="box-pad" style={{ display: 'flex', flexDirection: 'column', gap: 14, flexShrink: 0 }}>
-        {quotaHint && (
-          <div
-            role="alert"
-            style={{
-              fontSize: '0.8rem',
-              padding: '10px 12px',
-              borderRadius: 'var(--radius-control)',
-              border: '1px solid var(--negative)',
-              color: 'var(--text-primary)',
-            }}
-          >
-            <strong style={{ color: 'var(--negative)' }}>AI-trinnet stoppes av Gemini-kvoten.</strong> {quotaHint}
-          </div>
-        )}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 18 }}>
-          <FreshnessTile label="Brreg sjekket" value={freshness.brregWeek} total={freshness.total} hint="siste 7 dager" />
-          <FreshnessTile label="Brreg sjekket" value={freshness.brregMonth} total={freshness.total} hint="siste 30 dager" />
-          <FreshnessTile label="AI-vurdert" value={freshness.aiMonth} total={freshness.total} hint="siste 30 dager" />
-          <FreshnessTile
-            label="Aldri AI-vurdert"
-            value={freshness.aiNever}
-            total={freshness.total}
-            hint="står i AI-køen, høyest score først"
-          />
+      {(quotaHint || tab === 'oversikt') && (
+        <div
+          className="box-pad"
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 14,
+            flexShrink: 0,
+          }}
+        >
+          {quotaHint && (
+            <div
+              role="alert"
+              style={{
+                fontSize: '0.8rem',
+                padding: '10px 12px',
+                borderRadius: 'var(--radius-control)',
+                border: '1px solid var(--negative)',
+                color: 'var(--text-primary)',
+              }}
+            >
+              <strong style={{ color: 'var(--negative)' }}>AI-trinnet stoppes av Gemini-kvoten.</strong> {quotaHint}
+            </div>
+          )}
+          {tab === 'oversikt' && (
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))',
+                gap: 18,
+              }}
+            >
+              <FreshnessTile
+                label="Brreg sjekket"
+                value={freshness.brregWeek}
+                total={freshness.total}
+                hint="siste 7 dager"
+              />
+              <FreshnessTile
+                label="Brreg sjekket"
+                value={freshness.brregMonth}
+                total={freshness.total}
+                hint="siste 30 dager"
+              />
+              <FreshnessTile
+                label="AI-vurdert"
+                value={freshness.aiMonth}
+                total={freshness.total}
+                hint="siste 30 dager"
+              />
+              <FreshnessTile
+                label="Aldri AI-vurdert"
+                value={freshness.aiNever}
+                total={freshness.total}
+                hint="står i AI-køen, høyest score først"
+              />
+            </div>
+          )}
         </div>
-      </div>
-      <div className="box-header" style={{ borderTop: '1px solid var(--border)', flexShrink: 0 }}>
-        <span className="box-title">Siste skann</span>
-        <span className="muted">klikk en rad for å se hva som ble oppdatert</span>
-      </div>
-      <div className="box-scroll">
-        <table className="table">
-          <thead>
-            <tr>
-              <th>Startet</th>
-              <th>Type</th>
-              <th className="col-right" title="Nye selskaper funnet i Enhetsregisteret">Nye selsk.</th>
-              <th className="col-right" title="Selskaper sjekket mot Brønnøysund">Brreg sjekket</th>
-              <th className="col-right" title="Selskaper med nytt regnskapsår">Nye regnskap</th>
-              <th className="col-right" title="Daglig leder satt/endret, eller styret endret">Ledelse/styre</th>
-              <th className="col-right">AI-vurdert</th>
-              <th className="col-right">Nettsider</th>
-              <th className="col-right" title="Selskaper der vi hentet kontakter fra nettsiden (antall personer i parentes)">Kontakter</th>
-              <th className="col-right">Feil</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {scans.map((s) => {
-              const d = parseDetails(s.details);
-              const errors = parseErrors(s.errors);
-              const open = selectedScanId === s.id;
-              const href = open ? '/admin' : `/admin?scan=${s.id}`;
-              const cell = (content: React.ReactNode, right = true) => (
-                <td className={right ? 'col-right num' : undefined}>
-                  <Link href={href} scroll={false} style={{ display: 'block', color: 'inherit' }}>
-                    {content}
-                  </Link>
-                </td>
-              );
-              return [
-                <tr key={s.id} style={{ cursor: 'pointer', background: open ? 'var(--accent-soft)' : undefined }}>
-                  {cell(<span style={{ whiteSpace: 'nowrap' }}>{open ? '▾' : '▸'} {whenLabel(s.started_at)}</span>, false)}
-                  {cell(d ? TRIGGER_LABEL[d.trigger] : <span className="muted">eldre</span>, false)}
-                  {cell(<Num n={d ? (d.discovery.ran ? d.discovery.added : null) : null} />)}
-                  {cell(<Num n={d ? d.brreg.processed : null} />)}
-                  {cell(<Num n={d ? d.brreg.newFinancials : s.financials_fetched} />)}
-                  {cell(<Num n={d ? d.brreg.ceoSet + d.brreg.ceoChanged + d.brreg.boardUpdated : null} />)}
-                  {cell(<Num n={d ? (d.ai.enabled ? d.ai.analyses : null) : null} />)}
-                  {cell(<Num n={d ? (d.ai.enabled ? d.ai.websitesFound : null) : null} />)}
-                  {cell(
-                    d && d.ai.enabled ? (
-                      <>
-                        <Num n={d.ai.contactCompanies} />
-                        {d.ai.contactPeople > 0 && <span className="muted"> ({d.ai.contactPeople})</span>}
-                      </>
-                    ) : (
-                      <Num n={null} />
-                    ),
-                  )}
-                  {cell(<span style={{ color: errors.length ? 'var(--negative)' : undefined }}><Num n={errors.length} /></span>)}
-                  {cell(<span className="muted">{statusLabel(s, d)}</span>, false)}
-                </tr>,
-                open && (
-                  <tr key={`${s.id}-details`}>
-                    <td colSpan={11} style={{ padding: '12px 20px 18px', background: 'var(--surface-raised)' }}>
-                      <ScanDetailsView scan={s} details={d} errors={errors} />
-                    </td>
-                  </tr>
-                ),
-              ];
-            })}
-            {scans.length === 0 && (
+      )}
+      {tab === 'siste' && (
+        <div className="box-scroll">
+          <table className="table">
+            <thead>
               <tr>
-                <td colSpan={11} className="muted" style={{ textAlign: 'center', padding: 24 }}>
-                  Ingen skann ennå.
-                </td>
+                <th>Startet</th>
+                <th>Type</th>
+                <th className="col-right" title="Nye selskaper funnet i Enhetsregisteret">
+                  Nye selsk.
+                </th>
+                <th className="col-right" title="Selskaper sjekket mot Brønnøysund">
+                  Brreg sjekket
+                </th>
+                <th className="col-right" title="Selskaper med nytt regnskapsår">
+                  Nye regnskap
+                </th>
+                <th className="col-right" title="Daglig leder satt/endret, eller styret endret">
+                  Ledelse/styre
+                </th>
+                <th className="col-right">AI-vurdert</th>
+                <th className="col-right">Nettsider</th>
+                <th
+                  className="col-right"
+                  title="Selskaper der vi hentet kontakter fra nettsiden (antall personer i parentes)"
+                >
+                  Kontakter
+                </th>
+                <th className="col-right">Feil</th>
+                <th>Status</th>
               </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody>
+              {scans.map((s) => {
+                const d = parseDetails(s.details);
+                const errors = parseErrors(s.errors);
+                const open = selectedScanId === s.id;
+                const href = open ? '/admin' : `/admin?scan=${s.id}`;
+                const cell = (content: React.ReactNode, right = true) => (
+                  <td className={right ? 'col-right num' : undefined}>
+                    <Link href={href} scroll={false} style={{ display: 'block', color: 'inherit' }}>
+                      {content}
+                    </Link>
+                  </td>
+                );
+                return [
+                  <tr
+                    key={s.id}
+                    style={{
+                      cursor: 'pointer',
+                      background: open ? 'var(--accent-soft)' : undefined,
+                    }}
+                  >
+                    {cell(
+                      <span style={{ whiteSpace: 'nowrap' }}>
+                        {open ? '▾' : '▸'} {whenLabel(s.started_at)}
+                      </span>,
+                      false,
+                    )}
+                    {cell(d ? TRIGGER_LABEL[d.trigger] : <span className="muted">eldre</span>, false)}
+                    {cell(<Num n={d ? (d.discovery.ran ? d.discovery.added : null) : null} />)}
+                    {cell(<Num n={d ? d.brreg.processed : null} />)}
+                    {cell(<Num n={d ? d.brreg.newFinancials : s.financials_fetched} />)}
+                    {cell(<Num n={d ? d.brreg.ceoSet + d.brreg.ceoChanged + d.brreg.boardUpdated : null} />)}
+                    {cell(<Num n={d ? (d.ai.enabled ? d.ai.analyses : null) : null} />)}
+                    {cell(<Num n={d ? (d.ai.enabled ? d.ai.websitesFound : null) : null} />)}
+                    {cell(
+                      d && d.ai.enabled ? (
+                        <>
+                          <Num n={d.ai.contactCompanies} />
+                          {d.ai.contactPeople > 0 && <span className="muted"> ({d.ai.contactPeople})</span>}
+                        </>
+                      ) : (
+                        <Num n={null} />
+                      ),
+                    )}
+                    {cell(
+                      <span
+                        style={{
+                          color: errors.length ? 'var(--negative)' : undefined,
+                        }}
+                      >
+                        <Num n={errors.length} />
+                      </span>,
+                    )}
+                    {cell(<span className="muted">{statusLabel(s, d)}</span>, false)}
+                  </tr>,
+                  open && (
+                    <tr key={`${s.id}-details`}>
+                      <td
+                        colSpan={11}
+                        style={{
+                          padding: '12px 20px 18px',
+                          background: 'var(--surface-raised)',
+                        }}
+                      >
+                        <ScanDetailsView scan={s} details={d} errors={errors} />
+                      </td>
+                    </tr>
+                  ),
+                ];
+              })}
+              {scans.length === 0 && (
+                <tr>
+                  <td colSpan={11} className="muted" style={{ textAlign: 'center', padding: 24 }}>
+                    Ingen skann ennå.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
@@ -241,7 +341,14 @@ function ScanDetailsView({
   // AI-only companies can show up as changed without being in the Brreg count.
   const unchanged = Math.max(0, d.brreg.processed - changed);
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12, fontSize: '0.8rem' }}>
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 12,
+        fontSize: '0.8rem',
+      }}
+    >
       <p>
         {d.discovery.ran && (
           <>
@@ -272,10 +379,26 @@ function ScanDetailsView({
         <div>
           <p style={{ fontWeight: 600, marginBottom: 6 }}>
             Endringer i {changed} selskaper
-            {changed > d.companies.length && <span className="muted" style={{ fontWeight: 400 }}> (viser {d.companies.length})</span>}
-            {unchanged > 0 && <span className="muted" style={{ fontWeight: 400 }}> · {unchanged} sjekket uten endring</span>}
+            {changed > d.companies.length && (
+              <span className="muted" style={{ fontWeight: 400 }}>
+                {' '}
+                (viser {d.companies.length})
+              </span>
+            )}
+            {unchanged > 0 && (
+              <span className="muted" style={{ fontWeight: 400 }}>
+                {' '}
+                · {unchanged} sjekket uten endring
+              </span>
+            )}
           </p>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '6px 20px' }}>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
+              gap: '6px 20px',
+            }}
+          >
             {d.companies.map((c) => (
               <div key={c.orgnr} style={{ minWidth: 0 }}>
                 <Link href={`/company/${c.orgnr}`} className="link-accent" style={{ fontWeight: 600 }}>
@@ -294,18 +417,35 @@ function ScanDetailsView({
 
       {errors.length > 0 && (
         <div>
-          <p style={{ fontWeight: 600, marginBottom: 8, color: 'var(--negative)' }}>{errors.length} feil</p>
+          <p
+            style={{
+              fontWeight: 600,
+              marginBottom: 8,
+              color: 'var(--negative)',
+            }}
+          >
+            {errors.length} feil
+          </p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {groupScanErrors(errors).map((g) => (
-              <div key={`${g.step}-${g.message}`} style={{ borderLeft: '3px solid var(--negative)', paddingLeft: 10 }}>
+              <div
+                key={`${g.step}-${g.message}`}
+                style={{
+                  borderLeft: '3px solid var(--negative)',
+                  paddingLeft: 10,
+                }}
+              >
                 <div>
                   <strong>{g.step}</strong>
                   <span className="muted">
-                    {' '}· {g.count} {g.count === 1 ? 'gang' : 'ganger'}
+                    {' '}
+                    · {g.count} {g.count === 1 ? 'gang' : 'ganger'}
                     {g.orgnrs.length > 0 && ` · ${new Set(g.orgnrs).size} selskaper`}
                   </span>
                 </div>
-                <div className="muted" style={{ overflowWrap: 'anywhere' }}>{g.message}</div>
+                <div className="muted" style={{ overflowWrap: 'anywhere' }}>
+                  {g.message}
+                </div>
                 {g.hint && <div style={{ marginTop: 2 }}>{g.hint}</div>}
               </div>
             ))}

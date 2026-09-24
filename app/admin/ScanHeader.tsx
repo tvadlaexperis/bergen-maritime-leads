@@ -12,12 +12,15 @@ export default function ScanHeader({
   aiEnabled,
   aiRemaining,
   info,
+  tabs,
 }: {
   meta: string;
   aiEnabled: boolean;
   aiRemaining: number;
   /** How a scan works — shown in a hover/focus popover behind the (i) icon. */
   info: ReactNode;
+  /** Oversikt / Siste skann view toggles — plain links, rendered left of the run buttons. */
+  tabs: ReactNode;
 }) {
   const [scanStatus, setScanStatus] = useState<string | null>(null);
   const [aiStatus, setAiStatus] = useState<string | null>(null);
@@ -41,6 +44,8 @@ export default function ScanHeader({
           <span className="muted" style={{ fontSize: '0.75rem' }}>{meta}</span>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          {tabs}
+          <span aria-hidden="true" style={{ width: 1, height: 22, background: 'var(--border)', margin: '0 4px' }} />
           <RunScanButton onStatus={setScanStatus} />
           {aiEnabled && <RunAiQueueButton initialRemaining={aiRemaining} onStatus={setAiStatus} />}
         </div>

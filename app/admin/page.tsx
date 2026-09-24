@@ -45,7 +45,7 @@ const PERIODS = [
 export default async function AdminPage({
   searchParams,
 }: {
-  searchParams: { view?: string; kategori?: string; modus?: string; scan?: string; periode?: string };
+  searchParams: { view?: string; kategori?: string; modus?: string; scan?: string; periode?: string; fane?: string };
 }) {
   const user = await getCurrentUser();
   if (!user || user.role !== 'admin') redirect('/login?next=/admin');
@@ -252,6 +252,7 @@ export default async function AdminPage({
           selectedScanId={selectedScanId}
           aiRemaining={aiRemaining}
           aiEnabled={!!process.env.GEMINI_API_KEY}
+          tab={searchParams.fane === 'oversikt' ? 'oversikt' : 'siste'}
         />
       )}
     </div>
