@@ -2,8 +2,7 @@ import Link from 'next/link';
 import type { Freshness, Scan } from '@/lib/db';
 import type { ScanDetails } from '@/lib/scan';
 import { KOMMUNER, NACE_CODES } from '@/data/maritime-sectors.mjs';
-import RunScanButton from './RunScanButton';
-import RunAiQueueButton from './RunAiQueueButton';
+import ScanHeader from './ScanHeader';
 
 const TRIGGER_LABEL: Record<ScanDetails['trigger'], string> = {
   cron: 'Nattlig',
@@ -86,16 +85,14 @@ export default function ScanPanel({
   const aiBatch = Number(process.env.SCAN_AI_BATCH) || 12;
   return (
     <div className="box" style={{ flex: 1, minHeight: 0 }}>
-      <div className="box-header">
-        <span className="box-title">Skann</span>
-        <span className="muted">
-          nattlig 05:00 UTC · {(KOMMUNER as { name: string }[]).map((k) => k.name).join(', ')} ·{' '}
-          {(NACE_CODES as unknown[]).length} bransjekoder · {activeCount} selskaper
-        </span>
-      </div>
+      <ScanHeader
+        meta={`nattlig 05:00 UTC · ${(KOMMUNER as { name: string }[]).map((k) => k.name).join(', ')} · ${
+          (NACE_CODES as unknown[]).length
+        } bransjekoder · ${activeCount} selskaper`}
+        aiEnabled={aiEnabled}
+        aiRemaining={aiRemaining}
+      />
       <div className="box-pad" style={{ display: 'flex', flexDirection: 'column', gap: 14, flexShrink: 0 }}>
-        <RunScanButton />
-        {aiEnabled && <RunAiQueueButton initialRemaining={aiRemaining} />}
         <p className="muted" style={{ fontSize: '0.72rem' }}>
           Hver kjøring har to trinn innenfor et tidsbudsjett på ca. 55 sekunder. <strong>1. Brønnøysund</strong> (gratis,
           raskt): regnskap, daglig leder, styre, konsern og lead-score for selskaper som ikke er sjekket de siste 3

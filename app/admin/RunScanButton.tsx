@@ -1,13 +1,15 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { runScanAction } from './actions';
 
-export default function RunScanButton() {
+// Buttons only — the result line is reported up via `onStatus` so the
+// buttons can sit in the Skann header while the text renders below it.
+export default function RunScanButton({ onStatus }: { onStatus: (msg: string | null) => void }) {
   const router = useRouter();
   const [busy, start] = useTransition();
-  const [msg, setMsg] = useState<string | null>(null);
+  const setMsg = onStatus;
 
   function run(full: boolean) {
     setMsg(null);
@@ -23,14 +25,13 @@ export default function RunScanButton() {
   }
 
   return (
-    <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+    <>
       <button className="btn btn-primary btn-sm" disabled={busy} onClick={() => run(false)}>
         {busy ? 'Skanner…' : 'Kjør skann (neste bunt)'}
       </button>
       <button className="btn btn-ghost btn-sm" disabled={busy} onClick={() => run(true)}>
         Full oppdatering
       </button>
-      {msg && <span className="muted" style={{ fontSize: '0.78rem' }}>{msg}</span>}
-    </div>
+    </>
   );
 }
