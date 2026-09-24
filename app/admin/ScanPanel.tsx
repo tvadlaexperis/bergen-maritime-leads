@@ -3,11 +3,13 @@ import type { Freshness, Scan } from '@/lib/db';
 import type { ScanDetails } from '@/lib/scan';
 import { KOMMUNER, NACE_CODES } from '@/data/maritime-sectors.mjs';
 import RunScanButton from './RunScanButton';
+import RunAiQueueButton from './RunAiQueueButton';
 
 const TRIGGER_LABEL: Record<ScanDetails['trigger'], string> = {
   cron: 'Nattlig',
   manuell: 'Manuell',
   full: 'Full',
+  ai: 'AI-kø',
 };
 
 function parseDetails(raw: string | null): ScanDetails | null {
@@ -71,11 +73,15 @@ export default function ScanPanel({
   freshness,
   activeCount,
   selectedScanId,
+  aiRemaining,
+  aiEnabled,
 }: {
   scans: Scan[];
   freshness: Freshness;
   activeCount: number;
   selectedScanId: number | null;
+  aiRemaining: number;
+  aiEnabled: boolean;
 }) {
   const aiBatch = Number(process.env.SCAN_AI_BATCH) || 12;
   return (
@@ -89,12 +95,14 @@ export default function ScanPanel({
       </div>
       <div className="box-pad" style={{ display: 'flex', flexDirection: 'column', gap: 14, flexShrink: 0 }}>
         <RunScanButton />
+        {aiEnabled && <RunAiQueueButton initialRemaining={aiRemaining} />}
         <p className="muted" style={{ fontSize: '0.72rem' }}>
           Hver kjøring har to trinn innenfor et tidsbudsjett på ca. 55 sekunder. <strong>1. Brønnøysund</strong> (gratis,
-          raskt): regnskap, daglig leder, styre, konsern og lead-score — de som ikke er sjekket på lengst går først, og en
-          kjøring rekker vanligvis 100+ selskaper. <strong>2. AI</strong> (tregt): AI-vurdering, nettsidesøk og kontakter fra
-          nettsiden for inntil {aiBatch} selskaper — de som aldri er vurdert og har høyest score går først. «Full
-          oppdatering» leter i tillegg etter nye selskaper i Enhetsregisteret.
+          raskt): regnskap, daglig leder, styre, konsern og lead-score for selskaper som ikke er sjekket de siste 3
+          dagene — er alle oppdatert, hoppes trinnet over. <strong>2. AI</strong> (tregt): AI-vurdering, nettsidesøk og
+          kontakter fra nettsiden for inntil {aiBatch} selskaper — de som aldri er vurdert og har høyest score går først.
+          «Full oppdatering» sjekker alle i Brreg uansett alder og leter etter nye selskaper. «Kjør AI-køen» hopper over
+          Brreg og kjører AI-trinnet gang på gang (ca. {aiBatch} selskaper i minuttet) så lenge siden er åpen.
         </p>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 18 }}>
           <FreshnessTile label="Brreg sjekket" value={freshness.brregWeek} total={freshness.total} hint="siste 7 dager" />

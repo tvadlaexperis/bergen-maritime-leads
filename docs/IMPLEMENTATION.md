@@ -54,20 +54,28 @@ the guest magic-link flow, `scripts/hash-password.mjs`, `scripts/create-user.mjs
    so results are re-filtered with `matchNace()`. Bankrupt entities are dropped.
    Each hit is upserted into `companies`.
    Upserts are batched (`upsertCompanies()`, 100 per Turso round-trip).
-2. **Brreg pass** (free, fast) — staleness-ordered queue (`listCompaniesToRefresh`,
-   capped by `SCAN_BATCH`, default 150), 6 companies in parallel, until 30 s into the
+2. **Brreg pass** (free, fast) — only companies that are *due* (never refreshed, newer
+   filing on record, or not checked in 3 days; `full` = everyone), staleness-ordered
+   (`listCompaniesToRefresh`, capped by `SCAN_BATCH`, default 150). Nothing due → skipped,
+   and the AI pass gets the whole budget. 6 companies in parallel, until 30 s into the
    run (50 s if AI is off): regnskap + roller + konsern in parallel, then `score.compute`.
    Measured locally: all 615 companies in 26 s.
 3. **AI pass** (Gemini, slow) — its own queue (`listCompaniesForAi`: never-attempted
    first, highest lead score first, then oldest `ai_attempted_at`), up to `SCAN_AI_BATCH`
-   (default 12) companies in waves of 4. Per company, `ai.analyze` runs alongside
+   (default 12) companies in waves of 6. Admin «Kjør AI-køen» (`RunAiQueueButton` →
+   `runAiQueueAction`) calls AI-only runs back to back from the browser until no
+   never-attempted company is left, stopping after two runs with zero successful analyses.
+   Cost (Gemini 3.6 Flash, Sept 2026): ~10k in / ~2k out tokens per company ≈ $0.015, and
+   `findWebsite` search grounding stays inside the 5,000 free searches/month. Per company, `ai.analyze` runs alongside
    `ai.findWebsite` → `ai.extractContacts`; every call's timeout is clipped to the run's
    hard stop at 54 s so the function always finishes and writes its `scans` row.
    Previously all of this ran sequentially per company inside the Brreg loop, which made
    chunks outlive the 60 s limit — contacts and most Brreg data never got written.
 4. `scans.details` (JSON, `ScanDetails` in `lib/scan.ts`) records per-step counts and a
    per-company list of what changed; admin → Skann shows it (click a row).
-5. Cron: discovery on Mondays (or `?discovery=1`), passes 2–3 every night. Admin "Kjør
+5. Admin → Logg filters by period (I dag / I går / 7 / 30 dager / Alle), Bergen-midnight
+   boundaries (`osloDayStart` in `app/format.ts`).
+6. Cron: discovery on Mondays (or `?discovery=1`), passes 2–3 every night. Admin "Kjør
    skann" = passes 2–3; "Full oppdatering" = discovery + passes 2–3.
 
 ## Deploy state

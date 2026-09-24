@@ -16,6 +16,7 @@ import {
   setCompanyWebsite,
   setCompanyContacts,
   deleteCompany,
+  countAiNeverAttempted,
   type CompanyStatus,
 } from '@/lib/db';
 import { runScan, refreshCompany, addCompanyByOrgnr } from '@/lib/scan';
@@ -152,6 +153,33 @@ export async function runScanAction(full: boolean): Promise<{ summary: string }>
   revalidatePath('/admin');
   revalidatePath('/dashboard');
   return { summary };
+}
+
+// One AI-only run (no Brreg pass, whole budget to the AI queue). The
+// «Kjør AI-køen» button calls this back to back until `remaining` hits 0 —
+// each call is its own ≤60s request, so no single request outlives Vercel's
+// function limit however long the queue is.
+export async function runAiQueueAction(): Promise<
+  { error: string } | { processed: number; analyses: number; contacts: number; websites: number; errors: number; remaining: number }
+> {
+  const user = await guard('admin-ai-queue');
+  if (!process.env.GEMINI_API_KEY) return { error: 'AI er ikke konfigurert (GEMINI_API_KEY mangler).' };
+  const r = await runScan({ aiOnly: true, skipDiscovery: true, trigger: 'ai' });
+  const d = r.details.ai;
+  await audit('scan.ai', {
+    actor: user.email,
+    detail: `${d.processed} forsøkt, ${d.analyses} vurderinger, ${d.websitesFound} nettsider, kontakter hos ${d.contactCompanies}, ${r.errors.length} feil`,
+  });
+  revalidatePath('/');
+  revalidatePath('/admin');
+  return {
+    processed: d.processed,
+    analyses: d.analyses,
+    contacts: d.contactCompanies,
+    websites: d.websitesFound,
+    errors: r.errors.length,
+    remaining: await countAiNeverAttempted(),
+  };
 }
 
 export async function generateGuestLinkAction(

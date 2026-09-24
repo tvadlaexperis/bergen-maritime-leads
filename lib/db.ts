@@ -1031,18 +1031,25 @@ export async function deleteCompany(id: number): Promise<void> {
 // Those go first; everyone else falls back to oldest-refreshed-first, so a
 // small nightly batch still cycles through the whole list over a few weeks
 // instead of wasting slots re-fetching accounts that haven't changed.
-export async function listCompaniesToRefresh(limit: number): Promise<CompanyWithScore[]> {
+//
+// Only companies that are actually *due* are returned: never refreshed, a
+// newer filing on record, or not re-checked in `staleDays`. When nothing is
+// due the Brreg pass is empty and the AI pass gets the whole run budget.
+export async function listCompaniesToRefresh(limit: number, staleDays = 3): Promise<CompanyWithScore[]> {
   const c = await db();
   const res = await c.execute({
     sql: `SELECT co.*, ${SCORE_COLS} FROM companies co ${SCORE_JOIN}
           LEFT JOIN (SELECT company_id, MAX(year) AS max_year FROM financials GROUP BY company_id) f
             ON f.company_id = co.id
-          WHERE co.status = 'active'
+          WHERE co.status = 'active' AND (
+            co.last_refreshed_at IS NULL OR co.last_refreshed_at < ?
+            OR (co.last_annual_report IS NOT NULL AND CAST(co.last_annual_report AS INTEGER) > COALESCE(f.max_year, 0))
+          )
           ORDER BY
             (co.last_annual_report IS NOT NULL AND CAST(co.last_annual_report AS INTEGER) > COALESCE(f.max_year, 0)) DESC,
             (co.last_refreshed_at IS NOT NULL), co.last_refreshed_at ASC, co.name COLLATE NOCASE
           LIMIT ?`,
-    args: [limit],
+    args: [Date.now() - staleDays * 86_400_000, limit],
   });
   return plain<CompanyWithScore>(res.rows);
 }
@@ -1065,6 +1072,15 @@ export async function listCompaniesForAi(limit: number): Promise<CompanyWithScor
     args: [limit],
   });
   return plain<CompanyWithScore>(res.rows);
+}
+
+// Companies the AI pass hasn't tried yet — what "Kjør AI-køen" counts down.
+export async function countAiNeverAttempted(): Promise<number> {
+  const c = await db();
+  const res = await c.execute(
+    "SELECT COUNT(*) AS n FROM companies WHERE status = 'active' AND ai_attempted_at IS NULL AND ai_analysis_at IS NULL",
+  );
+  return Number((res.rows[0] as unknown as { n: number }).n);
 }
 
 export interface Freshness {
@@ -1174,9 +1190,14 @@ export async function insertAudit(e: {
   }
 }
 
-export async function listAudit(limit = 50): Promise<AuditEntry[]> {
+export async function listAudit(limit = 50, range?: { from: number; to: number }): Promise<AuditEntry[]> {
   const c = await db();
-  const res = await c.execute({ sql: 'SELECT * FROM audit_log ORDER BY at DESC LIMIT ?', args: [limit] });
+  const res = range
+    ? await c.execute({
+        sql: 'SELECT * FROM audit_log WHERE at >= ? AND at < ? ORDER BY at DESC LIMIT ?',
+        args: [range.from, range.to, limit],
+      })
+    : await c.execute({ sql: 'SELECT * FROM audit_log ORDER BY at DESC LIMIT ?', args: [limit] });
   return res.rows as unknown as AuditEntry[];
 }
 

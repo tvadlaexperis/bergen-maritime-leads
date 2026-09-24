@@ -36,7 +36,7 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 type ScanError = { scope: string; message: string };
 
-export type ScanTrigger = 'cron' | 'manuell' | 'full';
+export type ScanTrigger = 'cron' | 'manuell' | 'full' | 'ai';
 
 // Everything a run did, stored as JSON on the `scans` row so the admin
 // "Siste skann" table can show *what* was updated, not just how many rows
@@ -415,8 +415,10 @@ async function aiPass(
 // --- The scan ----------------------------------------------------------
 
 export interface RunScanOptions {
-  /** Brreg pass: no cap on the candidate list (the time budget still applies). */
+  /** Brreg pass: treat every company as due, not just stale ones (the time budget still applies). */
   full?: boolean;
+  /** Skip the Brreg pass entirely — the whole budget goes to the AI queue ("Kjør AI-køen"). */
+  aiOnly?: boolean;
   /** How many companies the Brreg pass may consider this run (ignored when `full`). */
   limit?: number;
   /** Skip discovery — only refresh known companies. */
@@ -431,7 +433,10 @@ export interface RunScanOptions {
 // write the scan row, so the "Siste skann" table always gets a finished
 // entry instead of a "kjører / avbrutt" one.
 const BRREG_CONCURRENCY = 6;
-const AI_CONCURRENCY = 4;
+const AI_CONCURRENCY = 6;
+// A company re-checked in Brreg within this many days isn't due again —
+// accounts are filed yearly and board changes are rare.
+const BRREG_STALE_DAYS = 3;
 const BRREG_UNTIL_MS = 30_000;
 const BRREG_UNTIL_NO_AI_MS = 50_000;
 const HARD_STOP_MS = 54_000;
@@ -462,12 +467,17 @@ export async function runScan(opts: RunScanOptions = {}): Promise<ScanResult> {
     }
   }
 
-  // Pass 1 — Brreg, staleness-ordered (lib/db.ts listCompaniesToRefresh), so
-  // each run picks up where the last one stopped.
+  // Pass 1 — Brreg, only companies that are due, staleness-ordered (lib/db.ts
+  // listCompaniesToRefresh), so each run picks up where the last one stopped.
+  // Once everyone's been checked recently this is empty and the AI pass
+  // below starts immediately with the whole budget.
   const brregUntil = started + (aiEnabled ? BRREG_UNTIL_MS : BRREG_UNTIL_NO_AI_MS);
-  const batch = await listCompaniesToRefresh(
-    opts.full ? Number.MAX_SAFE_INTEGER : opts.limit && opts.limit > 0 ? opts.limit : Number(process.env.SCAN_BATCH) || 150,
-  );
+  const batch = opts.aiOnly
+    ? []
+    : await listCompaniesToRefresh(
+        opts.full ? Number.MAX_SAFE_INTEGER : opts.limit && opts.limit > 0 ? opts.limit : Number(process.env.SCAN_BATCH) || 150,
+        opts.full ? 0 : BRREG_STALE_DAYS,
+      );
   details.brreg.queued = batch.length;
   let next = 0;
   await Promise.all(

@@ -13,8 +13,9 @@ import {
   listScans,
   listAudit,
   getFreshness,
+  countAiNeverAttempted,
 } from '@/lib/db';
-import { dateLabel } from '@/app/format';
+import { dateLabel, osloDayStart } from '@/app/format';
 import ScanPanel from './ScanPanel';
 import AdminToolsMenu from './AdminToolsMenu';
 
@@ -28,13 +29,23 @@ export const metadata: Metadata = { title: 'Admin' };
 
 type View = 'skann' | 'logg' | 'dekning';
 
+// Logg date filter. Day boundaries are Bergen midnight, not the server's UTC.
+const PERIODS = [
+  { key: 'idag', label: 'I dag', range: () => ({ from: osloDayStart(0), to: Number.MAX_SAFE_INTEGER }) },
+  { key: 'igar', label: 'I går', range: () => ({ from: osloDayStart(1), to: osloDayStart(0) }) },
+  { key: '7d', label: 'Siste 7 dager', range: () => ({ from: osloDayStart(6), to: Number.MAX_SAFE_INTEGER }) },
+  { key: '30d', label: 'Siste 30 dager', range: () => ({ from: osloDayStart(29), to: Number.MAX_SAFE_INTEGER }) },
+  { key: 'alle', label: 'Alle', range: () => null },
+] as const;
+
+
 // Which of the full-width panels shows below the header — a query param
 // rather than client state, so the toggle is a plain link and the page stays
 // a Server Component (no new client wrapper needed just to switch panels).
 export default async function AdminPage({
   searchParams,
 }: {
-  searchParams: { view?: string; kategori?: string; modus?: string; scan?: string };
+  searchParams: { view?: string; kategori?: string; modus?: string; scan?: string; periode?: string };
 }) {
   const user = await getCurrentUser();
   if (!user || user.role !== 'admin') redirect('/login?next=/admin');
@@ -43,15 +54,18 @@ export default async function AdminPage({
   const category: CoverageCategory | null =
     view === 'dekning' && searchParams.kategori && isCoverageCategory(searchParams.kategori) ? searchParams.kategori : null;
   const selectedScanId = Number(searchParams.scan) || null;
+  const period = PERIODS.find((p) => p.key === searchParams.periode) ?? PERIODS.find((p) => p.key === 'idag')!;
+  const periodRange = period.range();
   const mode: CoverageMode = searchParams.modus && isCoverageMode(searchParams.modus) ? searchParams.modus : 'har';
 
-  const [activeCount, scans, auditRows, coverage, categoryCompanies, freshness] = await Promise.all([
+  const [activeCount, scans, auditRows, coverage, categoryCompanies, freshness, aiRemaining] = await Promise.all([
     countActiveCompanies(),
     listScans(15),
-    listAudit(40),
+    listAudit(periodRange ? 1000 : 200, periodRange ?? undefined),
     getDataCoverage(),
     category ? listCompaniesForCoverage(category, mode) : Promise.resolve(null),
     getFreshness(),
+    countAiNeverAttempted(),
   ]);
 
   return (
@@ -170,7 +184,18 @@ export default async function AdminPage({
         <div className="box" style={{ flex: 1, minHeight: 0 }}>
           <div className="box-header">
             <span className="box-title">Logg</span>
-            <span className="muted">innlogginger &amp; admin-handlinger</span>
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+              {PERIODS.map((p) => (
+                <Link
+                  key={p.key}
+                  href={`/admin?view=logg&periode=${p.key}`}
+                  className={`btn btn-ghost btn-sm${p.key === period.key ? ' active' : ''}`}
+                >
+                  {p.label}
+                </Link>
+              ))}
+              <span className="muted" style={{ marginLeft: 8 }}>{auditRows.length} hendelser</span>
+            </div>
           </div>
           <div className="box-scroll">
             <table className="table">
@@ -187,7 +212,7 @@ export default async function AdminPage({
                 {auditRows.map((a) => (
                   <tr key={a.id}>
                     <td className="num muted" style={{ whiteSpace: 'nowrap' }}>
-                      {dateLabel(a.at)} {new Date(a.at).toLocaleTimeString('nb-NO', { hour: '2-digit', minute: '2-digit' })}
+                      {dateLabel(a.at)} {new Date(a.at).toLocaleTimeString('nb-NO', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Oslo' })}
                     </td>
                     <td style={{ whiteSpace: 'nowrap' }}>{a.actor ?? '—'}</td>
                     <td>
@@ -201,7 +226,7 @@ export default async function AdminPage({
                 ))}
                 {auditRows.length === 0 && (
                   <tr>
-                    <td colSpan={5} className="muted" style={{ textAlign: 'center', padding: 24 }}>Ingen hendelser ennå.</td>
+                    <td colSpan={5} className="muted" style={{ textAlign: 'center', padding: 24 }}>Ingen hendelser i perioden.</td>
                   </tr>
                 )}
               </tbody>
@@ -209,7 +234,14 @@ export default async function AdminPage({
           </div>
         </div>
       ) : (
-        <ScanPanel scans={scans} freshness={freshness} activeCount={activeCount} selectedScanId={selectedScanId} />
+        <ScanPanel
+          scans={scans}
+          freshness={freshness}
+          activeCount={activeCount}
+          selectedScanId={selectedScanId}
+          aiRemaining={aiRemaining}
+          aiEnabled={!!process.env.GEMINI_API_KEY}
+        />
       )}
     </div>
   );

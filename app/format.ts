@@ -26,7 +26,7 @@ export function dateLabel(ts: number | string | null | undefined): string {
   if (ts == null) return '—';
   const d = typeof ts === 'number' ? new Date(ts) : new Date(ts);
   if (Number.isNaN(d.getTime())) return '—';
-  return d.toLocaleDateString('nb-NO', { year: 'numeric', month: 'short', day: 'numeric' });
+  return d.toLocaleDateString('nb-NO', { year: 'numeric', month: 'short', day: 'numeric', timeZone: 'Europe/Oslo' });
 }
 
 export function agoLabel(ts: number | null | undefined): string {
@@ -38,4 +38,23 @@ export function agoLabel(ts: number | null | undefined): string {
   const months = Math.round(days / 30);
   if (months < 24) return `for ${months} mnd siden`;
   return `for ${Math.round(months / 12)} år siden`;
+}
+
+// Minutes Europe/Oslo is ahead of UTC at instant `d` (60 or 120, DST-aware).
+function osloOffsetMinutes(d: Date): number {
+  const tz =
+    new Intl.DateTimeFormat('en-US', { timeZone: 'Europe/Oslo', timeZoneName: 'shortOffset' })
+      .formatToParts(d)
+      .find((p) => p.type === 'timeZoneName')?.value ?? 'GMT+1';
+  const m = tz.match(/GMT([+-])(\d+)(?::(\d+))?/);
+  if (!m) return 60;
+  const mins = Number(m[2]) * 60 + Number(m[3] ?? 0);
+  return m[1] === '-' ? -mins : mins;
+}
+
+/** Epoch ms of local midnight in Bergen, `daysAgo` days back (0 = today). Server runs in UTC. */
+export function osloDayStart(daysAgo = 0, now = new Date()): number {
+  const [y, mo, d] = now.toLocaleDateString('en-CA', { timeZone: 'Europe/Oslo' }).split('-').map(Number);
+  const utcMidnight = Date.UTC(y, mo - 1, d - daysAgo);
+  return utcMidnight - osloOffsetMinutes(new Date(utcMidnight)) * 60_000;
 }
