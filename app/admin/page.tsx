@@ -13,7 +13,7 @@ import {
   listScans,
   listAudit,
   getFreshness,
-  countAiNeverAttempted,
+  countAiPending,
 } from '@/lib/db';
 import { dateLabel, osloDayStart } from '@/app/format';
 import ScanPanel from './ScanPanel';
@@ -65,7 +65,7 @@ export default async function AdminPage({
     getDataCoverage(),
     category ? listCompaniesForCoverage(category, mode) : Promise.resolve(null),
     getFreshness(),
-    countAiNeverAttempted(),
+    countAiPending(),
   ]);
 
   return (

@@ -347,7 +347,7 @@ async function aiPass(
         news: news.map((n) => ({ title: n.title, date: n.seenAt, domain: n.domain })),
         contacts,
       },
-      budget(25_000),
+      budget(40_000),
     );
     if (!analysis.ok) errors.push({ scope: `ai.analyze ${orgnr}`, message: analysis.error });
     if (analysis.ok && analysis.data) {
@@ -368,7 +368,7 @@ async function aiPass(
       const found = await orchestrator.callTool<string | null>(
         'ai.findWebsite',
         { name: company.name, orgnr: company.orgnr, poststed: company.poststed },
-        budget(20_000),
+        budget(30_000),
       );
       // Only a completed search counts as "attempted" — a timeout clipped by
       // the run's budget didn't actually get an answer, so try again later.
@@ -389,7 +389,7 @@ async function aiPass(
     const contacts = await orchestrator.callTool<{ name: string; role: string | null; email: string | null; phone: string | null }[]>(
       'ai.extractContacts',
       { name: company.name, website },
-      budget(35_000),
+      budget(40_000),
     );
     if (!contacts.ok) {
       errors.push({ scope: `ai.extractContacts ${orgnr}`, message: contacts.error });
@@ -433,7 +433,7 @@ export interface RunScanOptions {
 // write the scan row, so the "Siste skann" table always gets a finished
 // entry instead of a "kjører / avbrutt" one.
 const BRREG_CONCURRENCY = 6;
-const AI_CONCURRENCY = 6;
+const AI_CONCURRENCY = 4;
 // A company re-checked in Brreg within this many days isn't due again —
 // accounts are filed yearly and board changes are rare.
 const BRREG_STALE_DAYS = 3;

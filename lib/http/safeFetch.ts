@@ -74,8 +74,21 @@ export interface SafeFetchOptions {
   body?: string;
 }
 
+export type SafeFetchResult = { ok: true; text: string } | { ok: false; reason: string };
+
 /** Fetches a URL, returning the body text, or null on any failure/violation. */
 export async function safeFetchText(rawUrl: string, opts: SafeFetchOptions = {}): Promise<string | null> {
+  const r = await safeFetchResult(rawUrl, opts);
+  return r.ok ? r.text : null;
+}
+
+/**
+ * Same guards as safeFetchText, but says *why* a call failed (HTTP status +
+ * the start of the error body, timeout, size cap). For callers whose failures
+ * must be visible — a bare null made Gemini 429s/timeouts look like "no
+ * answer" and never reach the scan's error list.
+ */
+export async function safeFetchResult(rawUrl: string, opts: SafeFetchOptions = {}): Promise<SafeFetchResult> {
   const allow = new Set((opts.allowHosts ?? []).map((h) => h.toLowerCase()));
   const timeoutMs = opts.timeoutMs ?? TIMEOUT_MS;
   const maxBytes = opts.maxBytes ?? MAX_BYTES;
@@ -84,14 +97,14 @@ export async function safeFetchText(rawUrl: string, opts: SafeFetchOptions = {})
   try {
     current = new URL(rawUrl);
   } catch {
-    return null;
+    return { ok: false, reason: 'ugyldig URL' };
   }
 
   const ac = new AbortController();
   const timer = setTimeout(() => ac.abort(), timeoutMs);
   try {
     for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
-      if (current.protocol !== 'http:' && current.protocol !== 'https:') return null;
+      if (current.protocol !== 'http:' && current.protocol !== 'https:') return { ok: false, reason: 'ikke http(s)' };
       if (!allow.has(current.hostname.toLowerCase())) {
         await assertHostAllowed(current.hostname);
       }
@@ -109,11 +122,19 @@ export async function safeFetchText(rawUrl: string, opts: SafeFetchOptions = {})
 
       if (res.status >= 300 && res.status < 400) {
         const loc = res.headers.get('location');
-        if (!loc || hop === MAX_REDIRECTS) return null;
+        if (!loc || hop === MAX_REDIRECTS) return { ok: false, reason: `for mange omdirigeringer (${res.status})` };
         current = new URL(loc, current); // re-validated at the top of the loop
         continue;
       }
-      if (!res.ok || !res.body) return null;
+      if (!res.ok || !res.body) {
+        let snippet = '';
+        try {
+          snippet = (await res.text()).replace(/\s+/g, ' ').slice(0, 200);
+        } catch {
+          // body unreadable — the status alone will do
+        }
+        return { ok: false, reason: `HTTP ${res.status}${snippet ? `: ${snippet}` : ''}` };
+      }
 
       // Read with a byte cap.
       const reader = res.body.getReader();
@@ -125,15 +146,16 @@ export async function safeFetchText(rawUrl: string, opts: SafeFetchOptions = {})
         total += value.byteLength;
         if (total > maxBytes) {
           reader.cancel();
-          return null;
+          return { ok: false, reason: `svar over ${maxBytes} bytes` };
         }
         chunks.push(value);
       }
-      return Buffer.concat(chunks.map((c) => Buffer.from(c))).toString('utf8');
+      return { ok: true, text: Buffer.concat(chunks.map((c) => Buffer.from(c))).toString('utf8') };
     }
-    return null;
-  } catch {
-    return null;
+    return { ok: false, reason: 'for mange omdirigeringer' };
+  } catch (e) {
+    if (ac.signal.aborted) return { ok: false, reason: `tidsavbrudd etter ${Math.round(timeoutMs / 1000)} s` };
+    return { ok: false, reason: e instanceof Error ? e.message : String(e) };
   } finally {
     clearTimeout(timer);
   }

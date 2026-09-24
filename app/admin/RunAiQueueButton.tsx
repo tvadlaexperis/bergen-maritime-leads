@@ -17,7 +17,17 @@ export default function RunAiQueueButton({ initialRemaining }: { initialRemainin
   const [totals, setTotals] = useState<Totals>(ZERO);
   const [remaining, setRemaining] = useState(initialRemaining);
   const [msg, setMsg] = useState<string | null>(null);
+  const [waitLeft, setWaitLeft] = useState(0);
   const stopRef = useRef(false);
+
+  // Interruptible pause — "Stopp" during a rate-limit wait ends it at once.
+  async function pause(seconds: number) {
+    for (let left = seconds; left > 0 && !stopRef.current; left--) {
+      setWaitLeft(left);
+      await new Promise((r) => setTimeout(r, 1000));
+    }
+    setWaitLeft(0);
+  }
 
   async function run() {
     stopRef.current = false;
@@ -27,6 +37,7 @@ export default function RunAiQueueButton({ initialRemaining }: { initialRemainin
     let t = ZERO;
     setTotals(t);
     let idleRuns = 0;
+    let rateLimitWaits = 0;
     try {
       while (!stopRef.current) {
         const r = await runAiQueueAction();
@@ -49,14 +60,27 @@ export default function RunAiQueueButton({ initialRemaining }: { initialRemainin
           setMsg('Ferdig — alle selskaper har vært gjennom AI-trinnet.');
           break;
         }
-        // Two runs in a row with no successful analysis means Gemini is
-        // down or rate-limiting — stop instead of burning through the queue
-        // marking everyone as "attempted".
+        // Gemini's per-minute quota: back off and carry on rather than stop,
+        // up to a point — five waits in a row means the daily quota is gone.
+        if (r.rateLimited && r.analyses === 0) {
+          rateLimitWaits++;
+          if (rateLimitWaits > 5) {
+            setMsg(`Stoppet: Gemini avviser fortsatt (kvote brukt opp?). ${r.firstError ?? ''}`);
+            break;
+          }
+          setMsg('Gemini-kvoten er nådd — venter før neste kjøring.');
+          await pause(60);
+          continue;
+        }
+        rateLimitWaits = 0;
+        // Two runs in a row with no successful analysis (and not a rate
+        // limit) means something is actually broken — stop and say what.
         idleRuns = r.analyses === 0 ? idleRuns + 1 : 0;
         if (idleRuns >= 2) {
-          setMsg('Stoppet: to kjøringer på rad uten noen AI-vurdering. Se feilene i «Siste skann».');
+          setMsg(`Stoppet: to kjøringer på rad uten AI-vurdering. Første feil: ${r.firstError ?? 'ingen feil registrert'}`);
           break;
         }
+        setMsg(null);
       }
       if (stopRef.current) setMsg('Stoppet.');
     } catch {
@@ -88,7 +112,7 @@ export default function RunAiQueueButton({ initialRemaining }: { initialRemainin
       )}
       {(running || totals.runs > 0) && (
         <span className="muted" style={{ fontSize: '0.78rem' }}>
-          {running && <>Kjøring {totals.runs + 1} pågår · </>}
+          {running && (waitLeft > 0 ? <>Venter {waitLeft} s · </> : <>Kjøring {totals.runs + 1} pågår · </>)}
           {totals.analyses} vurdert, {totals.websites} nettsider, kontakter hos {totals.contacts}
           {totals.errors > 0 && <>, {totals.errors} feil</>} · {remaining} igjen
           {running && totals.runs > 0 && totals.processed > 0 && (

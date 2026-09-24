@@ -1057,29 +1057,29 @@ export async function listCompaniesToRefresh(limit: number, staleDays = 3): Prom
 // The AI pass (ai.analyze / findWebsite / extractContacts) is the slow,
 // paid part of enrichment — a handful of companies per run at most — so it
 // gets its own queue instead of riding along with the Brreg rotation: never-
-// attempted companies first, best lead score first within that, then the
-// oldest attempt. The sales team sees the top of the list covered first.
-// Ordering by the *attempt* (not the successful analysis) matters: a company
-// Gemini keeps failing on would otherwise sit at the head of the queue and
-// block everyone behind it on every run.
+// analyzed companies first — never-attempted before previously-failed, best
+// lead score first within that — then the oldest analysis. The sales team
+// sees the top of the list covered first. Within each group the *attempt*
+// time orders the rotation, so a company Gemini keeps failing on moves back
+// behind the others instead of blocking the head of the queue every run.
 export async function listCompaniesForAi(limit: number): Promise<CompanyWithScore[]> {
   const c = await db();
   const res = await c.execute({
     sql: `SELECT co.*, ${SCORE_COLS} FROM companies co ${SCORE_JOIN}
           WHERE co.status = 'active'
-          ORDER BY COALESCE(co.ai_attempted_at, co.ai_analysis_at, 0) ASC, COALESCE(sc.lead_score, -1) DESC
+          ORDER BY (co.ai_analysis_at IS NOT NULL), COALESCE(co.ai_attempted_at, co.ai_analysis_at, 0) ASC,
+            COALESCE(sc.lead_score, -1) DESC
           LIMIT ?`,
     args: [limit],
   });
   return plain<CompanyWithScore>(res.rows);
 }
 
-// Companies the AI pass hasn't tried yet — what "Kjør AI-køen" counts down.
-export async function countAiNeverAttempted(): Promise<number> {
+// Companies with no AI analysis yet — what "Kjør AI-køen" counts down. Only
+// a successful analysis takes a company off this count, not a failed attempt.
+export async function countAiPending(): Promise<number> {
   const c = await db();
-  const res = await c.execute(
-    "SELECT COUNT(*) AS n FROM companies WHERE status = 'active' AND ai_attempted_at IS NULL AND ai_analysis_at IS NULL",
-  );
+  const res = await c.execute("SELECT COUNT(*) AS n FROM companies WHERE status = 'active' AND ai_analysis_at IS NULL");
   return Number((res.rows[0] as unknown as { n: number }).n);
 }
 

@@ -1,5 +1,5 @@
 import type { Provider } from '../types';
-import { safeFetchText } from '../../http/safeFetch';
+import { safeFetchText, safeFetchResult } from '../../http/safeFetch';
 import { cleanWebsite } from '../../brreg';
 import { stripHtml, findLikelyContactPages } from '../../website';
 
@@ -155,45 +155,62 @@ function buildPrompt(input: LeadAnalysisInput): string {
   );
 }
 
-async function requestAnalysis(input: LeadAnalysisInput): Promise<LeadAnalysis | null> {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) return null;
 
-  const body = await safeFetchText(URL, {
+// One Gemini Interactions call → the model's output text. Throws (rather
+// than returning null) on HTTP errors, timeouts and empty output, so the
+// orchestrator turns them into a scan error with the actual reason — a 429
+// or a timeout used to be indistinguishable from "the model had no answer".
+// The fetch timeout is deliberately generous: the orchestrator's own
+// timeout (clipped to the scan's remaining budget in lib/scan.ts) is what
+// actually bounds a call.
+async function geminiText(apiKey: string, payload: Record<string, unknown>): Promise<string> {
+  const res = await safeFetchResult(URL, {
     allowHosts: [HOST],
     method: 'POST',
-    timeoutMs: 25_000,
+    timeoutMs: 55_000,
     headers: {
       'Content-Type': 'application/json',
       'x-goog-api-key': apiKey,
     },
-    body: JSON.stringify({
-      model: GEMINI_MODEL,
+    body: JSON.stringify({ model: GEMINI_MODEL, ...payload }),
+  });
+  if (!res.ok) throw new Error(`Gemini ${res.reason}`);
+
+  let data: { status?: string; steps?: { type: string; content?: { text?: string }[] }[] };
+  try {
+    data = JSON.parse(res.text);
+  } catch {
+    throw new Error('Gemini: svaret var ikke gyldig JSON');
+  }
+  const outputStep = data.steps?.find((step) => step.type === 'model_output');
+  const text = outputStep?.content?.map((block) => block.text ?? '').join('').trim();
+  if (!text) {
+    const kinds = (data.steps ?? []).map((st) => st.type).join(', ') || 'ingen steg';
+    throw new Error(`Gemini: tomt svar (status ${data.status ?? 'ukjent'}; ${kinds})`);
+  }
+  return text;
+}
+
+function parseJsonOutput(text: string): unknown {
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error('Gemini: modellsvaret var ikke gyldig JSON');
+  }
+}
+
+async function requestAnalysis(input: LeadAnalysisInput): Promise<LeadAnalysis | null> {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) return null;
+
+  const parsed = parseJsonOutput(
+    await geminiText(apiKey, {
       input: [{ type: 'text', text: buildPrompt(input) }],
       response_format: { type: 'text', mime_type: 'application/json', schema: ANALYSIS_SCHEMA },
     }),
-  });
-  if (!body) return null;
-
-  let data: unknown;
-  try {
-    data = JSON.parse(body);
-  } catch {
-    return null;
-  }
-  const outputStep = (data as { steps?: { type: string; content?: { text?: string }[] }[] }).steps?.find(
-    (step) => step.type === 'model_output',
   );
-  const outputText = outputStep?.content?.map((block) => block.text ?? '').join('');
-  if (!outputText) return null;
-
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(outputText);
-  } catch {
-    return null;
-  }
-  return isValidAnalysis(parsed) ? parsed : null;
+  if (!isValidAnalysis(parsed)) throw new Error('Gemini: vurderingen manglet påkrevde felt');
+  return parsed;
 }
 
 export interface FindWebsiteInput {
@@ -219,36 +236,11 @@ async function requestWebsite(input: FindWebsiteInput): Promise<string | null> {
     'Svar KUN med selve URL-en (f.eks. https://firma.no) uten noen annen tekst eller forklaring. ' +
     'Hvis du ikke finner en offisiell nettside med rimelig sikkerhet, svar nøyaktig ordet UKJENT.';
 
-  const body = await safeFetchText(URL, {
-    allowHosts: [HOST],
-    method: 'POST',
-    timeoutMs: 20_000,
-    headers: {
-      'Content-Type': 'application/json',
-      'x-goog-api-key': apiKey,
-    },
-    body: JSON.stringify({
-      model: GEMINI_MODEL,
-      input: [{ type: 'text', text: prompt }],
-      tools: [{ type: 'google_search' }],
-    }),
+  const text = await geminiText(apiKey, {
+    input: [{ type: 'text', text: prompt }],
+    tools: [{ type: 'google_search' }],
   });
-  if (!body) return null;
-
-  let data: unknown;
-  try {
-    data = JSON.parse(body);
-  } catch {
-    return null;
-  }
-  const outputStep = (data as { steps?: { type: string; content?: { text?: string }[] }[] }).steps?.find(
-    (step) => step.type === 'model_output',
-  );
-  const text = outputStep?.content
-    ?.map((block) => block.text ?? '')
-    .join('')
-    .trim();
-  if (!text || text.toUpperCase().includes('UKJENT')) return null;
+  if (text.toUpperCase().includes('UKJENT')) return null;
   return cleanWebsite(text);
 }
 
@@ -337,41 +329,13 @@ async function requestContacts(name: string, website: string): Promise<Extracted
     '- Finner du ingen navngitte personer i teksten, returner en tom liste.\n\n' +
     combinedText;
 
-  const body = await safeFetchText(URL, {
-    allowHosts: [HOST],
-    method: 'POST',
-    timeoutMs: 20_000,
-    headers: {
-      'Content-Type': 'application/json',
-      'x-goog-api-key': apiKey,
-    },
-    body: JSON.stringify({
-      model: GEMINI_MODEL,
+  const parsed = parseJsonOutput(
+    await geminiText(apiKey, {
       input: [{ type: 'text', text: prompt }],
       response_format: { type: 'text', mime_type: 'application/json', schema: CONTACTS_SCHEMA },
     }),
-  });
-  if (!body) return [];
-
-  let data: unknown;
-  try {
-    data = JSON.parse(body);
-  } catch {
-    return [];
-  }
-  const outputStep = (data as { steps?: { type: string; content?: { text?: string }[] }[] }).steps?.find(
-    (step) => step.type === 'model_output',
   );
-  const outputText = outputStep?.content?.map((block) => block.text ?? '').join('');
-  if (!outputText) return [];
-
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(outputText);
-  } catch {
-    return [];
-  }
-  if (!isValidContacts(parsed)) return [];
+  if (!isValidContacts(parsed)) throw new Error('Gemini: kontaktlisten hadde feil format');
   return parsed.contacts.filter((ct) => ct.name?.trim()).slice(0, 20);
 }
 

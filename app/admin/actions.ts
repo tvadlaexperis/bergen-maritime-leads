@@ -16,7 +16,7 @@ import {
   setCompanyWebsite,
   setCompanyContacts,
   deleteCompany,
-  countAiNeverAttempted,
+  countAiPending,
   type CompanyStatus,
 } from '@/lib/db';
 import { runScan, refreshCompany, addCompanyByOrgnr } from '@/lib/scan';
@@ -160,7 +160,17 @@ export async function runScanAction(full: boolean): Promise<{ summary: string }>
 // each call is its own ≤60s request, so no single request outlives Vercel's
 // function limit however long the queue is.
 export async function runAiQueueAction(): Promise<
-  { error: string } | { processed: number; analyses: number; contacts: number; websites: number; errors: number; remaining: number }
+  | { error: string }
+  | {
+      processed: number;
+      analyses: number;
+      contacts: number;
+      websites: number;
+      errors: number;
+      rateLimited: boolean;
+      firstError: string | null;
+      remaining: number;
+    }
 > {
   const user = await guard('admin-ai-queue');
   if (!process.env.GEMINI_API_KEY) return { error: 'AI er ikke konfigurert (GEMINI_API_KEY mangler).' };
@@ -178,7 +188,9 @@ export async function runAiQueueAction(): Promise<
     contacts: d.contactCompanies,
     websites: d.websitesFound,
     errors: r.errors.length,
-    remaining: await countAiNeverAttempted(),
+    rateLimited: r.errors.some((e) => /HTTP 429|RESOURCE_EXHAUSTED|quota/i.test(e.message)),
+    firstError: r.errors[0] ? `${r.errors[0].scope}: ${r.errors[0].message}` : null,
+    remaining: await countAiPending(),
   };
 }
 
