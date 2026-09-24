@@ -1008,3 +1008,51 @@ a {
 /* Kept last so Tailwind utilities win cascade ties against the component
    classes above (matches minmatside's ordering). */
 @tailwind utilities;
+
+/* (i) icon with a hover/focus popover — pure CSS, keyboard reachable via tabindex. */
+.info-tip {
+  position: relative;
+  display: inline-flex;
+  align-self: center;
+  color: var(--text-muted);
+  cursor: help;
+  border-radius: 50%;
+}
+.info-tip:hover,
+.info-tip:focus-visible {
+  color: var(--accent);
+  outline: none;
+}
+.info-tip:focus-visible {
+  box-shadow: 0 0 0 3px var(--focus-ring);
+}
+.info-tip-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: -8px;
+  z-index: 50;
+  width: min(460px, calc(100vw - 32px));
+  padding: 12px 14px;
+  font-size: 0.76rem;
+  font-weight: 400;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  background: var(--surface-raised);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-control);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.14);
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-2px);
+  transition: opacity 0.12s ease, transform 0.12s ease, visibility 0.12s;
+  pointer-events: none;
+}
+.info-tip-panel strong {
+  color: var(--text-primary);
+}
+.info-tip:hover .info-tip-panel,
+.info-tip:focus-visible .info-tip-panel {
+  opacity: 1;
+  visibility: visible;
+  transform: none;
+}
