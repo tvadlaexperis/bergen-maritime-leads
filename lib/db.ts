@@ -1,4 +1,4 @@
-import { createClient, type Client } from '@libsql/client';
+import { createClient, type Client, type InStatement } from '@libsql/client';
 import path from 'path';
 import type { Role, CompanyStatus, CompanyFinancials } from './types';
 
@@ -29,6 +29,7 @@ export interface Company {
   employees: number | null;
   website: string | null;
   phone: string | null;
+  email: string | null; // Brreg's `epostadresse` — usually post@/firmapost@, not a person
   address: string | null;
   postnummer: string | null;
   poststed: string | null;
@@ -64,6 +65,7 @@ export interface Company {
   ai_analysis: string | null; // JSON-encoded LeadAnalysis (lib/orchestrator/providers/ai.ts)
   ai_analysis_at: number | null;
   website_search_attempted_at: number | null;
+  ai_attempted_at: number | null;
   discovered_at: number;
   last_refreshed_at: number | null;
   updated_at: number;
@@ -84,10 +86,14 @@ export interface Financial {
   fetched_at: number;
 }
 
-// Best-effort contacts scraped from a company's own website (lib/website.ts +
-// ai.extractContacts) — distinct from the admin-typed Kontaktperson/CTO/
-// Salgssjef fields on `companies`, which a human explicitly entered and that
-// a re-scrape should never silently overwrite.
+// Machine-sourced contacts, kept apart from the admin-typed Kontaktperson/
+// CTO/Salgssjef fields on `companies` (which a human explicitly entered and a
+// re-scan must never silently overwrite). `source` says where each row came
+// from, and each source is replaced independently of the other:
+//   'nettside' — scraped from the company's own site (lib/website.ts + ai.extractContacts)
+//   'brreg'    — styreleder/styremedlemmer from the Brønnøysund roles register
+export type ContactSource = 'nettside' | 'brreg';
+
 export interface WebsiteContact {
   id: number;
   company_id: number;
@@ -95,6 +101,7 @@ export interface WebsiteContact {
   role: string | null;
   email: string | null;
   phone: string | null;
+  source: ContactSource;
   fetched_at: number;
 }
 
@@ -124,6 +131,7 @@ export interface Scan {
   companies_updated: number;
   financials_fetched: number;
   errors: string | null;
+  details: string | null; // JSON-encoded ScanDetails (lib/scan.ts); null on scans from before it existed
 }
 
 export interface CompanyWithScore extends Company {
@@ -181,6 +189,8 @@ const CONTACT_COLUMNS = [
   'ai_analysis TEXT',
   'ai_analysis_at INTEGER',
   'website_search_attempted_at INTEGER',
+  'email TEXT',
+  'ai_attempted_at INTEGER',
 ];
 
 async function addColumnsIfMissing(table: string, columns: string[]): Promise<void> {
@@ -299,6 +309,7 @@ async function ensureSchema(): Promise<void> {
         role TEXT,
         email TEXT,
         phone TEXT,
+        source TEXT NOT NULL DEFAULT 'nettside',
         fetched_at INTEGER NOT NULL
       );
       CREATE INDEX IF NOT EXISTS idx_contacts_company ON company_contacts(company_id);
@@ -321,7 +332,8 @@ async function ensureSchema(): Promise<void> {
         companies_found INTEGER NOT NULL DEFAULT 0,
         companies_updated INTEGER NOT NULL DEFAULT 0,
         financials_fetched INTEGER NOT NULL DEFAULT 0,
-        errors TEXT
+        errors TEXT,
+        details TEXT
       );
 
       CREATE TABLE IF NOT EXISTS audit_log (
@@ -345,6 +357,8 @@ async function ensureSchema(): Promise<void> {
       )
       .then(() => addColumnsIfMissing('companies', CONTACT_COLUMNS))
       .then(() => addColumnsIfMissing('company_scores', SCORE_COLUMNS))
+      .then(() => addColumnsIfMissing('company_contacts', ["source TEXT NOT NULL DEFAULT 'nettside'"]))
+      .then(() => addColumnsIfMissing('scans', ['details TEXT']))
       .then(() => ensureSeeded());
   }
   return schemaReady;
@@ -430,7 +444,7 @@ async function loadSnapshot(c: Client): Promise<void> {
     const co = entry.company as Record<string, unknown>;
     const cols = [
       'orgnr', 'name', 'org_form', 'nace1_code', 'nace1_text', 'nace2_code', 'nace2_text',
-      'nace3_code', 'nace3_text', 'sector_code', 'sector_text', 'employees', 'website', 'phone',
+      'nace3_code', 'nace3_text', 'sector_code', 'sector_text', 'employees', 'website', 'phone', 'email',
       'address', 'postnummer', 'poststed', 'kommune', 'kommunenummer', 'registered_at',
       'established_at', 'last_annual_report', 'in_mva', 'bankrupt', 'under_liquidation',
       'matched_code', 'matched_label', 'matched_group', 'manual_entry', 'status', 'notes',
@@ -515,6 +529,8 @@ export interface DataCoverage {
   withWebsite: number;
   withWebsiteContacts: number;
   withCeo: number;
+  withEmail: number;
+  withBoard: number;
 }
 
 // One query, not `listCompaniesWithScore()` + counting in JS — this is a
@@ -530,8 +546,10 @@ export async function getDataCoverage(): Promise<DataCoverage> {
       COUNT(CASE WHEN (SELECT COUNT(DISTINCT year) FROM financials f WHERE f.company_id = co.id) >= 2 THEN 1 END) AS with_growth,
       COUNT(CASE WHEN co.ai_analysis IS NOT NULL THEN 1 END) AS with_ai_analysis,
       COUNT(CASE WHEN co.website IS NOT NULL THEN 1 END) AS with_website,
-      COUNT(CASE WHEN EXISTS (SELECT 1 FROM company_contacts cc WHERE cc.company_id = co.id) THEN 1 END) AS with_website_contacts,
-      COUNT(CASE WHEN co.ceo_name IS NOT NULL THEN 1 END) AS with_ceo
+      COUNT(CASE WHEN EXISTS (SELECT 1 FROM company_contacts cc WHERE cc.company_id = co.id AND cc.source = 'nettside') THEN 1 END) AS with_website_contacts,
+      COUNT(CASE WHEN co.ceo_name IS NOT NULL THEN 1 END) AS with_ceo,
+      COUNT(CASE WHEN co.email IS NOT NULL THEN 1 END) AS with_email,
+      COUNT(CASE WHEN EXISTS (SELECT 1 FROM company_contacts cc WHERE cc.company_id = co.id AND cc.source = 'brreg') THEN 1 END) AS with_board
     FROM companies co
     WHERE co.status = 'active'
   `);
@@ -544,6 +562,8 @@ export async function getDataCoverage(): Promise<DataCoverage> {
     withWebsite: Number(r.with_website),
     withWebsiteContacts: Number(r.with_website_contacts),
     withCeo: Number(r.with_ceo),
+    withEmail: Number(r.with_email),
+    withBoard: Number(r.with_board),
   };
 }
 
@@ -554,6 +574,8 @@ export const COVERAGE_CATEGORIES = [
   'website',
   'contacts',
   'ceo',
+  'email',
+  'board',
 ] as const;
 export type CoverageCategory = (typeof COVERAGE_CATEGORIES)[number];
 
@@ -569,8 +591,10 @@ const COVERAGE_WHERE: Record<CoverageCategory, string> = {
   growth: '(SELECT COUNT(DISTINCT year) FROM financials f WHERE f.company_id = co.id) >= 2',
   ai: 'co.ai_analysis IS NOT NULL',
   website: 'co.website IS NOT NULL',
-  contacts: 'EXISTS (SELECT 1 FROM company_contacts cc WHERE cc.company_id = co.id)',
+  contacts: "EXISTS (SELECT 1 FROM company_contacts cc WHERE cc.company_id = co.id AND cc.source = 'nettside')",
   ceo: 'co.ceo_name IS NOT NULL',
+  email: 'co.email IS NOT NULL',
+  board: "EXISTS (SELECT 1 FROM company_contacts cc WHERE cc.company_id = co.id AND cc.source = 'brreg')",
 };
 
 export type CoverageMode = 'har' | 'mangler';
@@ -628,31 +652,37 @@ export async function listFinancials(companyId: number): Promise<Financial[]> {
   return res.rows as unknown as Financial[];
 }
 
-export async function listWebsiteContacts(companyId: number): Promise<WebsiteContact[]> {
+export async function listWebsiteContacts(companyId: number, source?: ContactSource): Promise<WebsiteContact[]> {
   const c = await db();
   const res = await c.execute({
-    sql: 'SELECT * FROM company_contacts WHERE company_id = ? ORDER BY id',
-    args: [companyId],
+    sql: `SELECT * FROM company_contacts WHERE company_id = ?${source ? ' AND source = ?' : ''} ORDER BY id`,
+    args: source ? [companyId, source] : [companyId],
   });
-  return res.rows as unknown as WebsiteContact[];
+  return plain<WebsiteContact>(res.rows);
 }
 
-// Full delete+reinsert on every enrichment cycle, unlike replaceFinancials'
-// per-year upsert — a team page reflects who works there *now*, not a
-// history worth accumulating, so a departed contact should simply disappear.
-export async function replaceWebsiteContacts(
+// Full delete+reinsert of one source's rows on every enrichment cycle, unlike
+// replaceFinancials' per-year upsert — a team page / board reflects who's
+// there *now*, not a history worth accumulating, so a departed contact should
+// simply disappear. One batch (one round-trip, atomic) rather than a
+// statement per contact.
+export async function replaceContacts(
   companyId: number,
+  source: ContactSource,
   contacts: { name: string; role: string | null; email: string | null; phone: string | null }[],
 ): Promise<void> {
   const c = await db();
   const now = Date.now();
-  await c.execute({ sql: 'DELETE FROM company_contacts WHERE company_id = ?', args: [companyId] });
-  for (const ct of contacts) {
-    await c.execute({
-      sql: 'INSERT INTO company_contacts (company_id, name, role, email, phone, fetched_at) VALUES (?, ?, ?, ?, ?, ?)',
-      args: [companyId, ct.name, ct.role, ct.email, ct.phone, now],
-    });
-  }
+  await c.batch(
+    [
+      { sql: 'DELETE FROM company_contacts WHERE company_id = ? AND source = ?', args: [companyId, source] },
+      ...contacts.map((ct) => ({
+        sql: 'INSERT INTO company_contacts (company_id, name, role, email, phone, source, fetched_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        args: [companyId, ct.name, ct.role, ct.email, ct.phone, source, now],
+      })),
+    ],
+    'write',
+  );
 }
 
 // A short, human-readable log of what a scan run actually changed — surfaced
@@ -718,6 +748,7 @@ export interface UpsertCompanyInput {
   employees?: number | null;
   website?: string | null;
   phone?: string | null;
+  email?: string | null;
   address?: string | null;
   postnummer?: string | null;
   poststed?: string | null;
@@ -735,12 +766,7 @@ export interface UpsertCompanyInput {
   manual_entry?: boolean;
 }
 
-// Returns 1 for a fresh insert, 0 for an update of an existing company.
-export async function upsertCompany(input: UpsertCompanyInput): Promise<number> {
-  const c = await db();
-  const now = Date.now();
-  const before = await c.execute({ sql: 'SELECT 1 FROM companies WHERE orgnr = ?', args: [input.orgnr] });
-  const isNew = before.rows.length === 0;
+function upsertStatement(input: UpsertCompanyInput, now: number): InStatement {
   const nace = input.nace ?? [];
   const args = [
     input.orgnr,
@@ -753,6 +779,7 @@ export async function upsertCompany(input: UpsertCompanyInput): Promise<number> 
     input.employees ?? null,
     input.website ?? null,
     input.phone ?? null,
+    input.email ?? null,
     input.address ?? null,
     input.postnummer ?? null,
     input.poststed ?? null,
@@ -771,10 +798,10 @@ export async function upsertCompany(input: UpsertCompanyInput): Promise<number> 
     now,
     now,
   ];
-  await c.execute({
+  return {
     sql: `INSERT INTO companies (
         orgnr, name, org_form, nace1_code, nace1_text, nace2_code, nace2_text, nace3_code, nace3_text,
-        sector_code, sector_text, employees, website, phone, address, postnummer, poststed, kommune,
+        sector_code, sector_text, employees, website, phone, email, address, postnummer, poststed, kommune,
         kommunenummer, registered_at, established_at, last_annual_report, in_mva, bankrupt,
         under_liquidation, matched_code, matched_label, matched_group, manual_entry, discovered_at, updated_at
       ) VALUES (${args.map(() => '?').join(', ')})
@@ -785,7 +812,8 @@ export async function upsertCompany(input: UpsertCompanyInput): Promise<number> 
         nace3_code = excluded.nace3_code, nace3_text = excluded.nace3_text,
         sector_code = excluded.sector_code, sector_text = excluded.sector_text,
         employees = excluded.employees, website = COALESCE(excluded.website, companies.website),
-        phone = COALESCE(excluded.phone, companies.phone), address = excluded.address,
+        phone = COALESCE(excluded.phone, companies.phone), email = COALESCE(excluded.email, companies.email),
+        address = excluded.address,
         postnummer = excluded.postnummer, poststed = excluded.poststed, kommune = excluded.kommune,
         kommunenummer = excluded.kommunenummer, registered_at = excluded.registered_at,
         established_at = excluded.established_at, last_annual_report = excluded.last_annual_report,
@@ -796,8 +824,32 @@ export async function upsertCompany(input: UpsertCompanyInput): Promise<number> 
         matched_group = COALESCE(excluded.matched_group, companies.matched_group),
         updated_at = excluded.updated_at`,
     args,
-  });
-  return isNew ? 1 : 0;
+  };
+}
+
+// Returns 1 for a fresh insert, 0 for an update of an existing company.
+export async function upsertCompany(input: UpsertCompanyInput): Promise<number> {
+  return upsertCompanies([input]);
+}
+
+// Discovery upserts all ~600 companies every time it runs — one execute()
+// per company is one Turso round-trip each, which alone used to eat most of
+// the scan's 60s budget. Chunked batches cut that to a handful of calls.
+// Returns how many were fresh inserts.
+export async function upsertCompanies(inputs: UpsertCompanyInput[]): Promise<number> {
+  if (inputs.length === 0) return 0;
+  const c = await db();
+  const now = Date.now();
+  const existing = new Set(
+    (await c.execute('SELECT orgnr FROM companies')).rows.map((r) => String((r as unknown as { orgnr: string }).orgnr)),
+  );
+  for (let i = 0; i < inputs.length; i += 100) {
+    await c.batch(
+      inputs.slice(i, i + 100).map((input) => upsertStatement(input, now)),
+      'write',
+    );
+  }
+  return inputs.filter((input) => !existing.has(input.orgnr)).length;
 }
 
 export async function markCompanyRefreshed(orgnr: string): Promise<void> {
@@ -919,6 +971,11 @@ export async function setCompanyAiAnalysis(id: number, analysisJson: string): Pr
   });
 }
 
+export async function setAiAttempted(id: number): Promise<void> {
+  const c = await db();
+  await c.execute({ sql: 'UPDATE companies SET ai_attempted_at = ? WHERE id = ?', args: [Date.now(), id] });
+}
+
 // Marks that we've already run the paid Google Search-grounded website
 // lookup (ai.findWebsite) for this company, whether or not it found one —
 // so it runs at most once per company ever, not on every refresh.
@@ -974,10 +1031,10 @@ export async function deleteCompany(id: number): Promise<void> {
 // Those go first; everyone else falls back to oldest-refreshed-first, so a
 // small nightly batch still cycles through the whole list over a few weeks
 // instead of wasting slots re-fetching accounts that haven't changed.
-export async function listCompaniesToRefresh(limit: number): Promise<Company[]> {
+export async function listCompaniesToRefresh(limit: number): Promise<CompanyWithScore[]> {
   const c = await db();
   const res = await c.execute({
-    sql: `SELECT co.* FROM companies co
+    sql: `SELECT co.*, ${SCORE_COLS} FROM companies co ${SCORE_JOIN}
           LEFT JOIN (SELECT company_id, MAX(year) AS max_year FROM financials GROUP BY company_id) f
             ON f.company_id = co.id
           WHERE co.status = 'active'
@@ -987,7 +1044,65 @@ export async function listCompaniesToRefresh(limit: number): Promise<Company[]> 
           LIMIT ?`,
     args: [limit],
   });
-  return res.rows as unknown as Company[];
+  return plain<CompanyWithScore>(res.rows);
+}
+
+// The AI pass (ai.analyze / findWebsite / extractContacts) is the slow,
+// paid part of enrichment — a handful of companies per run at most — so it
+// gets its own queue instead of riding along with the Brreg rotation: never-
+// attempted companies first, best lead score first within that, then the
+// oldest attempt. The sales team sees the top of the list covered first.
+// Ordering by the *attempt* (not the successful analysis) matters: a company
+// Gemini keeps failing on would otherwise sit at the head of the queue and
+// block everyone behind it on every run.
+export async function listCompaniesForAi(limit: number): Promise<CompanyWithScore[]> {
+  const c = await db();
+  const res = await c.execute({
+    sql: `SELECT co.*, ${SCORE_COLS} FROM companies co ${SCORE_JOIN}
+          WHERE co.status = 'active'
+          ORDER BY COALESCE(co.ai_attempted_at, co.ai_analysis_at, 0) ASC, COALESCE(sc.lead_score, -1) DESC
+          LIMIT ?`,
+    args: [limit],
+  });
+  return plain<CompanyWithScore>(res.rows);
+}
+
+export interface Freshness {
+  total: number;
+  brregWeek: number;
+  brregMonth: number;
+  brregNever: number;
+  aiMonth: number;
+  aiNever: number;
+}
+
+// How current the data is, for the admin Skann panel — the "Datadekning"
+// view answers *whether* we have something, this answers *how old* it is.
+export async function getFreshness(): Promise<Freshness> {
+  const c = await db();
+  const now = Date.now();
+  const week = now - 7 * 86_400_000;
+  const month = now - 30 * 86_400_000;
+  const res = await c.execute({
+    sql: `SELECT
+            COUNT(*) AS total,
+            COUNT(CASE WHEN last_refreshed_at >= ? THEN 1 END) AS brreg_week,
+            COUNT(CASE WHEN last_refreshed_at >= ? THEN 1 END) AS brreg_month,
+            COUNT(CASE WHEN last_refreshed_at IS NULL THEN 1 END) AS brreg_never,
+            COUNT(CASE WHEN ai_analysis_at >= ? THEN 1 END) AS ai_month,
+            COUNT(CASE WHEN ai_analysis_at IS NULL THEN 1 END) AS ai_never
+          FROM companies WHERE status = 'active'`,
+    args: [week, month, month],
+  });
+  const r = res.rows[0] as unknown as Record<string, number>;
+  return {
+    total: Number(r.total),
+    brregWeek: Number(r.brreg_week),
+    brregMonth: Number(r.brreg_month),
+    brregNever: Number(r.brreg_never),
+    aiMonth: Number(r.ai_month),
+    aiNever: Number(r.ai_never),
+  };
 }
 
 // --- Scans ---
@@ -1000,12 +1115,26 @@ export async function startScan(): Promise<number> {
 
 export async function finishScan(
   id: number,
-  data: { companiesFound: number; companiesUpdated: number; financialsFetched: number; errors: { scope: string; message: string }[] },
+  data: {
+    companiesFound: number;
+    companiesUpdated: number;
+    financialsFetched: number;
+    errors: { scope: string; message: string }[];
+    details: unknown;
+  },
 ): Promise<void> {
   const c = await db();
   await c.execute({
-    sql: `UPDATE scans SET finished_at = ?, companies_found = ?, companies_updated = ?, financials_fetched = ?, errors = ? WHERE id = ?`,
-    args: [Date.now(), data.companiesFound, data.companiesUpdated, data.financialsFetched, JSON.stringify(data.errors), id],
+    sql: `UPDATE scans SET finished_at = ?, companies_found = ?, companies_updated = ?, financials_fetched = ?, errors = ?, details = ? WHERE id = ?`,
+    args: [
+      Date.now(),
+      data.companiesFound,
+      data.companiesUpdated,
+      data.financialsFetched,
+      JSON.stringify(data.errors),
+      JSON.stringify(data.details),
+      id,
+    ],
   });
 }
 

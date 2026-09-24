@@ -4,11 +4,12 @@ import {
   BRREG_ENHET_HOST,
   parseEnhetPage,
   parseRegnskap,
-  parseDagligLeder,
+  parseRoller,
   parseKonsernstruktur,
   type Company,
   type EnhetPage,
   type KonsernInfo,
+  type Roller,
 } from '../../brreg';
 import type { CompanyFinancials } from '../../types';
 
@@ -72,10 +73,12 @@ async function getRegnskap(orgnr: string): Promise<CompanyFinancials[]> {
   return parseRegnskap(json);
 }
 
-async function getDagligLeder(orgnr: string): Promise<string | null> {
+// null = the lookup itself failed (not "no roles") — callers must not wipe
+// a stored daglig leder/board on a transient Brreg hiccup.
+async function getRoller(orgnr: string): Promise<Roller | null> {
   const json = await getJson(`${ENHET_BASE}/${encodeURIComponent(orgnr)}/roller`);
   if (!json) return null;
-  return parseDagligLeder(json);
+  return parseRoller(json);
 }
 
 // 404 (not part of any group) is the common case and comes back as `null`
@@ -102,7 +105,7 @@ export const brregProvider: Provider = {
       return getRegnskap(String((args as { orgnr: string }).orgnr));
     }
     if (tool === 'getRoller') {
-      return getDagligLeder(String((args as { orgnr: string }).orgnr));
+      return getRoller(String((args as { orgnr: string }).orgnr));
     }
     if (tool === 'getKonsern') {
       return getKonsern(String((args as { orgnr: string }).orgnr));

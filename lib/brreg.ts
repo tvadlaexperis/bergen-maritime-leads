@@ -21,6 +21,7 @@ export interface RawEnhet {
   hjemmeside?: string;
   telefon?: string;
   mobil?: string;
+  epostadresse?: string;
   forretningsadresse?: {
     adresse?: string[];
     postnummer?: string;
@@ -47,6 +48,7 @@ export interface Company {
   employees: number | null;
   website: string | null;
   phone: string | null;
+  email: string | null;
   address: string | null;
   postnummer: string | null;
   poststed: string | null;
@@ -80,6 +82,7 @@ export function normalizeEnhet(e: RawEnhet): Company {
     employees: typeof e.antallAnsatte === 'number' ? e.antallAnsatte : null,
     website: cleanWebsite(e.hjemmeside),
     phone: e.telefon || e.mobil || null,
+    email: cleanEmail(e.epostadresse),
     address: addr?.adresse?.filter(Boolean).join(', ') || null,
     postnummer: addr?.postnummer ?? null,
     poststed: addr?.poststed ?? null,
@@ -100,6 +103,11 @@ export function cleanWebsite(raw?: string): string | null {
   if (/^https?:\/\//i.test(s)) return s;
   if (/^[a-z0-9.-]+\.[a-z]{2,}(\/|$)/i.test(s)) return `https://${s}`;
   return null;
+}
+
+export function cleanEmail(raw?: string): string | null {
+  const s = (raw ?? '').trim().toLowerCase();
+  return /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/.test(s) ? s : null;
 }
 
 export interface EnhetPage {
@@ -174,12 +182,14 @@ export function parseRegnskap(json: unknown): CompanyFinancials[] {
 }
 
 // --- Roller (roles) ------------------------------------------------------
-// Only the statutory "daglig leder" (managing director) role is exposed —
-// Brønnøysund has no concept of CTO/sales manager, and we deliberately don't
-// read/store birth dates from the person object (privacy).
+// Only the statutory roles are exposed — daglig leder plus the board
+// (styreleder/styremedlemmer). Brønnøysund has no concept of CTO/sales
+// manager, and we deliberately don't read/store birth dates from the person
+// object (privacy). Varamedlemmer, revisor and regnskapsfører are skipped:
+// deputies are rarely a sales contact, and the last two are firms, not people.
 
 interface RawRolle {
-  type?: { kode?: string };
+  type?: { kode?: string; beskrivelse?: string };
   person?: { navn?: { fornavn?: string; mellomnavn?: string; etternavn?: string }; erDoed?: boolean };
   avregistrert?: boolean;
 }
@@ -191,14 +201,52 @@ interface RawRoller {
   rollegrupper?: RawRollegruppe[];
 }
 
-export function parseDagligLeder(json: unknown): string | null {
-  const grupper = (json as RawRoller)?.rollegrupper ?? [];
-  const dagl = grupper.find((g) => g.type?.kode === 'DAGL');
-  const rolle = dagl?.roller?.find((r) => !r.avregistrert && r.person && !r.person.erDoed);
-  const navn = rolle?.person?.navn;
+function personName(r: RawRolle): string | null {
+  if (r.avregistrert || !r.person || r.person.erDoed) return null;
+  const navn = r.person.navn;
   if (!navn) return null;
   const full = [navn.fornavn, navn.mellomnavn, navn.etternavn].filter(Boolean).join(' ').trim();
   return full || null;
+}
+
+export function parseDagligLeder(json: unknown): string | null {
+  const grupper = (json as RawRoller)?.rollegrupper ?? [];
+  const dagl = grupper.find((g) => g.type?.kode === 'DAGL');
+  for (const r of dagl?.roller ?? []) {
+    const name = personName(r);
+    if (name) return name;
+  }
+  return null;
+}
+
+export interface BoardMember {
+  name: string;
+  role: 'Styreleder' | 'Nestleder' | 'Styremedlem';
+}
+
+export interface Roller {
+  ceo: string | null;
+  board: BoardMember[];
+}
+
+const BOARD_ROLES: Record<string, BoardMember['role']> = {
+  LEDE: 'Styreleder',
+  NEST: 'Nestleder',
+  MEDL: 'Styremedlem',
+};
+
+export function parseRoller(json: unknown): Roller {
+  const grupper = (json as RawRoller)?.rollegrupper ?? [];
+  const styr = grupper.find((g) => g.type?.kode === 'STYR');
+  const board: BoardMember[] = [];
+  for (const r of styr?.roller ?? []) {
+    const role = BOARD_ROLES[r.type?.kode ?? ''];
+    const name = personName(r);
+    if (role && name && !board.some((b) => b.name === name)) board.push({ name, role });
+  }
+  const order = { Styreleder: 0, Nestleder: 1, Styremedlem: 2 };
+  board.sort((a, b) => order[a.role] - order[b.role]);
+  return { ceo: parseDagligLeder(json), board };
 }
 
 // --- Konsernstruktur (corporate group structure) --------------------------
@@ -261,4 +309,30 @@ export function proffUrl(orgnr: string): string {
 
 export function brregUrl(orgnr: string): string {
   return `https://virksomhet.brreg.no/nb/oppslag/enheter/${orgnr}`;
+}
+
+// --- LinkedIn search links -------------------------------------------------
+// Links only — we never call or scrape LinkedIn (its ToS forbids automated
+// access, and there's no open API for people data). The salesperson clicks
+// through while logged in to their own LinkedIn / Sales Navigator, which is
+// where the people data actually lives.
+
+/** "BEERENBERG SERVICES AS" -> "Beerenberg Services" — what people write in their LinkedIn headline. */
+export function linkedinCompanyName(name: string): string {
+  const bare = name.replace(/\s+(AS|ASA|ANS|DA|SA|KS|NUF|BA)$/i, '').trim();
+  return bare.toLowerCase().replace(/(^|[\s\-/&(])(\p{L})/gu, (_, sep, ch) => sep + ch.toUpperCase());
+}
+
+export function linkedinPeopleUrl(keywords: string): string {
+  return `https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(keywords)}`;
+}
+
+export function linkedinCompanyUrl(companyName: string): string {
+  return `https://www.linkedin.com/search/results/companies/?keywords=${encodeURIComponent(linkedinCompanyName(companyName))}`;
+}
+
+/** People at `companyName` whose title matches any of `roles` (LinkedIn keyword boolean syntax). */
+export function linkedinRoleSearchUrl(companyName: string, roles: string[]): string {
+  const quoted = roles.map((r) => (r.includes(' ') ? `"${r}"` : r)).join(' OR ');
+  return linkedinPeopleUrl(`"${linkedinCompanyName(companyName)}" AND (${quoted})`);
 }

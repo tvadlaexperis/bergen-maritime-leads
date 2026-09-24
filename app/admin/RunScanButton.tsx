@@ -14,9 +14,7 @@ export default function RunScanButton() {
     start(async () => {
       try {
         const r = await runScanAction(full);
-        setMsg(
-          `${r.found} selskaper funnet, ${r.updated} oppdatert, ${r.fin} regnskap hentet${r.errors ? `, ${r.errors} feil` : ''}.`,
-        );
+        setMsg(r.summary);
         router.refresh();
       } catch {
         setMsg('Skann feilet — sjekk loggene.');

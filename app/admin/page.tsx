@@ -12,10 +12,10 @@ import {
   type CoverageMode,
   listScans,
   listAudit,
+  getFreshness,
 } from '@/lib/db';
-import { agoLabel, dateLabel } from '@/app/format';
-import { NACE_CODES, KOMMUNER } from '@/data/maritime-sectors.mjs';
-import RunScanButton from './RunScanButton';
+import { dateLabel } from '@/app/format';
+import ScanPanel from './ScanPanel';
 import AdminToolsMenu from './AdminToolsMenu';
 
 export const dynamic = 'force-dynamic';
@@ -34,7 +34,7 @@ type View = 'skann' | 'logg' | 'dekning';
 export default async function AdminPage({
   searchParams,
 }: {
-  searchParams: { view?: string; kategori?: string; modus?: string };
+  searchParams: { view?: string; kategori?: string; modus?: string; scan?: string };
 }) {
   const user = await getCurrentUser();
   if (!user || user.role !== 'admin') redirect('/login?next=/admin');
@@ -42,14 +42,16 @@ export default async function AdminPage({
   const view: View = searchParams.view === 'logg' ? 'logg' : searchParams.view === 'dekning' ? 'dekning' : 'skann';
   const category: CoverageCategory | null =
     view === 'dekning' && searchParams.kategori && isCoverageCategory(searchParams.kategori) ? searchParams.kategori : null;
+  const selectedScanId = Number(searchParams.scan) || null;
   const mode: CoverageMode = searchParams.modus && isCoverageMode(searchParams.modus) ? searchParams.modus : 'har';
 
-  const [activeCount, scans, auditRows, coverage, categoryCompanies] = await Promise.all([
+  const [activeCount, scans, auditRows, coverage, categoryCompanies, freshness] = await Promise.all([
     countActiveCompanies(),
-    listScans(12),
+    listScans(15),
     listAudit(40),
     getDataCoverage(),
     category ? listCompaniesForCoverage(category, mode) : Promise.resolve(null),
+    getFreshness(),
   ]);
 
   return (
@@ -88,6 +90,8 @@ export default async function AdminPage({
               { key: 'website', label: 'Nettside funnet', value: coverage.withWebsite },
               { key: 'contacts', label: 'Kontakter hentet fra nettside', value: coverage.withWebsiteContacts },
               { key: 'ceo', label: 'Daglig leder (Brreg)', value: coverage.withCeo },
+              { key: 'board', label: 'Styre (Brreg)', value: coverage.withBoard },
+              { key: 'email', label: 'Firma-e-post (Brreg)', value: coverage.withEmail },
             ] as const;
             const selectedLabel = rows.find((r) => r.key === category)?.label;
 
@@ -205,64 +209,7 @@ export default async function AdminPage({
           </div>
         </div>
       ) : (
-        <div className="box" style={{ flex: 1, minHeight: 0 }}>
-          <div className="box-header">
-            <span className="box-title">Skann</span>
-            <span className="muted">
-              nattlig 05:00 UTC · {(KOMMUNER as { name: string }[]).map((k) => k.name).join(', ')} ·{' '}
-              {(NACE_CODES as unknown[]).length} bransjekoder · {activeCount} selskaper
-            </span>
-          </div>
-          <div className="box-pad" style={{ display: 'flex', flexDirection: 'column', gap: 10, flexShrink: 0 }}>
-            <RunScanButton />
-            <p className="muted" style={{ fontSize: '0.72rem' }}>
-              «Kjør skann» oppdaterer selskapslisten fra Enhetsregisteret og henter regnskap for en
-              roterende bunt (inntil {process.env.SCAN_BATCH || 150} selskaper, prioritert etter hvem
-              som trenger det mest). «Full oppdatering» bruker samme prioritering uten bunngrensen —
-              begge er likevel begrenset av et 45-sekunders tidsbudsjett per kjøring, så det tar flere
-              kjøringer å nå gjennom alle.
-            </p>
-          </div>
-          <div className="box-header" style={{ borderTop: '1px solid var(--border)', flexShrink: 0 }}>
-            <span className="box-title">Siste skann</span>
-          </div>
-          <div className="box-scroll">
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Startet</th>
-                  <th className="col-right">Funnet</th>
-                  <th className="col-right">Oppdatert</th>
-                  <th className="col-right">Regnskap</th>
-                  <th className="col-right">Feil</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {scans.map((s) => {
-                  const errs = s.errors ? (JSON.parse(s.errors) as unknown[]).length : 0;
-                  return (
-                    <tr key={s.id}>
-                      <td className="num">{agoLabel(s.started_at)}</td>
-                      <td className="col-right num">{s.companies_found}</td>
-                      <td className="col-right num">{s.companies_updated}</td>
-                      <td className="col-right num">{s.financials_fetched}</td>
-                      <td className="col-right num" style={{ color: errs ? 'var(--negative)' : undefined }}>{errs}</td>
-                      <td className="muted">{s.finished_at ? 'ferdig' : 'kjører / avbrutt'}</td>
-                    </tr>
-                  );
-                })}
-                {scans.length === 0 && (
-                  <tr>
-                    <td colSpan={6} className="muted" style={{ textAlign: 'center', padding: 24 }}>
-                      Ingen skann ennå.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        <ScanPanel scans={scans} freshness={freshness} activeCount={activeCount} selectedScanId={selectedScanId} />
       )}
     </div>
   );

@@ -1,13 +1,15 @@
 import { orchestrator } from './orchestrator/boot';
 import type { LeadScoreResult } from './orchestrator/providers/score';
 import type { LeadAnalysis } from './orchestrator/providers/ai';
-import type { Company as RawCompany, KonsernInfo } from './brreg';
+import type { Company as RawCompany, KonsernInfo, Roller } from './brreg';
 import { getCompanyNews } from './news';
+import { scoreBand } from './score';
 import type { CompanyFinancials } from './types';
 import {
   startScan,
   finishScan,
   upsertCompany,
+  upsertCompanies,
   markCompanyRefreshed,
   replaceFinancials,
   insertScore,
@@ -16,13 +18,17 @@ import {
   setCompanyAiAnalysis,
   setCompanyWebsite,
   setWebsiteSearchAttempted,
-  replaceWebsiteContacts,
+  setAiAttempted,
+  replaceContacts,
   listWebsiteContacts,
   addNotification,
   listCompaniesToRefresh,
+  listCompaniesForAi,
   getCompanyByOrgnr,
   listFinancials,
   type Company,
+  type CompanyWithScore,
+  type UpsertCompanyInput,
 } from './db';
 import { KOMMUNER, NACE_CODES, matchNace } from '../data/maritime-sectors.mjs';
 
@@ -30,13 +36,99 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 type ScanError = { scope: string; message: string };
 
+export type ScanTrigger = 'cron' | 'manuell' | 'full';
+
+// Everything a run did, stored as JSON on the `scans` row so the admin
+// "Siste skann" table can show *what* was updated, not just how many rows
+// were touched. `companies` lists only companies where something actually
+// changed — a Brreg re-check that found nothing new is counted in
+// `brreg.processed` but not listed.
+export interface ScanDetails {
+  trigger: ScanTrigger;
+  tookMs: number;
+  stoppedEarly: boolean; // the time budget ran out before the queue did
+  discovery: { ran: boolean; found: number; added: number };
+  brreg: {
+    queued: number;
+    processed: number;
+    newFinancials: number;
+    ceoSet: number;
+    ceoChanged: number;
+    boardUpdated: number;
+    scoreChanged: number;
+  };
+  ai: {
+    enabled: boolean;
+    processed: number;
+    analyses: number;
+    websitesFound: number;
+    contactCompanies: number;
+    contactPeople: number;
+  };
+  companies: { orgnr: string; name: string; changes: string[] }[];
+  changedCount: number; // before `companies` is capped for storage
+}
+
 export interface ScanResult {
   scanId: number;
-  companiesFound: number;
-  companiesUpdated: number;
-  financialsFetched: number;
+  details: ScanDetails;
   errors: ScanError[];
-  tookMs: number;
+}
+
+function emptyDetails(trigger: ScanTrigger): ScanDetails {
+  return {
+    trigger,
+    tookMs: 0,
+    stoppedEarly: false,
+    discovery: { ran: false, found: 0, added: 0 },
+    brreg: { queued: 0, processed: 0, newFinancials: 0, ceoSet: 0, ceoChanged: 0, boardUpdated: 0, scoreChanged: 0 },
+    ai: { enabled: false, processed: 0, analyses: 0, websitesFound: 0, contactCompanies: 0, contactPeople: 0 },
+    companies: [],
+    changedCount: 0,
+  };
+}
+
+// Per-company log shared by both passes: `changes` feeds the scan's details,
+// `notes` (a subset — only what a salesperson cares about) feeds the header
+// bell via addNotification.
+class CompanyLog {
+  changes: string[] = [];
+  notes: string[] = [];
+  change(text: string, notify = false) {
+    this.changes.push(text);
+    if (notify) this.notes.push(text);
+  }
+}
+
+function toUpsertInput(co: RawCompany, manual = false): UpsertCompanyInput {
+  const match = matchNace(co.nace.map((n) => n.code)) as { code: string; label: string; group: string } | null;
+  return {
+    orgnr: co.orgnr,
+    name: co.name,
+    org_form: co.orgForm,
+    nace: co.nace,
+    sector_code: co.sectorCode,
+    sector_text: co.sectorText,
+    employees: co.employees,
+    website: co.website,
+    phone: co.phone,
+    email: co.email,
+    address: co.address,
+    postnummer: co.postnummer,
+    poststed: co.poststed,
+    kommune: co.kommune,
+    kommunenummer: co.kommunenummer,
+    registered_at: co.registeredAt,
+    established_at: co.establishedAt,
+    last_annual_report: co.lastAnnualReport,
+    in_mva: co.inMva,
+    bankrupt: co.bankrupt,
+    under_liquidation: co.underLiquidation,
+    matched_code: match?.code ?? null,
+    matched_label: match?.label ?? null,
+    matched_group: match?.group ?? null,
+    manual_entry: manual,
+  };
 }
 
 // --- Discovery: walk the register for every kommune × NACE slice ----------
@@ -79,56 +171,8 @@ function parseBuyingSignalLevel(raw: string | null): string | null {
   }
 }
 
-// --- Enrichment: annual accounts + score for one company -----------------
-
-async function enrichCompany(orgnr: string, errors: ScanError[]): Promise<boolean> {
-  const company = await getCompanyByOrgnr(orgnr);
-  if (!company) return false;
-
-  // Short, human-readable log of what actually changed this run — surfaced
-  // via the header bell (app/NotificationsBell.tsx). Comparisons below need
-  // the "before" state, so grab it up front rather than after each write.
-  const notes: string[] = [];
-  const priorYears = new Set((await listFinancials(company.id)).map((f) => f.year));
-  const priorContactCount = (await listWebsiteContacts(company.id)).length;
-  const priorSignalLevel = parseBuyingSignalLevel(company.ai_analysis);
-
-  const fin = await orchestrator.callTool<CompanyFinancials[]>('brreg.getRegnskap', { orgnr }, 15_000);
-  const financials = fin.ok ? fin.data : [];
-  if (!fin.ok) errors.push({ scope: `regnskap ${orgnr}`, message: fin.error });
-  const newYears = financials.filter((f) => !priorYears.has(f.year)).map((f) => f.year);
-  if (newYears.length) notes.push(`Nytt regnskap for ${newYears.join(', ')} hentet`);
-
-  const roller = await orchestrator.callTool<string | null>('brreg.getRoller', { orgnr }, 12_000);
-  if (roller.ok) {
-    const ceoChanged = company.ceo_name != null && roller.data != null && roller.data !== company.ceo_name;
-    await setCompanyCeo(company.id, roller.data, ceoChanged);
-    if (ceoChanged) notes.push(`Ny daglig leder: ${roller.data}`);
-  }
-
-  // null just means "not part of any corporate group" (the common case) —
-  // not a fetch failure, so it's not pushed to errors.
-  const konsern = await orchestrator.callTool<KonsernInfo | null>('brreg.getKonsern', { orgnr }, 12_000);
-  if (konsern.ok) {
-    const newParentOrgnr = konsern.data?.parentOrgnr ?? null;
-    if (newParentOrgnr && newParentOrgnr !== company.parent_orgnr) {
-      notes.push(`Del av konsernet ${konsern.data?.parentName ?? newParentOrgnr}`);
-    }
-    await setCompanyParent(company.id, newParentOrgnr, konsern.data?.parentName ?? null);
-  }
-
-  let fetched = 0;
-  if (financials.length) {
-    fetched = await replaceFinancials(company.id, financials);
-  }
-
-  // Brønnøysund's regnskap endpoint often returns only the single most
-  // recent filing per call, not the company's full history — so scoring off
-  // `financials` (this call's result) alone made revenue growth look
-  // undocumented even when the DB had accumulated two-plus years across
-  // earlier refreshes. Read back the full stored history instead.
-  const history = await listFinancials(company.id);
-  const allFinancials: CompanyFinancials[] = history
+function toCompanyFinancials(history: Awaited<ReturnType<typeof listFinancials>>): CompanyFinancials[] {
+  return history
     .slice()
     .sort((a, b) => b.year - a.year)
     .map((f) => ({
@@ -143,13 +187,86 @@ async function enrichCompany(orgnr: string, errors: ScanError[]): Promise<boolea
       totalDebt: f.total_debt,
       employees: null,
     }));
+}
 
+// --- Pass 1: Brønnøysund (free, fast) ------------------------------------
+// Accounts, daglig leder + board, konsern, and the lead score. A few hundred
+// ms per company, so a single run gets through most of the list. Used to
+// share a code path with the AI calls below, which made every company as slow
+// as its slowest Gemini call — and a chunk of five regularly outlived the
+// 60s function limit, so even the cheap Brreg data never got written.
+
+async function brregPass(
+  company: CompanyWithScore,
+  log: CompanyLog,
+  stats: ScanDetails['brreg'],
+  errors: ScanError[],
+): Promise<void> {
+  const orgnr = company.orgnr;
+  const [prevFinancials, prevBoard, fin, roller, konsern] = await Promise.all([
+    listFinancials(company.id),
+    listWebsiteContacts(company.id, 'brreg'),
+    orchestrator.callTool<CompanyFinancials[]>('brreg.getRegnskap', { orgnr }, 15_000),
+    orchestrator.callTool<Roller | null>('brreg.getRoller', { orgnr }, 12_000),
+    // null just means "not part of any corporate group" (the common case).
+    orchestrator.callTool<KonsernInfo | null>('brreg.getKonsern', { orgnr }, 12_000),
+  ]);
+
+  const priorYears = new Set(prevFinancials.map((f) => f.year));
+  if (!fin.ok) errors.push({ scope: `regnskap ${orgnr}`, message: fin.error });
+  const financials = fin.ok ? fin.data : [];
+  const newYears = financials.filter((f) => !priorYears.has(f.year)).map((f) => f.year);
+  if (financials.length) await replaceFinancials(company.id, financials);
+  if (newYears.length) {
+    stats.newFinancials++;
+    log.change(`Nytt regnskap for ${newYears.join(', ')}`, true);
+  }
+
+  if (!roller.ok) errors.push({ scope: `roller ${orgnr}`, message: roller.error });
+  if (roller.ok && roller.data) {
+    const ceo = roller.data.ceo;
+    const ceoChanged = company.ceo_name != null && ceo != null && ceo !== company.ceo_name;
+    if (ceo !== company.ceo_name) await setCompanyCeo(company.id, ceo, ceoChanged);
+    if (ceoChanged) {
+      stats.ceoChanged++;
+      log.change(`Ny daglig leder: ${ceo}`, true);
+    } else if (ceo && !company.ceo_name) {
+      stats.ceoSet++;
+      log.change(`Daglig leder: ${ceo}`);
+    }
+
+    const key = (xs: { name: string; role: string | null }[]) => xs.map((x) => `${x.role}:${x.name}`).sort().join('|');
+    if (key(roller.data.board) !== key(prevBoard)) {
+      await replaceContacts(
+        company.id,
+        'brreg',
+        roller.data.board.map((b) => ({ name: b.name, role: b.role, email: null, phone: null })),
+      );
+      stats.boardUpdated++;
+      const chair = roller.data.board.find((b) => b.role === 'Styreleder');
+      log.change(`Styre oppdatert (${roller.data.board.length} pers.${chair ? `, leder ${chair.name}` : ''})`);
+    }
+  }
+
+  if (konsern.ok) {
+    const newParentOrgnr = konsern.data?.parentOrgnr ?? null;
+    if (newParentOrgnr !== company.parent_orgnr) {
+      await setCompanyParent(company.id, newParentOrgnr, konsern.data?.parentName ?? null);
+      if (newParentOrgnr) log.change(`Del av konsernet ${konsern.data?.parentName ?? newParentOrgnr}`, true);
+    }
+  }
+
+  // Brønnøysund's regnskap endpoint often returns only the single most
+  // recent filing per call, not the company's full history — score off the
+  // full stored history instead of this call's result.
+  const allFinancials = toCompanyFinancials(newYears.length ? await listFinancials(company.id) : prevFinancials);
   const scored = await orchestrator.callTool<LeadScoreResult>('score.compute', {
     employees: company.employees,
     financials: allFinancials,
   });
   if (scored.ok) {
     const s = scored.data;
+    const before = company.lead_score;
     await insertScore({
       companyId: company.id,
       leadScore: s.leadScore,
@@ -165,15 +282,50 @@ async function enrichCompany(orgnr: string, errors: ScanError[]): Promise<boolea
       latestYear: s.latestYear,
       reason: s.reason,
     });
+    if (before !== s.leadScore) {
+      stats.scoreChanged++;
+      log.change(before == null ? `Score ${s.leadScore}` : `Score ${before} → ${s.leadScore}`);
+    }
+  } else {
+    errors.push({ scope: `score ${orgnr}`, message: scored.error });
+  }
 
-    // Best-effort — disabled (no GEMINI_API_KEY) or failed calls just leave
-    // the previous analysis in place rather than failing the whole scan.
-    const news = await getCompanyNews(company.name, 5);
+  await markCompanyRefreshed(orgnr);
+  stats.processed++;
+}
+
+// --- Pass 2: AI (Gemini — slow, partly paid) ------------------------------
+// Analysis, website search, website contact scrape. The analysis and the
+// website→contacts chain run side by side rather than one after the other,
+// and every call's timeout is clipped to whatever is left of the run's
+// budget so a slow Gemini response can't push the function past Vercel's
+// hard limit.
+
+async function aiPass(
+  orgnr: string,
+  log: CompanyLog,
+  stats: ScanDetails['ai'],
+  errors: ScanError[],
+  deadline: number,
+): Promise<void> {
+  const company = await getCompanyByOrgnr(orgnr);
+  if (!company) return;
+  await setAiAttempted(company.id);
+  const budget = (ms: number) => Math.max(1_000, Math.min(ms, deadline - Date.now()));
+
+  const analysisJob = async () => {
+    const priorSignalLevel = parseBuyingSignalLevel(company.ai_analysis);
+    const [history, board, news] = await Promise.all([
+      listFinancials(company.id),
+      listWebsiteContacts(company.id),
+      getCompanyNews(company.name, 5),
+    ]);
     const contacts: { role: string; name: string }[] = [
       { role: 'Daglig leder', name: company.ceo_name },
       { role: 'Kontaktperson', name: company.contact_name },
       { role: 'CTO', name: company.cto_name },
       { role: 'Salgssjef', name: company.sales_name },
+      ...board.slice(0, 8).map((b) => ({ role: b.role ?? 'Ansatt', name: b.name })),
     ].filter((c): c is { role: string; name: string } => !!c.name);
 
     const analysis = await orchestrator.callTool<LeadAnalysis | null>(
@@ -184,174 +336,195 @@ async function enrichCompany(orgnr: string, errors: ScanError[]): Promise<boolea
         sector: company.matched_label,
         nace: company.nace1_text,
         employees: company.employees,
-        financials: allFinancials.map((f) => ({ year: f.year, revenue: f.revenue, operatingResult: f.operatingResult, profit: f.profit })),
-        leadScore: s.leadScore,
-        band: s.band,
+        financials: toCompanyFinancials(history).map((f) => ({
+          year: f.year,
+          revenue: f.revenue,
+          operatingResult: f.operatingResult,
+          profit: f.profit,
+        })),
+        leadScore: company.lead_score,
+        band: company.lead_score != null ? scoreBand(company.lead_score) : null,
         news: news.map((n) => ({ title: n.title, date: n.seenAt, domain: n.domain })),
         contacts,
       },
-      25_000,
+      budget(25_000),
     );
+    if (!analysis.ok) errors.push({ scope: `ai.analyze ${orgnr}`, message: analysis.error });
     if (analysis.ok && analysis.data) {
       await setCompanyAiAnalysis(company.id, JSON.stringify(analysis.data));
+      stats.analyses++;
+      log.change('AI-vurdering oppdatert');
       if (analysis.data.buyingSignal.level === 'høy' && priorSignalLevel !== 'høy') {
-        notes.push('Sterkt kjøpssignal oppdaget');
+        log.change('Sterkt kjøpssignal oppdaget', true);
       }
     }
-  } else {
-    errors.push({ scope: `score ${orgnr}`, message: scored.error });
-  }
+  };
 
-  // Paid Google Search-grounded lookup, so this must run at most once per
-  // company ever — never on a later refresh, even if it found nothing.
-  let website = company.website;
-  if (!company.website && !company.website_search_attempted_at) {
-    const found = await orchestrator.callTool<string | null>(
-      'ai.findWebsite',
-      { name: company.name, orgnr: company.orgnr, poststed: company.poststed },
-      20_000,
-    );
-    await setWebsiteSearchAttempted(company.id);
-    if (found.ok && found.data) {
-      await setCompanyWebsite(company.id, found.data);
-      website = found.data;
-      notes.push('Nettside funnet');
+  const websiteJob = async () => {
+    // Paid Google Search-grounded lookup, so this must run at most once per
+    // company ever — never on a later refresh, even if it found nothing.
+    let website = company.website;
+    if (!website && !company.website_search_attempted_at) {
+      const found = await orchestrator.callTool<string | null>(
+        'ai.findWebsite',
+        { name: company.name, orgnr: company.orgnr, poststed: company.poststed },
+        budget(20_000),
+      );
+      // Only a completed search counts as "attempted" — a timeout clipped by
+      // the run's budget didn't actually get an answer, so try again later.
+      if (found.ok) await setWebsiteSearchAttempted(company.id);
+      else errors.push({ scope: `ai.findWebsite ${orgnr}`, message: found.error });
+      if (found.ok && found.data) {
+        await setCompanyWebsite(company.id, found.data);
+        website = found.data;
+        stats.websitesFound++;
+        log.change(`Nettside funnet: ${found.data}`, true);
+      }
     }
-  }
+    if (!website) return;
 
-  // Best-effort scrape of the company's own "about us"/contact/team pages —
-  // free-form Gemini call, not the paid search above, so it's fine to run on
-  // every refresh (staff on a team page turn over; a stale list is worse
-  // than none).
-  if (website) {
+    // Free-form Gemini read of the company's own about/contact/team pages —
+    // fine to repeat on every AI cycle, since staff on a team page turn over.
+    const prior = await listWebsiteContacts(company.id, 'nettside');
     const contacts = await orchestrator.callTool<{ name: string; role: string | null; email: string | null; phone: string | null }[]>(
       'ai.extractContacts',
       { name: company.name, website },
-      35_000,
+      budget(35_000),
     );
-    if (contacts.ok) {
-      await replaceWebsiteContacts(company.id, contacts.data);
-      if (priorContactCount === 0 && contacts.data.length > 0) {
-        notes.push(`${contacts.data.length} kontakter hentet fra nettsiden`);
-      }
+    if (!contacts.ok) {
+      errors.push({ scope: `ai.extractContacts ${orgnr}`, message: contacts.error });
+      return;
     }
-  }
+    // An empty result from a site that previously listed people is far more
+    // likely a fetch hiccup (timeout, bot wall) than everyone leaving — keep
+    // the old list rather than wiping it.
+    if (contacts.data.length === 0 && prior.length > 0) return;
+    await replaceContacts(company.id, 'nettside', contacts.data);
+    if (contacts.data.length > 0) {
+      stats.contactCompanies++;
+      stats.contactPeople += contacts.data.length;
+      const added = contacts.data.filter((c) => !prior.some((p) => p.name === c.name)).length;
+      if (added > 0) log.change(`${added} nye kontakter fra nettsiden`, prior.length === 0);
+    }
+  };
 
-  if (notes.length) await addNotification(company.id, company.orgnr, company.name, notes.join(' · '));
-
-  await markCompanyRefreshed(orgnr);
-  return fetched > 0 || financials.length > 0;
-}
-
-function naceMatchFor(co: RawCompany) {
-  return matchNace(co.nace.map((n) => n.code)) as { code: string; label: string; group: string } | null;
+  await Promise.all([analysisJob(), websiteJob()]);
+  stats.processed++;
 }
 
 // --- The scan ----------------------------------------------------------
 
 export interface RunScanOptions {
-  /** Re-fetch accounts for every company, not just the stale rotating batch. */
+  /** Brreg pass: no cap on the candidate list (the time budget still applies). */
   full?: boolean;
-  /** How many companies to enrich this run (ignored when `full`). */
+  /** How many companies the Brreg pass may consider this run (ignored when `full`). */
   limit?: number;
-  /** Skip discovery — only refresh accounts/scores for known companies. */
+  /** Skip discovery — only refresh known companies. */
   skipDiscovery?: boolean;
+  trigger?: ScanTrigger;
 }
+
+// The cron route and the admin Server Action both cap the function at 60s
+// (maxDuration). Everything below is planned against that: discovery first
+// (when it runs), then the Brreg pass until BRREG_UNTIL_MS, then as many AI
+// waves as still fit whole before HARD_STOP_MS — leaving a few seconds to
+// write the scan row, so the "Siste skann" table always gets a finished
+// entry instead of a "kjører / avbrutt" one.
+const BRREG_CONCURRENCY = 6;
+const AI_CONCURRENCY = 4;
+const BRREG_UNTIL_MS = 30_000;
+const BRREG_UNTIL_NO_AI_MS = 50_000;
+const HARD_STOP_MS = 54_000;
+const AI_MIN_WINDOW_MS = 18_000;
 
 export async function runScan(opts: RunScanOptions = {}): Promise<ScanResult> {
   const started = Date.now();
   const scanId = await startScan();
   const errors: ScanError[] = [];
-  let companiesFound = 0;
-  let companiesUpdated = 0;
-  let financialsFetched = 0;
+  const details = emptyDetails(opts.trigger ?? 'manuell');
+  const logs = new Map<string, { name: string; log: CompanyLog }>();
+  const logFor = (co: { orgnr: string; name: string }) => {
+    let entry = logs.get(co.orgnr);
+    if (!entry) logs.set(co.orgnr, (entry = { name: co.name, log: new CompanyLog() }));
+    return entry.log;
+  };
+  const aiEnabled = !!process.env.GEMINI_API_KEY;
+  details.ai.enabled = aiEnabled;
 
   if (!opts.skipDiscovery) {
+    details.discovery.ran = true;
     try {
       const discovered = await discover(errors);
-      companiesFound = discovered.size;
-      for (const co of discovered.values()) {
-        const match = naceMatchFor(co);
-        const fresh = await upsertCompany({
-          orgnr: co.orgnr,
-          name: co.name,
-          org_form: co.orgForm,
-          nace: co.nace,
-          sector_code: co.sectorCode,
-          sector_text: co.sectorText,
-          employees: co.employees,
-          website: co.website,
-          phone: co.phone,
-          address: co.address,
-          postnummer: co.postnummer,
-          poststed: co.poststed,
-          kommune: co.kommune,
-          kommunenummer: co.kommunenummer,
-          registered_at: co.registeredAt,
-          established_at: co.establishedAt,
-          last_annual_report: co.lastAnnualReport,
-          in_mva: co.inMva,
-          bankrupt: co.bankrupt,
-          under_liquidation: co.underLiquidation,
-          matched_code: match?.code ?? null,
-          matched_label: match?.label ?? null,
-          matched_group: match?.group ?? null,
-        });
-        if (!fresh) companiesUpdated++;
-      }
+      details.discovery.found = discovered.size;
+      details.discovery.added = await upsertCompanies([...discovered.values()].map((co) => toUpsertInput(co)));
     } catch (e) {
       errors.push({ scope: 'discovery', message: e instanceof Error ? e.message : String(e) });
     }
   }
 
-  // Enrichment pass. The candidate list can safely be larger than what a run
-  // will actually get through — the deadline guard below caps real work, so
-  // a bigger pool just means we never run dry before time does.
-  //
-  // `full` used to mean "every active company, alphabetically" — but the
-  // same 45s deadline still applied, so a single click never actually
-  // reached past the first ~40-60 names starting with A, and clicking it
-  // again just reprocessed exactly those same companies forever (no
-  // staleness ordering to make room for the rest). Routing it through the
-  // same staleness-ordered query instead means each click (or nightly run)
-  // picks up wherever the last one left off, and eventually does cover
-  // everyone — just not in one request, which no ordering could fix given
-  // the serverless time limit.
+  // Pass 1 — Brreg, staleness-ordered (lib/db.ts listCompaniesToRefresh), so
+  // each run picks up where the last one stopped.
+  const brregUntil = started + (aiEnabled ? BRREG_UNTIL_MS : BRREG_UNTIL_NO_AI_MS);
   const batch = await listCompaniesToRefresh(
     opts.full ? Number.MAX_SAFE_INTEGER : opts.limit && opts.limit > 0 ? opts.limit : Number(process.env.SCAN_BATCH) || 150,
   );
-
-  // The cron route caps the whole function at 60s (app/api/cron/scan/route.ts
-  // maxDuration) — a fully sequential, one-at-a-time loop through 40
-  // companies (each doing several external calls: regnskap, roller,
-  // konsern, ai.analyze, a website scrape for contacts) was regularly
-  // getting hard-killed by Vercel partway through, silently, with no
-  // finishScan() and nothing recorded for whatever was in flight. Running a
-  // few companies concurrently multiplies real throughput inside the same
-  // budget, and stopping new work once close to the deadline means a scan
-  // always finishes cleanly and its counts in the admin "Siste skann" table
-  // reflect what actually happened, instead of Vercel finishing it for us.
-  const ENRICH_CONCURRENCY = 5;
-  const ENRICH_DEADLINE_MS = 45_000;
-
-  for (let i = 0; i < batch.length; i += ENRICH_CONCURRENCY) {
-    if (Date.now() - started > ENRICH_DEADLINE_MS) break;
-    const chunk = batch.slice(i, i + ENRICH_CONCURRENCY);
-    const results = await Promise.all(
-      chunk.map(async (co) => {
+  details.brreg.queued = batch.length;
+  let next = 0;
+  await Promise.all(
+    Array.from({ length: BRREG_CONCURRENCY }, async () => {
+      while (next < batch.length && Date.now() < brregUntil) {
+        const co = batch[next++];
         try {
-          return await enrichCompany(co.orgnr, errors);
+          await brregPass(co, logFor(co), details.brreg, errors);
         } catch (e) {
-          errors.push({ scope: `enrich ${co.orgnr}`, message: e instanceof Error ? e.message : String(e) });
-          return false;
+          errors.push({ scope: `brreg ${co.orgnr}`, message: e instanceof Error ? e.message : String(e) });
         }
-      }),
-    );
-    financialsFetched += results.filter(Boolean).length;
+      }
+    }),
+  );
+  if (details.brreg.processed < batch.length) details.stoppedEarly = true;
+
+  // Pass 2 — AI, in whole waves that each still fit before the hard stop.
+  if (aiEnabled) {
+    const deadline = started + HARD_STOP_MS;
+    const queue = await listCompaniesForAi(Number(process.env.SCAN_AI_BATCH) || 12);
+    let i = 0;
+    while (i < queue.length && deadline - Date.now() >= AI_MIN_WINDOW_MS) {
+      const wave = queue.slice(i, i + AI_CONCURRENCY);
+      i += wave.length;
+      await Promise.all(
+        wave.map(async (co) => {
+          try {
+            await aiPass(co.orgnr, logFor(co), details.ai, errors, deadline);
+          } catch (e) {
+            errors.push({ scope: `ai ${co.orgnr}`, message: e instanceof Error ? e.message : String(e) });
+          }
+        }),
+      );
+    }
+    if (i < queue.length) details.stoppedEarly = true;
   }
 
-  await finishScan(scanId, { companiesFound, companiesUpdated, financialsFetched, errors });
-  return { scanId, companiesFound, companiesUpdated, financialsFetched, errors, tookMs: Date.now() - started };
+  for (const [orgnr, { name, log }] of logs) {
+    if (log.changes.length) details.companies.push({ orgnr, name, changes: log.changes });
+    if (log.notes.length) {
+      const co = await getCompanyByOrgnr(orgnr);
+      if (co) await addNotification(co.id, orgnr, name, log.notes.join(' · '));
+    }
+  }
+  details.changedCount = details.companies.length;
+  details.companies.sort((a, b) => a.name.localeCompare(b.name, 'nb'));
+  details.companies = details.companies.slice(0, 400);
+  details.tookMs = Date.now() - started;
+
+  await finishScan(scanId, {
+    companiesFound: details.discovery.found,
+    companiesUpdated: details.brreg.processed,
+    financialsFetched: details.brreg.newFinancials,
+    errors,
+    details,
+  });
+  return { scanId, details, errors };
 }
 
 // Concurrent refreshes for the same company (e.g. the auto-refresh trigger
@@ -369,43 +542,24 @@ export function refreshCompany(orgnr: string): Promise<{ ok: boolean; errors: Sc
   return p;
 }
 
-// Enrich a single company on demand (admin "refresh" button, or after a manual
-// add). Also runs discovery-less so it's fast.
+// Both passes for a single company, outside the scan budget (admin "refresh"
+// button, auto-refresh on first view, manual add).
+async function enrichOne(orgnr: string, errors: ScanError[]): Promise<void> {
+  const company = await getCompanyByOrgnr(orgnr);
+  if (!company) return;
+  const log = new CompanyLog();
+  await brregPass(company, log, emptyDetails('manuell').brreg, errors);
+  await aiPass(orgnr, log, emptyDetails('manuell').ai, errors, Date.now() + HARD_STOP_MS);
+  if (log.notes.length) await addNotification(company.id, company.orgnr, company.name, log.notes.join(' · '));
+}
+
 async function doRefreshCompany(orgnr: string): Promise<{ ok: boolean; errors: ScanError[] }> {
   const errors: ScanError[] = [];
   try {
     // Pull the latest facts from the register too, in case employees changed.
     const enhet = await orchestrator.callTool<RawCompany | null>('brreg.getEnhet', { orgnr }, 12_000);
-    if (enhet.ok && enhet.data) {
-      const co = enhet.data;
-      const match = naceMatchFor(co);
-      await upsertCompany({
-        orgnr: co.orgnr,
-        name: co.name,
-        org_form: co.orgForm,
-        nace: co.nace,
-        sector_code: co.sectorCode,
-        sector_text: co.sectorText,
-        employees: co.employees,
-        website: co.website,
-        phone: co.phone,
-        address: co.address,
-        postnummer: co.postnummer,
-        poststed: co.poststed,
-        kommune: co.kommune,
-        kommunenummer: co.kommunenummer,
-        registered_at: co.registeredAt,
-        established_at: co.establishedAt,
-        last_annual_report: co.lastAnnualReport,
-        in_mva: co.inMva,
-        bankrupt: co.bankrupt,
-        under_liquidation: co.underLiquidation,
-        matched_code: match?.code ?? null,
-        matched_label: match?.label ?? null,
-        matched_group: match?.group ?? null,
-      });
-    }
-    await enrichCompany(orgnr, errors);
+    if (enhet.ok && enhet.data) await upsertCompany(toUpsertInput(enhet.data));
+    await enrichOne(orgnr, errors);
     return { ok: errors.length === 0, errors };
   } catch (e) {
     errors.push({ scope: `refresh ${orgnr}`, message: e instanceof Error ? e.message : String(e) });
@@ -424,34 +578,7 @@ export async function addCompanyByOrgnr(
   if (!enhet.ok || !enhet.data) {
     return { ok: false, error: 'Fant ikke foretaket i Enhetsregisteret.' };
   }
-  const co = enhet.data;
-  const match = naceMatchFor(co);
-  await upsertCompany({
-    orgnr: co.orgnr,
-    name: co.name,
-    org_form: co.orgForm,
-    nace: co.nace,
-    sector_code: co.sectorCode,
-    sector_text: co.sectorText,
-    employees: co.employees,
-    website: co.website,
-    phone: co.phone,
-    address: co.address,
-    postnummer: co.postnummer,
-    poststed: co.poststed,
-    kommune: co.kommune,
-    kommunenummer: co.kommunenummer,
-    registered_at: co.registeredAt,
-    established_at: co.establishedAt,
-    last_annual_report: co.lastAnnualReport,
-    in_mva: co.inMva,
-    bankrupt: co.bankrupt,
-    under_liquidation: co.underLiquidation,
-    matched_code: match?.code ?? null,
-    matched_label: match?.label ?? null,
-    matched_group: match?.group ?? null,
-    manual_entry: true,
-  });
-  await enrichCompany(orgnr, []);
+  await upsertCompany(toUpsertInput(enhet.data, true));
+  await enrichOne(orgnr, []);
   return { ok: true, company: (await getCompanyByOrgnr(orgnr))! };
 }

@@ -19,7 +19,7 @@ const db = createClient({ url: `file:${DB_PATH}` });
 
 const COMPANY_COLS = [
   'orgnr', 'name', 'org_form', 'nace1_code', 'nace1_text', 'nace2_code', 'nace2_text',
-  'nace3_code', 'nace3_text', 'sector_code', 'sector_text', 'employees', 'website', 'phone',
+  'nace3_code', 'nace3_text', 'sector_code', 'sector_text', 'employees', 'website', 'phone', 'email',
   'address', 'postnummer', 'poststed', 'kommune', 'kommunenummer', 'registered_at',
   'established_at', 'last_annual_report', 'in_mva', 'bankrupt', 'under_liquidation',
   'matched_code', 'matched_label', 'matched_group', 'manual_entry', 'status', 'notes',

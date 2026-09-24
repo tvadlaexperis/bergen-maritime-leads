@@ -3,7 +3,15 @@ import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
 import { getCompanyByOrgnr, getCompany, listFinancials, getScoreHistory, listSiblingCompanies, listWebsiteContacts } from '@/lib/db';
 import { getCurrentUser } from '@/lib/auth';
-import { isValidOrgnr, proffUrl, brregUrl } from '@/lib/brreg';
+import {
+  isValidOrgnr,
+  proffUrl,
+  brregUrl,
+  linkedinCompanyName,
+  linkedinCompanyUrl,
+  linkedinPeopleUrl,
+  linkedinRoleSearchUrl,
+} from '@/lib/brreg';
 import { getCompanyNews, type NewsItem } from '@/lib/news';
 import { fmtNok, fmtPct, fmtInt, dateLabel } from '@/app/format';
 import { bandFor } from '@/app/components/ScoreBadge';
@@ -53,7 +61,7 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
   if (!co) notFound();
 
   const base = await getCompany(co.id);
-  const [financials, history, user, news, siblings, websiteContacts] = await Promise.all([
+  const [financials, history, user, news, siblings, allContacts] = await Promise.all([
     listFinancials(co.id),
     getScoreHistory(co.id, 12),
     getCurrentUser(),
@@ -61,6 +69,9 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
     co.parent_orgnr ? listSiblingCompanies(co.parent_orgnr, co.orgnr) : Promise.resolve([]),
     listWebsiteContacts(co.id),
   ]);
+  const websiteContacts = allContacts.filter((c) => c.source !== 'brreg');
+  const boardContacts = allContacts.filter((c) => c.source === 'brreg');
+  const liName = linkedinCompanyName(co.name);
   const isAdmin = user?.role === 'admin';
   const band = bandFor(co.lead_score);
   const analysis = parseAnalysis(co.ai_analysis);
@@ -281,7 +292,11 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
         <div className="box">
           <div className="box-header">
             <span className="box-title">Kontakter</span>
-            {websiteContacts.length > 0 && <span className="muted">nettside</span>}
+            <span className="muted" style={{ fontSize: '0.72rem' }}>
+              {[boardContacts.length || co.ceo_name ? 'Brreg' : null, websiteContacts.length ? 'nettside' : null]
+                .filter(Boolean)
+                .join(' · ')}
+            </span>
           </div>
           <div style={{ overflow: 'auto', maxHeight: 320 }}>
             <table className="table">
@@ -294,22 +309,55 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
                 </tr>
               </thead>
               <tbody>
-                {co.ceo_name && <ContactRow label="Daglig leder" name={co.ceo_name} />}
-                {co.phone && <ContactRow label="Sentralbord" name={null} phone={co.phone} />}
-                <ContactRow label="Kontaktperson" name={co.contact_name} email={co.contact_email} phone={co.contact_phone} />
-                <ContactRow label="CTO" name={co.cto_name} email={co.cto_email} phone={co.cto_phone} />
-                <ContactRow label="Salgssjef" name={co.sales_name} email={co.sales_email} phone={co.sales_phone} />
+                {co.ceo_name && <ContactRow label="Daglig leder" name={co.ceo_name} company={liName} source="brreg" />}
+                {(co.phone || co.email) && <ContactRow label="Sentralbord" name={null} email={co.email} phone={co.phone} />}
+                <ContactRow label="Kontaktperson" name={co.contact_name} email={co.contact_email} phone={co.contact_phone} company={liName} />
+                <ContactRow label="CTO" name={co.cto_name} email={co.cto_email} phone={co.cto_phone} company={liName} />
+                <ContactRow label="Salgssjef" name={co.sales_name} email={co.sales_email} phone={co.sales_phone} company={liName} />
                 {websiteContacts.map((wc) => (
-                  <ContactRow key={wc.id} label={wc.role ?? 'Ansatt'} name={wc.name} email={wc.email} phone={wc.phone} sourced />
+                  <ContactRow key={wc.id} label={wc.role ?? 'Ansatt'} name={wc.name} email={wc.email} phone={wc.phone} company={liName} source="nettside" />
                 ))}
+                {boardContacts
+                  .filter((b) => b.name !== co.ceo_name)
+                  .map((b) => (
+                    <ContactRow key={b.id} label={b.role ?? 'Styremedlem'} name={b.name} company={liName} source="brreg" />
+                  ))}
               </tbody>
             </table>
           </div>
           {!co.contact_name && !co.cto_name && !co.sales_name && websiteContacts.length === 0 && (
             <div className="box-pad muted" style={{ paddingTop: 0, fontSize: '0.82rem' }}>
-              Ingen kontaktinfo registrert ennå.{isAdmin ? ' Legg inn under.' : ''}
+              Ingen navngitte kontakter utover ledelse/styre ennå.{isAdmin ? ' Legg inn under.' : ''}
             </div>
           )}
+          {/* Search links only — LinkedIn has no open API for people data and
+              forbids scraping, so the salesperson does the lookup in their own
+              logged-in LinkedIn / Sales Navigator session. */}
+          <div className="box-pad" style={{ paddingTop: 0, fontSize: '0.78rem', display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'baseline' }}>
+            <span className="muted">Finn på LinkedIn:</span>
+            <a href={linkedinCompanyUrl(co.name)} target="_blank" rel="noopener noreferrer" className="link-accent">
+              Selskapet ↗
+            </a>
+            <a
+              href={linkedinRoleSearchUrl(co.name, ['IT', 'CTO', 'CIO', 'IT-sjef', 'IT-leder', 'digitalisering', 'teknologi'])}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="link-accent"
+            >
+              IT-/teknologiledere ↗
+            </a>
+            <a
+              href={linkedinRoleSearchUrl(co.name, ['HR', 'rekruttering', 'personal', 'talent'])}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="link-accent"
+            >
+              HR/rekruttering ↗
+            </a>
+            <a href={linkedinPeopleUrl(`"${liName}"`)} target="_blank" rel="noopener noreferrer" className="link-accent">
+              Alle ansatte ↗
+            </a>
+          </div>
           {isAdmin && base && (
             <ContactsEditForm
               id={base.id}
@@ -560,26 +608,47 @@ function ContactRow({
   name,
   email,
   phone,
-  sourced,
+  company,
+  source,
 }: {
   label: string;
   name: string | null;
   email?: string | null;
   phone?: string | null;
-  /** True for a contact scraped from the company's own website, not admin-entered or from Brreg. */
-  sourced?: boolean;
+  /** LinkedIn-friendly company name — adds a person search link next to a named contact. */
+  company?: string;
+  /** Where a machine-sourced row came from; omitted for admin-entered contacts. */
+  source?: 'nettside' | 'brreg';
 }) {
   return (
     <tr>
       <td className="muted">
         {label}
-        {sourced && (
-          <span className="muted" style={{ fontSize: '0.72rem' }} title="Hentet fra selskapets egen nettside">
-            {' '}· nettside
+        {source && (
+          <span
+            className="muted"
+            style={{ fontSize: '0.72rem' }}
+            title={source === 'nettside' ? 'Hentet fra selskapets egen nettside' : 'Fra Brønnøysundregistrene'}
+          >
+            {' '}· {source === 'nettside' ? 'nettside' : 'Brreg'}
           </span>
         )}
       </td>
-      <td>{name ?? <span className="muted">—</span>}</td>
+      <td>
+        {name ?? <span className="muted">—</span>}
+        {name && company && (
+          <a
+            href={linkedinPeopleUrl(`${name} ${company}`)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="link-accent"
+            title={`Søk etter ${name} på LinkedIn`}
+            style={{ marginLeft: 6, fontSize: '0.7rem', fontWeight: 700 }}
+          >
+            in
+          </a>
+        )}
+      </td>
       <td>{email ? <a href={`mailto:${email}`} className="link-accent">{email}</a> : <span className="muted">—</span>}</td>
       <td>{phone ? <a href={`tel:${phone.replace(/\s/g, '')}`} className="link-accent">{phone}</a> : <span className="muted">—</span>}</td>
     </tr>

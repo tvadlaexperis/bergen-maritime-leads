@@ -30,6 +30,6 @@ export async function GET(req: NextRequest) {
   const skipDiscovery = discoveryParam != null ? discoveryParam === '0' : new Date().getUTCDay() !== 1;
 
   const started = Date.now();
-  const result = await runScan({ limit, full, skipDiscovery });
-  return NextResponse.json({ ...result, tookMs: Date.now() - started });
+  const result = await runScan({ limit, full, skipDiscovery, trigger: 'cron' });
+  return NextResponse.json({ scanId: result.scanId, ...result.details, errors: result.errors, tookMs: Date.now() - started });
 }

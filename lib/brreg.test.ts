@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { normalizeEnhet, parseEnhetPage, parseRegnskap, parseDagligLeder, parseKonsernstruktur, isValidOrgnr } from './brreg';
+import { normalizeEnhet, parseEnhetPage, parseRegnskap, parseDagligLeder, parseRoller, parseKonsernstruktur, cleanEmail, linkedinCompanyName, linkedinRoleSearchUrl, isValidOrgnr } from './brreg';
 import { matchNace } from '../data/maritime-sectors.mjs';
 
 const rawEnhet = {
@@ -83,6 +83,41 @@ describe('isValidOrgnr', () => {
     expect(isValidOrgnr('971171898')).toBe(true);
     expect(isValidOrgnr('971171899')).toBe(false);
     expect(isValidOrgnr('12345')).toBe(false);
+  });
+});
+
+describe('parseRoller', () => {
+  const r = parseRoller({
+    rollegrupper: [
+      { type: { kode: 'DAGL' }, roller: [{ type: { kode: 'DAGL' }, person: { navn: { fornavn: 'Arild', etternavn: 'Apelthun' } } }] },
+      {
+        type: { kode: 'STYR' },
+        roller: [
+          { type: { kode: 'MEDL' }, person: { navn: { fornavn: 'Finn', etternavn: 'Kydland' } } },
+          { type: { kode: 'LEDE' }, person: { navn: { fornavn: 'Padraig', mellomnavn: 'Martin', etternavn: 'Somers' } } },
+          { type: { kode: 'VARA' }, person: { navn: { fornavn: 'Tore', etternavn: 'Jørgensen' } } },
+          { type: { kode: 'MEDL' }, person: { navn: { fornavn: 'Død', etternavn: 'Person' }, erDoed: true } },
+          { type: { kode: 'MEDL' }, avregistrert: true, person: { navn: { fornavn: 'Gammel', etternavn: 'Medlem' } } },
+        ],
+      },
+      { type: { kode: 'REVI' }, roller: [{ type: { kode: 'REVI' }, enhet: { navn: ['PWC AS'] } }] },
+    ],
+  });
+  it('reads the daglig leder', () => expect(r.ceo).toBe('Arild Apelthun'));
+  it('lists active board members, chair first, skipping deputies/deceased/deregistered', () => {
+    expect(r.board).toEqual([
+      { name: 'Padraig Martin Somers', role: 'Styreleder' },
+      { name: 'Finn Kydland', role: 'Styremedlem' },
+    ]);
+  });
+  it('handles an empty response', () => expect(parseRoller({})).toEqual({ ceo: null, board: [] }));
+});
+
+describe('cleanEmail', () => {
+  it('normalizes a valid address', () => expect(cleanEmail(' Post@Firma.NO ')).toBe('post@firma.no'));
+  it('rejects junk', () => {
+    expect(cleanEmail('ikke en adresse')).toBeNull();
+    expect(cleanEmail(undefined)).toBeNull();
   });
 });
 
@@ -178,5 +213,17 @@ describe('matchNace', () => {
     expect(matchNace(['30.110'])?.group).toBe('Verft & bygging');
     expect(matchNace(['50.101'])?.group).toBe('Sjøtransport');
     expect(matchNace(['41.000', '71.129'])).toBeNull();
+  });
+});
+
+describe('LinkedIn search links', () => {
+  it('drops the company-form suffix and title-cases', () => {
+    expect(linkedinCompanyName('BEERENBERG SERVICES AS')).toBe('Beerenberg Services');
+    expect(linkedinCompanyName('ØSTENSJØ REDERI ASA')).toBe('Østensjø Rederi');
+  });
+  it('builds a boolean role search', () => {
+    const url = new URL(linkedinRoleSearchUrl('ALIMAK GROUP NORWAY AS', ['CTO', 'IT-sjef', 'head of IT']));
+    expect(url.hostname).toBe('www.linkedin.com');
+    expect(url.searchParams.get('keywords')).toBe('"Alimak Group Norway" AND (CTO OR IT-sjef OR "head of IT")');
   });
 });

@@ -130,19 +130,28 @@ export async function refreshCompanyAction(orgnr: string): Promise<{ ok: boolean
   return { ok: r.ok, errors: r.errors.length };
 }
 
-// Manual "run scan". `full` re-fetches accounts for every company (slower);
-// otherwise it runs the same rotating batch as the nightly cron.
-export async function runScanAction(full: boolean): Promise<{ found: number; updated: number; fin: number; errors: number }> {
+// Manual "run scan". The normal button skips discovery (the company list
+// barely changes day to day, and the nightly cron rediscovers weekly) so the
+// whole 60s budget goes to refreshing data; `full` also re-walks the register
+// for new companies and picks up register-side changes (e-post, ansatte).
+export async function runScanAction(full: boolean): Promise<{ summary: string }> {
   const user = await guard('admin-scan');
-  const r = await runScan({ full });
-  await audit('scan.run', {
-    actor: user.email,
-    detail: `${full ? 'full' : 'batch'}: ${r.companiesFound} funnet, ${r.companiesUpdated} oppdatert, ${r.financialsFetched} regnskap, ${r.errors.length} feil`,
-  });
+  const r = await runScan({ full, skipDiscovery: !full, trigger: full ? 'full' : 'manuell' });
+  const d = r.details;
+  const parts = [
+    d.discovery.ran ? `${d.discovery.added} nye selskaper` : null,
+    `${d.brreg.processed} sjekket i Brreg`,
+    d.brreg.newFinancials ? `${d.brreg.newFinancials} nye regnskap` : null,
+    d.ai.enabled ? `${d.ai.analyses} AI-vurderinger` : null,
+    d.ai.contactCompanies ? `kontakter hos ${d.ai.contactCompanies}` : null,
+    r.errors.length ? `${r.errors.length} feil` : null,
+  ].filter(Boolean);
+  const summary = parts.join(', ') + '.';
+  await audit('scan.run', { actor: user.email, detail: `${full ? 'full' : 'bunt'}: ${summary}` });
   revalidatePath('/');
   revalidatePath('/admin');
   revalidatePath('/dashboard');
-  return { found: r.companiesFound, updated: r.companiesUpdated, fin: r.financialsFetched, errors: r.errors.length };
+  return { summary };
 }
 
 export async function generateGuestLinkAction(

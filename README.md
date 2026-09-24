@@ -49,7 +49,7 @@ npm run db:snapshot                       # commit data/companies-snapshot.json
 
 `npx vercel deploy --prod`. Set in Vercel project env: `SESSION_SECRET`, `CRON_SECRET`,
 `ADMIN_EMAIL`, `ADMIN_PASSWORD_HASH`, optionally `GUEST_EMAIL` / `GUEST_PASSWORD_HASH`,
-`SCAN_BATCH`. The nightly cron (`vercel.json`, 05:00 UTC) hits `/api/cron/scan`.
+`SCAN_BATCH`, `SCAN_AI_BATCH`, `GEMINI_API_KEY`. The nightly cron (`vercel.json`, 05:00 UTC) hits `/api/cron/scan`.
 
 **Production database:** without `TURSO_DATABASE_URL` the prod DB is an ephemeral
 `/tmp` file — the committed snapshot keeps the list populated, but new scans and the
