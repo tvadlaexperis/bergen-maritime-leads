@@ -11,7 +11,8 @@ type SizeFilter = 'all' | 'under10' | '5-15' | '10' | '50';
 type ScoreFilter = 'all' | '40' | '66';
 type GrowthFilter = 'all' | '0' | '10' | '25';
 type SignalFilter = 'all' | 'high';
-type FilterTab = 'segment' | 'bransje' | 'selskapsform' | 'kommune' | 'size' | 'growth' | 'score' | 'signal';
+type ContactFilter = 'all' | 'missing' | 'has';
+type FilterTab = 'segment' | 'bransje' | 'selskapsform' | 'kommune' | 'size' | 'growth' | 'score' | 'signal' | 'kontakt';
 type SortKey = 'name' | 'group' | 'employees' | 'revenue' | 'growth' | 'result' | 'margin' | 'score' | 'updated';
 type SortDir = 'asc' | 'desc';
 
@@ -27,6 +28,7 @@ interface StoredFilters {
   minGrowth: GrowthFilter;
   minScore: ScoreFilter;
   signalFilter: SignalFilter;
+  contactFilter: ContactFilter;
   filterTab: FilterTab;
   search: string;
 }
@@ -40,9 +42,16 @@ const DEFAULT_FILTERS: StoredFilters = {
   minGrowth: 'all',
   minScore: 'all',
   signalFilter: 'all',
+  contactFilter: 'all',
   filterTab: 'segment',
   search: '',
 };
+
+// A named person to approach beyond the statutory roles every AS has:
+// scraped from the company's website, or typed in by an admin.
+function hasNamedContact(r: CompanyWithScore): boolean {
+  return (r.website_contact_count ?? 0) > 0 || !!(r.contact_name || r.cto_name || r.sales_name);
+}
 
 function uniqSorted(values: (string | null)[]): string[] {
   return [...new Set(values.filter((v): v is string => !!v))].sort((a, b) => a.localeCompare(b, 'nb'));
@@ -86,6 +95,7 @@ export default function CompanyList({
   const [minGrowth, setMinGrowth] = useState<GrowthFilter>(DEFAULT_FILTERS.minGrowth);
   const [minScore, setMinScore] = useState<ScoreFilter>(DEFAULT_FILTERS.minScore);
   const [signalFilter, setSignalFilter] = useState<SignalFilter>(DEFAULT_FILTERS.signalFilter);
+  const [contactFilter, setContactFilter] = useState<ContactFilter>(DEFAULT_FILTERS.contactFilter);
   const [filterTab, setFilterTab] = useState<FilterTab>(DEFAULT_FILTERS.filterTab);
   const [search, setSearch] = useState<string>(DEFAULT_FILTERS.search);
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
@@ -108,6 +118,7 @@ export default function CompanyList({
         if (saved.minGrowth) setMinGrowth(saved.minGrowth);
         if (saved.minScore) setMinScore(saved.minScore);
         if (saved.signalFilter) setSignalFilter(saved.signalFilter);
+        if (saved.contactFilter) setContactFilter(saved.contactFilter);
         if (saved.filterTab) setFilterTab(saved.filterTab);
         if (saved.search) setSearch(saved.search);
       }
@@ -136,6 +147,7 @@ export default function CompanyList({
       minGrowth,
       minScore,
       signalFilter,
+      contactFilter,
       filterTab,
       search,
     };
@@ -144,7 +156,7 @@ export default function CompanyList({
     } catch {
       // ignore write failures
     }
-  }, [group, bransje, orgForm, kommuneFilter, minSize, minGrowth, minScore, signalFilter, filterTab, search]);
+  }, [group, bransje, orgForm, kommuneFilter, minSize, minGrowth, minScore, signalFilter, contactFilter, filterTab, search]);
 
   useEffect(() => {
     if (!loadedFavorites.current) return;
@@ -173,6 +185,7 @@ export default function CompanyList({
     minGrowth !== DEFAULT_FILTERS.minGrowth,
     minScore !== DEFAULT_FILTERS.minScore,
     signalFilter !== DEFAULT_FILTERS.signalFilter,
+    contactFilter !== DEFAULT_FILTERS.contactFilter,
     search !== DEFAULT_FILTERS.search,
   ].filter(Boolean).length;
 
@@ -185,6 +198,7 @@ export default function CompanyList({
     setMinGrowth(DEFAULT_FILTERS.minGrowth);
     setMinScore(DEFAULT_FILTERS.minScore);
     setSignalFilter(DEFAULT_FILTERS.signalFilter);
+    setContactFilter(DEFAULT_FILTERS.contactFilter);
     setSearch(DEFAULT_FILTERS.search);
   }
 
@@ -240,6 +254,7 @@ export default function CompanyList({
       if (minScore === '40' && (r.lead_score ?? -1) < 40) return false;
       if (minScore === '66' && (r.lead_score ?? -1) < 66) return false;
       if (signalFilter === 'high' && signalById.get(r.id) !== 'høy') return false;
+      if (contactFilter !== 'all' && hasNamedContact(r) !== (contactFilter === 'has')) return false;
       if (q) {
         const haystack = `${r.name} ${r.matched_group ?? ''} ${r.nace1_text ?? ''} ${r.org_form ?? ''}`.toLowerCase();
         if (!haystack.includes(q)) return false;
@@ -257,7 +272,7 @@ export default function CompanyList({
       if (typeof av === 'string') return mul * av.localeCompare(bv as string, 'nb');
       return mul * ((av as number) - (bv as number));
     });
-  }, [rows, group, bransje, orgForm, kommuneFilter, minSize, minGrowth, minScore, signalFilter, signalById, search, favorites, lockFavorites, sortKey, sortDir]);
+  }, [rows, group, bransje, orgForm, kommuneFilter, minSize, minGrowth, minScore, signalFilter, signalById, contactFilter, search, favorites, lockFavorites, sortKey, sortDir]);
 
   return (
     <div className="page-fill" style={{ gap: 16 }}>
@@ -337,6 +352,13 @@ export default function CompanyList({
           >
             {signalFilter !== 'all' && <span className="chip-tab-dot" />}
             Kjøpssignal
+          </button>
+          <button
+            className={`chip-tab${filterTab === 'kontakt' ? ' active' : ''}`}
+            onClick={() => setFilterTab('kontakt')}
+          >
+            {contactFilter !== 'all' && <span className="chip-tab-dot" />}
+            Kontakt
           </button>
           <span style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 10 }}>
             {activeFilterCount > 0 && (
@@ -483,6 +505,28 @@ export default function CompanyList({
                 hvert som den roterende skanningen når dem.
               </span>
             )}
+          </div>
+        )}
+
+        {filterTab === 'kontakt' && (
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+            <button className={`chip${contactFilter === 'all' ? ' active' : ''}`} onClick={() => setContactFilter('all')}>
+              Alle
+            </button>
+            <button
+              className={`chip${contactFilter === 'missing' ? ' active' : ''}`}
+              onClick={() => setContactFilter('missing')}
+            >
+              Mangler kontaktperson
+            </button>
+            <button className={`chip${contactFilter === 'has' ? ' active' : ''}`} onClick={() => setContactFilter('has')}>
+              Har kontaktperson
+            </button>
+            <span className="muted" style={{ fontSize: '0.76rem' }}>
+              {contactFilter === 'missing'
+                ? 'Ingen navngitt kontakt utover daglig leder og styre — høyest score øverst. Bruk «Finn på LinkedIn» på selskapssiden.'
+                : 'Kontaktperson = hentet fra nettsiden eller lagt inn manuelt (daglig leder og styre teller ikke).'}
+            </span>
           </div>
         )}
       </div>
