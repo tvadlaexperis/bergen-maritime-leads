@@ -190,22 +190,24 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
                 </span>
               )}
             </p>
-            <span className="muted" style={{ fontSize: '0.82rem', display: 'inline-flex', gap: 14, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-              {co.ceo_name && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+              <span className="muted" style={{ fontSize: '0.82rem', display: 'inline-flex', gap: 14, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                {co.ceo_name && (
+                  <span>
+                    Daglig leder: <span style={{ color: 'var(--text-primary)' }}>{co.ceo_name}</span>
+                    {co.ceo_changed_at != null && (
+                      <span className="ceo-changed-badge" title={`Byttet daglig leder ${dateLabel(co.ceo_changed_at)}`}>
+                        Ny ledelse
+                      </span>
+                    )}
+                  </span>
+                )}
                 <span>
-                  Daglig leder: <span style={{ color: 'var(--text-primary)' }}>{co.ceo_name}</span>
-                  {co.ceo_changed_at != null && (
-                    <span className="ceo-changed-badge" title={`Byttet daglig leder ${dateLabel(co.ceo_changed_at)}`}>
-                      Ny ledelse
-                    </span>
-                  )}
+                  Ansatte: <span style={{ color: 'var(--text-primary)' }}>{fmtInt(co.employees)}</span>
                 </span>
-              )}
-              <span>
-                Ansatte: <span style={{ color: 'var(--text-primary)' }}>{fmtInt(co.employees)}</span>
               </span>
-            </span>
-            {isAdmin && <AdminPanelToggle />}
+              {isAdmin && <AdminPanelToggle />}
+            </div>
           </div>
         </div>
       </div>
@@ -263,7 +265,10 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
             </div>
             <div className="box-pad" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             {co.lead_score != null ? (
-              <>
+              // Two columns: the computed score (bars) left, the AI's
+              // qualitative factors right — wraps to one column when narrow.
+              <div className="score-split">
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 14, minWidth: 0 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
                   <span className="num" data-band={band} style={{ fontSize: '2.4rem', fontWeight: 800, lineHeight: 1 }}>
                     {co.lead_score}
@@ -297,15 +302,18 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
                     Historikk: {history.slice().reverse().map((h) => h.lead_score).join(' → ')}
                   </p>
                 )}
-                {analysis && analysis.scoreFactors.length > 0 && (
-                  <div style={{ marginTop: 4, paddingTop: 14, borderTop: '1px solid var(--border)' }}>
-                    <span className="muted" style={{ fontSize: '0.72rem', fontWeight: 700 }}>
-                      Faktorer (AI-vurdert)
-                    </span>
-                    <ScoreFactorList factors={analysis.scoreFactors} />
-                  </div>
+              </div>
+              <div className="score-split-factors">
+                <span className="muted" style={{ fontSize: '0.72rem', fontWeight: 700 }}>
+                  Faktorer (AI-vurdert)
+                </span>
+                {analysis && analysis.scoreFactors.length > 0 ? (
+                  <ScoreFactorList factors={analysis.scoreFactors} />
+                ) : (
+                  <p className="muted" style={{ fontSize: '0.84rem', marginTop: 6 }}>Ingen AI-vurdering ennå.</p>
                 )}
-              </>
+              </div>
+              </div>
             ) : (
               <p className="muted">
                 Ingen score ennå. {isAdmin ? 'Bruk «Oppdater fra registrene» under.' : 'Neste skann beregner en.'}
@@ -653,14 +661,14 @@ function EntryTab({ analysis, liCompany }: { analysis: LeadAnalysis; liCompany: 
 
       {/* Segment-level context — general knowledge, labelled as such so it
           isn't mistaken for something known about this company. */}
-      {analysis.industryChallenges && analysis.industryChallenges.length > 0 && (
-        <div>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
-            {label('Utfordringer i bransjen')}
-            <span className="muted" style={{ fontSize: '0.72rem' }}>
-              generell bransjekunnskap — ikke bekreftet for selskapet
-            </span>
-          </div>
+      <div>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
+          {label('Utfordringer i bransjen')}
+          <span className="muted" style={{ fontSize: '0.72rem' }}>
+            generell bransjekunnskap — ikke bekreftet for selskapet
+          </span>
+        </div>
+        {analysis.industryChallenges && analysis.industryChallenges.length > 0 ? (
           <div
             style={{
               display: 'grid',
@@ -676,8 +684,15 @@ function EntryTab({ analysis, liCompany }: { analysis: LeadAnalysis; liCompany: 
               </div>
             ))}
           </div>
-        </div>
-      )}
+        ) : (
+          // Analyses made before this field existed don't have it; they're
+          // queued for a new run (ONCE_MIGRATIONS in lib/db.ts).
+          <p className="muted" style={{ fontSize: '0.84rem', marginTop: 6 }}>
+            Ikke med i denne AI-vurderingen ennå — kommer ved neste kjøring («Oppdater alt» i Admin, eller «Oppdater info» →
+            oppdater fra registrene).
+          </p>
+        )}
+      </div>
     </div>
   );
 }
