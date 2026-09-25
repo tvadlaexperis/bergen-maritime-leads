@@ -120,7 +120,9 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
 
   return (
     <AdminPanelProvider>
-    <div className="page-scroll" style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+    {/* The page itself doesn't scroll: the header and AI strip stay put and
+        each column below scrolls on its own (.split-scroll). */}
+    <div className="page-fill" style={{ gap: 18 }}>
       <div>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap' }}>
           <div>
@@ -221,8 +223,8 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
 
       {/* Two columns all the way down: the sales analysis on the left,
           the facts (people, news, numbers, notes) on the right. */}
-      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 18, alignItems: 'start' }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 18, minWidth: 0 }}>
+      <div className="split-scroll">
+        <div className="split-scroll-col">
           {/* Tilrådd inngang — the salesperson's first question ("who do I call,
               and what do I say"), so it leads the wide column with an accent
               edge. Kjøpsmodus is a tab here: it's the same "should I call now?"
@@ -323,7 +325,7 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
           </div>
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 18, minWidth: 0 }}>
+        <div className="split-scroll-col">
           {/* Contacts */}
           <div className="box">
             <div className="box-header">

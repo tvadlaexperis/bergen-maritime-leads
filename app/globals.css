@@ -1162,3 +1162,45 @@ a {
     border-left: none;
   }
 }
+
+/* Company page: two columns that scroll independently below a fixed header.
+   The grid fills the rest of .page-fill; each column is its own scroll area.
+   Children mustn't shrink, or the boxes get squashed instead of scrolling. */
+.split-scroll {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 18px;
+}
+.split-scroll-col {
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  /* room so the scrollbar doesn't sit on top of the boxes' edges/shadow */
+  padding: 0 6px 4px 0;
+}
+.split-scroll-col > * {
+  flex-shrink: 0;
+}
+/* Narrow screens: one column, back to scrolling the page as a whole. */
+@media (max-width: 900px) {
+  .page-fill:has(> .split-scroll) {
+    overflow-y: auto;
+  }
+  .split-scroll {
+    display: flex;
+    flex-direction: column;
+    flex: none;
+  }
+  .split-scroll-col {
+    overflow: visible;
+    padding-right: 0;
+  }
+}
+.page-fill:has(> .split-scroll) > :not(.split-scroll) {
+  flex-shrink: 0;
+}
