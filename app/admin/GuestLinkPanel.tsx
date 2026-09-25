@@ -20,7 +20,7 @@ export default function GuestLinkPanel() {
         if (r.error) setError(r.error);
         else setUrl(r.url ?? null);
       } catch (e) {
-        setError(e instanceof Error ? e.message : 'Could not generate a link.');
+        setError(e instanceof Error ? e.message : 'Kunne ikke lage lenke.');
       }
     });
   }
@@ -39,8 +39,8 @@ export default function GuestLinkPanel() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
       <p className="muted" style={{ fontSize: '0.78rem' }}>
-        A one-click sign-in link for the shared <strong>guest</strong> account (read-only). Anyone
-        with the link is signed in as a viewer until it expires.
+        En innloggingslenke til den felles <strong>gjestekontoen</strong> (kun lesetilgang). Alle som har
+        lenken blir logget inn som leser til den utløper.
       </p>
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
         {[7, 30, 90].map((d) => (
@@ -50,11 +50,11 @@ export default function GuestLinkPanel() {
             onClick={() => setDays(d)}
             disabled={busy}
           >
-            {d} days
+            {d} dager
           </button>
         ))}
         <button className="btn btn-primary btn-sm" onClick={generate} disabled={busy}>
-          {busy ? 'Generating…' : 'Generate link'}
+          {busy ? 'Lager lenke…' : 'Lag lenke'}
         </button>
       </div>
 
@@ -63,7 +63,7 @@ export default function GuestLinkPanel() {
       {url && (
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           <input
-            aria-label="Guest link"
+            aria-label="Gjestelenke"
             readOnly
             value={url}
             onFocus={(e) => e.currentTarget.select()}
@@ -80,10 +80,10 @@ export default function GuestLinkPanel() {
             }}
           />
           <button className="btn btn-ghost btn-sm" onClick={copy}>
-            {copied ? 'Copied' : 'Copy'}
+            {copied ? 'Kopiert' : 'Kopier'}
           </button>
-          <a className="btn btn-ghost btn-sm" href={`mailto:?subject=Ship%20Predictions%20access&body=${encodeURIComponent(url)}`}>
-            Email
+          <a className="btn btn-ghost btn-sm" href={`mailto:?subject=${encodeURIComponent('Tilgang til Maritim Bergen')}&body=${encodeURIComponent(url)}`}>
+            Send på e-post
           </a>
         </div>
       )}

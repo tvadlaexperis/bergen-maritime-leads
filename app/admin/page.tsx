@@ -18,7 +18,10 @@ import {
 } from '@/lib/db';
 import { dateLabel, osloDayStart } from '@/app/format';
 import ScanPanel from './ScanPanel';
-import AdminToolsMenu from './AdminToolsMenu';
+import AddCompanyForm from './AddCompanyForm';
+import GuestLinkPanel from './GuestLinkPanel';
+import FreshnessTile from './FreshnessTile';
+import BackArrow from '@/app/components/BackArrow';
 
 export const dynamic = 'force-dynamic';
 // Matches the cron route's budget (app/api/cron/scan/route.ts) — without
@@ -28,7 +31,22 @@ export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 export const metadata: Metadata = { title: 'Admin' };
 
-type View = 'skann' | 'logg' | 'dekning';
+type View = 'oppdatering' | 'datakvalitet' | 'verktoy' | 'logg';
+
+// Page-level tabs. Old `?view=skann|dekning` links (bookmarks, notifications)
+// map onto their new homes.
+const VIEWS: { key: View; label: string; href: string }[] = [
+  { key: 'oppdatering', label: 'Oppdatering', href: '/admin' },
+  { key: 'datakvalitet', label: 'Datakvalitet', href: '/admin?view=datakvalitet' },
+  { key: 'verktoy', label: 'Verktøy', href: '/admin?view=verktoy' },
+  { key: 'logg', label: 'Logg', href: '/admin?view=logg' },
+];
+
+function parseView(raw: string | undefined): View {
+  if (raw === 'logg' || raw === 'verktoy' || raw === 'datakvalitet') return raw;
+  if (raw === 'dekning') return 'datakvalitet';
+  return 'oppdatering';
+}
 
 // Logg date filter. Day boundaries are Bergen midnight, not the server's UTC.
 const PERIODS = [
@@ -46,14 +64,14 @@ const PERIODS = [
 export default async function AdminPage({
   searchParams,
 }: {
-  searchParams: { view?: string; kategori?: string; modus?: string; scan?: string; periode?: string; fane?: string };
+  searchParams: { view?: string; kategori?: string; modus?: string; scan?: string; periode?: string };
 }) {
   const user = await getCurrentUser();
   if (!user || user.role !== 'admin') redirect('/login?next=/admin');
 
-  const view: View = searchParams.view === 'logg' ? 'logg' : searchParams.view === 'dekning' ? 'dekning' : 'skann';
+  const view = parseView(searchParams.view);
   const category: CoverageCategory | null =
-    view === 'dekning' && searchParams.kategori && isCoverageCategory(searchParams.kategori) ? searchParams.kategori : null;
+    view === 'datakvalitet' && searchParams.kategori && isCoverageCategory(searchParams.kategori) ? searchParams.kategori : null;
   const selectedScanId = Number(searchParams.scan) || null;
   const period = PERIODS.find((p) => p.key === searchParams.periode) ?? PERIODS.find((p) => p.key === 'idag')!;
   const periodRange = period.range();
@@ -74,40 +92,28 @@ export default async function AdminPage({
     <div className="page-fill" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <Link
-            href="/"
-            className="link-accent"
-            aria-label="Tilbake til listen"
-            title="Tilbake til listen"
-            style={{ display: 'inline-flex', padding: 4, marginLeft: -4 }}
-          >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M19 12H5" />
-              <path d="M12 19l-7-7 7-7" />
-            </svg>
-          </Link>
+          <BackArrow href="/" label="Tilbake til listen" />
           <h1 style={{ fontSize: '1.4rem', fontWeight: 800, letterSpacing: '-0.02em' }}>Admin</h1>
         </div>
-        <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-          <AdminToolsMenu />
-          <div style={{ display: 'flex', gap: 6 }}>
-            <Link href="/admin" className={`btn btn-ghost btn-sm${view === 'skann' ? ' active' : ''}`}>
-              Skann
-            </Link>
-            <Link href="/admin?view=dekning" className={`btn btn-ghost btn-sm${view === 'dekning' ? ' active' : ''}`}>
-              Datadekning
-            </Link>
-            <Link href="/admin?view=logg" className={`btn btn-ghost btn-sm${view === 'logg' ? ' active' : ''}`}>
-              Logg
-            </Link>
-          </div>
-        </div>
       </div>
+
+      <nav className="page-tabs" aria-label="Admin">
+        {VIEWS.map((v) => (
+          <Link
+            key={v.key}
+            href={v.href}
+            className={`page-tab${view === v.key ? ' active' : ''}`}
+            aria-current={view === v.key ? 'page' : undefined}
+          >
+            {v.label}
+          </Link>
+        ))}
+      </nav>
 
       {/* Full width, full height — only one panel shows at a time rather than
           splitting the width permanently, since these are rarely needed
           side by side. */}
-      {view === 'dekning' ? (
+      {view === 'datakvalitet' ? (
         <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', gap: 16, overflow: 'hidden' }}>
           {(() => {
             const rows = [
@@ -125,9 +131,24 @@ export default async function AdminPage({
 
             return (
               <>
+                <div className="box box-pad" style={{ flexShrink: 0, gap: 14 }}>
+                  <span className="box-title">Hvor oppdatert er dataene</span>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 18 }}>
+                    <FreshnessTile label="Brreg sjekket" value={freshness.brregWeek} total={freshness.total} hint="siste 7 dager" />
+                    <FreshnessTile label="Brreg sjekket" value={freshness.brregMonth} total={freshness.total} hint="siste 30 dager" />
+                    <FreshnessTile label="AI-vurdert" value={freshness.aiMonth} total={freshness.total} hint="siste 30 dager" />
+                    <FreshnessTile
+                      label="Aldri AI-vurdert"
+                      value={freshness.aiNever}
+                      total={freshness.total}
+                      hint="står i AI-køen, høyest score først"
+                    />
+                  </div>
+                </div>
                 <div style={{ flexShrink: 0 }}>
+                  <p style={{ fontSize: '0.9rem', fontWeight: 700, marginBottom: 4 }}>Hvor mye vet vi</p>
                   <p className="muted" style={{ fontSize: '0.8rem', marginBottom: 14 }}>
-                    Hvor mye vet vi om de {coverage.total} selskapene — klikk «Har» eller «Mangler» på en kategori
+                    Om de {coverage.total} selskapene — klikk «Har» eller «Mangler» på en kategori for å se hvem
                   </p>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14 }}>
                     {rows.map((row) => {
@@ -149,13 +170,13 @@ export default async function AdminPage({
                           </div>
                           <div style={{ display: 'flex', gap: 12, marginTop: 4 }}>
                             <Link
-                              href={cardActive && mode === 'har' ? '/admin?view=dekning' : `/admin?view=dekning&kategori=${row.key}&modus=har`}
+                              href={cardActive && mode === 'har' ? '/admin?view=datakvalitet' : `/admin?view=datakvalitet&kategori=${row.key}&modus=har`}
                               className={`coverage-link${cardActive && mode === 'har' ? ' active' : ''}`}
                             >
                               Har ({row.value})
                             </Link>
                             <Link
-                              href={cardActive && mode === 'mangler' ? '/admin?view=dekning' : `/admin?view=dekning&kategori=${row.key}&modus=mangler`}
+                              href={cardActive && mode === 'mangler' ? '/admin?view=datakvalitet' : `/admin?view=datakvalitet&kategori=${row.key}&modus=mangler`}
                               className={`coverage-link${cardActive && mode === 'mangler' ? ' active' : ''}`}
                             >
                               Mangler ({missing})
@@ -173,7 +194,7 @@ export default async function AdminPage({
                       <span className="box-title">
                         {categoryCompanies.length} selskaper {mode === 'har' ? 'har' : 'mangler'} — {selectedLabel}
                       </span>
-                      <Link href="/admin?view=dekning" className="muted" style={{ fontSize: '0.78rem' }}>✕ lukk</Link>
+                      <Link href="/admin?view=datakvalitet" className="muted" style={{ fontSize: '0.78rem' }}>✕ lukk</Link>
                     </div>
                     <div className="box-scroll">
                       {categoryCompanies.length === 0 ? (
@@ -193,6 +214,27 @@ export default async function AdminPage({
               </>
             );
           })()}
+        </div>
+      ) : view === 'verktoy' ? (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 18, alignItems: 'start' }}>
+          <div className="box">
+            <div className="box-header">
+              <span className="box-title">Legg til selskap manuelt</span>
+              <span className="muted" style={{ fontSize: '0.72rem' }}>for selskaper utenfor skannet</span>
+            </div>
+            <div className="box-pad">
+              <AddCompanyForm />
+            </div>
+          </div>
+          <div className="box">
+            <div className="box-header">
+              <span className="box-title">Gjestelenke</span>
+              <span className="muted" style={{ fontSize: '0.72rem' }}>lesetilgang uten passord</span>
+            </div>
+            <div className="box-pad">
+              <GuestLinkPanel />
+            </div>
+          </div>
         </div>
       ) : view === 'logg' ? (
         <div className="box" style={{ flex: 1, minHeight: 0 }}>
@@ -250,13 +292,11 @@ export default async function AdminPage({
       ) : (
         <ScanPanel
           scans={scans}
-          freshness={freshness}
           activeCount={activeCount}
           selectedScanId={selectedScanId}
           aiRemaining={aiRemaining}
           brregStale={brregStale}
           aiEnabled={!!process.env.GEMINI_API_KEY}
-          tab={searchParams.fane === 'oversikt' ? 'oversikt' : 'siste'}
         />
       )}
     </div>

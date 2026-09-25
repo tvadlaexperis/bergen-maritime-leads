@@ -4,7 +4,7 @@ import { useState, type ReactNode } from 'react';
 import RunScanButton from './RunScanButton';
 import RunUpdateAllButton from './RunUpdateAllButton';
 
-// The Skann box header: title + scope on the left, the run buttons on the
+// The Oppdatering tab's box header: title + scope on the left, the run buttons on the
 // right, and whatever the buttons report (last result, AI-queue progress)
 // on a line underneath — only while there's something to say.
 export default function ScanHeader({
@@ -13,7 +13,6 @@ export default function ScanHeader({
   aiRemaining,
   brregStale,
   info,
-  tabs,
 }: {
   meta: string;
   aiEnabled: boolean;
@@ -21,8 +20,6 @@ export default function ScanHeader({
   brregStale: number;
   /** How a scan works — shown in a hover/focus popover behind the (i) icon. */
   info: ReactNode;
-  /** Oversikt / Siste skann view toggles — plain links, rendered left of the run buttons. */
-  tabs: ReactNode;
 }) {
   const [scanStatus, setScanStatus] = useState<string | null>(null);
   const [aiStatus, setAiStatus] = useState<string | null>(null);
@@ -32,7 +29,7 @@ export default function ScanHeader({
     <>
       <div className="box-header" style={{ alignItems: 'center', flexWrap: 'wrap', gap: 12, flexShrink: 0 }}>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap', minWidth: 0 }}>
-          <span className="box-title">Skann</span>
+          <span className="box-title">Kjøringer</span>
           <span className="info-tip" tabIndex={0} aria-label="Om skanningen">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
               <circle cx="12" cy="12" r="10" />
@@ -46,15 +43,15 @@ export default function ScanHeader({
           <span className="muted" style={{ fontSize: '0.75rem' }}>{meta}</span>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-          {tabs}
-          <span aria-hidden="true" style={{ width: 1, height: 22, background: 'var(--border)', margin: '0 4px' }} />
-          <RunScanButton onStatus={setScanStatus} />
+          {/* The one most admins need is first and primary; the single-run
+              buttons are for when you want just one pass. */}
           <RunUpdateAllButton
             initialStale={brregStale}
             initialRemaining={aiRemaining}
             aiEnabled={aiEnabled}
             onStatus={setAiStatus}
           />
+          <RunScanButton onStatus={setScanStatus} />
         </div>
       </div>
       {lines.length > 0 && (

@@ -25,6 +25,7 @@ import { getCompanyNews } from '@/lib/news';
 import { fmtNok, fmtPct, fmtInt, dateLabel } from '@/app/format';
 import { bandFor } from '@/app/components/ScoreBadge';
 import type { LeadAnalysis, ScoreVerdict, SignalLevel } from '@/lib/orchestrator/providers/ai';
+import BackArrow from '@/app/components/BackArrow';
 import AdminControls from './AdminControls';
 import { AdminPanelProvider, AdminPanelToggle, AdminPanelModal } from './AdminPanel';
 import AutoRefreshTrigger from './AutoRefreshTrigger';
@@ -121,12 +122,10 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
     <AdminPanelProvider>
     <div className="page-scroll" style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
       <div>
-        <Link href="/" className="muted" style={{ fontSize: '0.8rem' }}>
-          ← Alle selskaper
-        </Link>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap', marginTop: 6 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap' }}>
           <div>
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+              <BackArrow href="/" label="Tilbake til alle selskaper" />
               <h1 style={{ fontSize: '1.5rem', fontWeight: 800, letterSpacing: '-0.02em' }}>{co.name}</h1>
               {co.under_liquidation === 1 && <span className="liquidation-badge">Under avvikling</span>}
             </div>
@@ -407,43 +406,43 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 18, alignItems: 'start' }}>
-        {/* Financial history */}
+        {/* News — the wide left column, room for the cards */}
         <div className="box">
-          <FinancialsTabs financials={financials} />
+          <div className="box-header">
+            <span className="box-title">Nyheter</span>
+            <span className="muted" style={{ fontSize: '0.72rem' }}>
+              {co.news_checked_at != null ? `nettsøk · sjekket ${dateLabel(co.news_checked_at)}` : 'GDELT'}
+            </span>
+          </div>
+          <div className="box-pad">
+            {news.length === 0 ? (
+              <p className="muted" style={{ fontSize: '0.85rem' }}>
+                {co.news_checked_at != null ? 'Ingen nyheter funnet siste 12 måneder.' : 'Ingen nyhetstreff siste tiden.'}
+              </p>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12 }}>
+                {news.map((n) => (
+                  <a key={n.url} href={n.url} target="_blank" rel="noopener noreferrer" className="news-card">
+                    {n.category && n.category !== 'annet' && (
+                      <span className="news-card-tag">{NEWS_CATEGORY_LABEL[n.category as NewsCategory] ?? n.category}</span>
+                    )}
+                    <span className="news-card-title">{n.title}</span>
+                    {n.summary && <span className="news-card-summary">{n.summary}</span>}
+                    <span className="muted" style={{ fontSize: '0.72rem' }}>
+                      {n.source}
+                      {n.date ? ` · ${dateLabel(n.date)}` : ''}
+                    </span>
+                  </a>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* News + Notater, stacked in the right column */}
+        {/* Regnskapstall + Notater, stacked in the right column */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
           <div className="box">
-            <div className="box-header">
-              <span className="box-title">Nyheter</span>
-              <span className="muted" style={{ fontSize: '0.72rem' }}>
-                {co.news_checked_at != null ? `nettsøk · sjekket ${dateLabel(co.news_checked_at)}` : 'GDELT'}
-              </span>
-            </div>
-            <div className="box-pad">
-              {news.length === 0 ? (
-                <p className="muted" style={{ fontSize: '0.85rem' }}>
-                  {co.news_checked_at != null ? 'Ingen nyheter funnet siste 12 måneder.' : 'Ingen nyhetstreff siste tiden.'}
-                </p>
-              ) : (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12 }}>
-                  {news.map((n) => (
-                    <a key={n.url} href={n.url} target="_blank" rel="noopener noreferrer" className="news-card">
-                      {n.category && n.category !== 'annet' && (
-                        <span className="news-card-tag">{NEWS_CATEGORY_LABEL[n.category as NewsCategory] ?? n.category}</span>
-                      )}
-                      <span className="news-card-title">{n.title}</span>
-                      {n.summary && <span className="news-card-summary">{n.summary}</span>}
-                      <span className="muted" style={{ fontSize: '0.72rem' }}>
-                        {n.source}
-                        {n.date ? ` · ${dateLabel(n.date)}` : ''}
-                      </span>
-                    </a>
-                  ))}
-                </div>
-              )}
-            </div>
+            <FinancialsTabs financials={financials} />
           </div>
 
           {isAdmin && base && <NotesBox notes={base.notes ?? ''} />}

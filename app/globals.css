@@ -1081,3 +1081,36 @@ a {
   visibility: visible;
   transform: none;
 }
+
+/* ── Page-level tabs (admin) — navigation, so it reads as navigation: text
+   with an underline for the active tab, not buttons like the actions below. ── */
+.page-tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  overflow-x: auto;
+}
+.page-tab {
+  padding: 8px 14px 10px;
+  margin-bottom: -1px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  border-bottom: 2px solid transparent;
+  white-space: nowrap;
+  transition: color 0.15s, border-color 0.15s;
+}
+.page-tab:hover {
+  color: var(--text-primary);
+  border-bottom-color: var(--border-strong);
+}
+.page-tab.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+.page-tab:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--focus-ring);
+  border-radius: var(--radius-control) var(--radius-control) 0 0;
+}

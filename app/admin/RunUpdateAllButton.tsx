@@ -180,7 +180,7 @@ export default function RunUpdateAllButton({
     </button>
   ) : (
     <button
-      className="btn btn-ghost btn-sm"
+      className="btn btn-primary btn-sm"
       disabled={stale === 0 && (!aiEnabled || remaining === 0)}
       onClick={run}
       title="Kjører Brreg til alle er sjekket, deretter AI-køen til den er tom — så lenge siden er åpen"

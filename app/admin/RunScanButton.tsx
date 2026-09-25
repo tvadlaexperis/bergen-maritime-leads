@@ -26,8 +26,8 @@ export default function RunScanButton({ onStatus }: { onStatus: (msg: string | n
 
   return (
     <>
-      <button className="btn btn-primary btn-sm" disabled={busy} onClick={() => run(false)}>
-        {busy ? 'Skanner…' : 'Kjør skann (neste bunt)'}
+      <button className="btn btn-ghost btn-sm" disabled={busy} onClick={() => run(false)}>
+        {busy ? 'Skanner…' : 'Kjør skann'}
       </button>
       <button className="btn btn-ghost btn-sm" disabled={busy} onClick={() => run(true)}>
         Full oppdatering
