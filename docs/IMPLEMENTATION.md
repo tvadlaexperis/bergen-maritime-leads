@@ -71,9 +71,11 @@ the guest magic-link flow, `scripts/hash-password.mjs`, `scripts/create-user.mjs
    Measured locally: all 615 companies in 26 s.
 3. **AI pass** (Gemini, slow) — its own queue (`listCompaniesForAi`: never-attempted
    first, highest lead score first, then oldest `ai_attempted_at`), up to `SCAN_AI_BATCH`
-   (default 12) companies in waves of 6. Admin «Kjør AI-køen» (`RunAiQueueButton` →
-   `runAiQueueAction`) calls AI-only runs back to back from the browser until no
-   never-attempted company is left, stopping after two runs with zero successful analyses.
+   (default 12) companies in waves of 6. Admin «Oppdater alt» (`RunUpdateAllButton`) is the catch-up
+   routine as one click: normal runs (`runScanAction`) until `countBrregStale()` is 0, then
+   AI-only runs (`runAiQueueAction`) until `countAiPending()` is 0 — back to back from the
+   browser while the page is open. Pauses 60 s on Gemini 429s; stops after two runs that did
+   nothing. Day-to-day upkeep needs none of this: the nightly cron runs both passes.
    Cost (Gemini 3.6 Flash, Sept 2026): ~10k in / ~2k out tokens per company ≈ $0.015, and
    `findWebsite` search grounding stays inside the 5,000 free searches/month. Per company, `ai.analyze` runs alongside
    `ai.findWebsite` → `ai.extractContacts`; every call's timeout is clipped to the run's

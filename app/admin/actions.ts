@@ -17,6 +17,7 @@ import {
   setCompanyContacts,
   deleteCompany,
   countAiPending,
+  countBrregStale,
   type CompanyStatus,
 } from '@/lib/db';
 import { runScan, refreshCompany, addCompanyByOrgnr } from '@/lib/scan';
@@ -135,7 +136,7 @@ export async function refreshCompanyAction(orgnr: string): Promise<{ ok: boolean
 // barely changes day to day, and the nightly cron rediscovers weekly) so the
 // whole 60s budget goes to refreshing data; `full` also re-walks the register
 // for new companies and picks up register-side changes (e-post, ansatte).
-export async function runScanAction(full: boolean): Promise<{ summary: string }> {
+export async function runScanAction(full: boolean): Promise<{ summary: string; processed: number; staleRemaining: number }> {
   const user = await guard('admin-scan');
   const r = await runScan({ full, skipDiscovery: !full, trigger: full ? 'full' : 'manuell' });
   const d = r.details;
@@ -154,7 +155,7 @@ export async function runScanAction(full: boolean): Promise<{ summary: string }>
   revalidatePath('/');
   revalidatePath('/admin');
   revalidatePath('/dashboard');
-  return { summary };
+  return { summary, processed: d.brreg.processed, staleRemaining: await countBrregStale() };
 }
 
 // One AI-only run (no Brreg pass, whole budget to the AI queue). The

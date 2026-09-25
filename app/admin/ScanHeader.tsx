@@ -2,7 +2,7 @@
 
 import { useState, type ReactNode } from 'react';
 import RunScanButton from './RunScanButton';
-import RunAiQueueButton from './RunAiQueueButton';
+import RunUpdateAllButton from './RunUpdateAllButton';
 
 // The Skann box header: title + scope on the left, the run buttons on the
 // right, and whatever the buttons report (last result, AI-queue progress)
@@ -11,12 +11,14 @@ export default function ScanHeader({
   meta,
   aiEnabled,
   aiRemaining,
+  brregStale,
   info,
   tabs,
 }: {
   meta: string;
   aiEnabled: boolean;
   aiRemaining: number;
+  brregStale: number;
   /** How a scan works — shown in a hover/focus popover behind the (i) icon. */
   info: ReactNode;
   /** Oversikt / Siste skann view toggles — plain links, rendered left of the run buttons. */
@@ -47,7 +49,12 @@ export default function ScanHeader({
           {tabs}
           <span aria-hidden="true" style={{ width: 1, height: 22, background: 'var(--border)', margin: '0 4px' }} />
           <RunScanButton onStatus={setScanStatus} />
-          {aiEnabled && <RunAiQueueButton initialRemaining={aiRemaining} onStatus={setAiStatus} />}
+          <RunUpdateAllButton
+            initialStale={brregStale}
+            initialRemaining={aiRemaining}
+            aiEnabled={aiEnabled}
+            onStatus={setAiStatus}
+          />
         </div>
       </div>
       {lines.length > 0 && (

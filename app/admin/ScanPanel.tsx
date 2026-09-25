@@ -90,6 +90,7 @@ export default function ScanPanel({
   selectedScanId,
   aiRemaining,
   aiEnabled,
+  brregStale,
   tab,
 }: {
   scans: Scan[];
@@ -98,6 +99,7 @@ export default function ScanPanel({
   selectedScanId: number | null;
   aiRemaining: number;
   aiEnabled: boolean;
+  brregStale: number;
   tab: ScanTab;
 }) {
   const aiBatch = Number(process.env.SCAN_AI_BATCH) || 12;
@@ -118,6 +120,7 @@ export default function ScanPanel({
         } bransjekoder · ${activeCount} selskaper`}
         aiEnabled={aiEnabled}
         aiRemaining={aiRemaining}
+        brregStale={brregStale}
         tabs={
           <>
             <Link href="/admin" className={`btn btn-ghost btn-sm${tab === 'siste' ? ' active' : ''}`} scroll={false}>
@@ -139,8 +142,8 @@ export default function ScanPanel({
             siste 3 dagene — er alle oppdatert, hoppes trinnet over. <strong>2. AI</strong> (tregt): AI-vurdering,
             nettsidesøk og kontakter fra nettsiden for inntil {aiBatch} selskaper — de som aldri er vurdert og har
             høyest score går først. «Full oppdatering» sjekker alle i Brreg uansett alder og leter etter nye selskaper.
-            «Kjør AI-køen» hopper over Brreg og kjører AI-trinnet gang på gang (ca. {aiBatch} selskaper i minuttet) så
-            lenge siden er åpen.
+            «Oppdater alt» kjører Brreg til alle er sjekket, deretter AI-køen til den er tom (ca. {aiBatch} selskaper i
+            minuttet) — så lenge siden er åpen. Den nattlige kjøringen gjør det samme i det små hver natt.
           </>
         }
       />

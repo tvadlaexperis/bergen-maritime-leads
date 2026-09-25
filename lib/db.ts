@@ -1064,6 +1064,20 @@ export async function listCompaniesToRefresh(limit: number, staleDays = 3): Prom
   return plain<CompanyWithScore>(res.rows);
 }
 
+// Companies not re-checked in Brreg within `staleDays` — what «Oppdater alt»
+// counts down. Deliberately not the full "due" condition above: a company
+// whose newer filing Brreg lists but the regnskap API doesn't serve yet stays
+// "due" after every check, so that count may never reach zero.
+export async function countBrregStale(staleDays = 3): Promise<number> {
+  const c = await db();
+  const res = await c.execute({
+    sql: `SELECT COUNT(*) AS n FROM companies
+          WHERE status = 'active' AND (last_refreshed_at IS NULL OR last_refreshed_at < ?)`,
+    args: [Date.now() - staleDays * 86_400_000],
+  });
+  return Number((res.rows[0] as unknown as { n: number }).n);
+}
+
 // A website we've never successfully read for contacts (and that has none
 // stored — rows from before contacts_scraped_at existed count as read).
 const NEEDS_CONTACT_SCRAPE = `(co.website IS NOT NULL AND co.contacts_scraped_at IS NULL

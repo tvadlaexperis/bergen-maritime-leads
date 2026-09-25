@@ -2,19 +2,28 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { runAiQueueAction } from './actions';
+import { runAiQueueAction, runScanAction } from './actions';
 
 type Totals = { runs: number; processed: number; analyses: number; contacts: number; websites: number; errors: number };
 const ZERO: Totals = { runs: 0, processed: 0, analyses: 0, contacts: 0, websites: 0, errors: 0 };
 
-// Drives the AI queue from the browser: one ≤60s server run after another,
-// for as long as this page stays open. Stopping only takes effect between
-// runs — the one in flight always finishes and gets logged.
-export default function RunAiQueueButton({
+type Phase = 'brreg' | 'ai';
+
+// «Oppdater alt»: the manual catch-up routine as one click. Phase 1 runs
+// normal scans until no company is left unchecked in Brreg for 3+ days
+// (e-post, roller, regnskap, nettside fra e-postdomene); phase 2 runs AI-only
+// scans until the AI queue is empty. One ≤60s server run after another, for
+// as long as this page stays open. Stopping only takes effect between runs —
+// the one in flight always finishes and gets logged.
+export default function RunUpdateAllButton({
+  initialStale,
   initialRemaining,
+  aiEnabled,
   onStatus,
 }: {
+  initialStale: number;
   initialRemaining: number;
+  aiEnabled: boolean;
   onStatus: (msg: string | null) => void;
 }) {
   const router = useRouter();
@@ -22,6 +31,9 @@ export default function RunAiQueueButton({
   const [stopping, setStopping] = useState(false);
   const [totals, setTotals] = useState<Totals>(ZERO);
   const [remaining, setRemaining] = useState(initialRemaining);
+  const [stale, setStale] = useState(initialStale);
+  const [phase, setPhase] = useState<Phase>('brreg');
+  const [brregChecked, setBrregChecked] = useState(0);
   const [msg, setMsg] = useState<string | null>(null);
   const [waitLeft, setWaitLeft] = useState(0);
   const stopRef = useRef(false);
@@ -42,9 +54,29 @@ export default function RunAiQueueButton({
     setMsg(null);
     let t = ZERO;
     setTotals(t);
+    setBrregChecked(0);
     let idleRuns = 0;
     let rateLimitWaits = 0;
     try {
+      // Phase 1 — Brreg. Stops when nothing is stale, or when a run checks
+      // nobody (everything left is already fresh, or Brreg is failing).
+      setPhase('brreg');
+      let checked = 0;
+      for (let i = 0; i < 10 && !stopRef.current; i++) {
+        const r = await runScanAction(false);
+        checked += r.processed;
+        setBrregChecked(checked);
+        setStale(r.staleRemaining);
+        router.refresh();
+        if (r.staleRemaining === 0 || r.processed === 0) break;
+      }
+      if (!aiEnabled) {
+        if (!stopRef.current) setMsg('Ferdig — alle selskaper er sjekket i Brreg (AI er ikke konfigurert).');
+        return;
+      }
+
+      // Phase 2 — AI queue.
+      setPhase('ai');
       while (!stopRef.current) {
         const r = await runAiQueueAction();
         if ('error' in r) {
@@ -101,17 +133,25 @@ export default function RunAiQueueButton({
   // Status is reported up (see ScanHeader) rather than rendered here, so
   // this can sit in the header next to the other scan buttons.
   let status: string | null = null;
-  if (running || totals.runs > 0) {
-    const parts = [
-      running ? (waitLeft > 0 ? `AI-kø: venter ${waitLeft} s` : `AI-kø: kjøring ${totals.runs + 1} pågår`) : 'AI-kø',
-      `${totals.analyses} vurdert, ${totals.websites} nettsider, kontakter hos ${totals.contacts}${totals.errors ? `, ${totals.errors} feil` : ''}`,
-      `${remaining} igjen`,
-      running && totals.runs > 0 && totals.processed > 0
-        ? `ca. ${Math.ceil(remaining / (totals.processed / totals.runs))} min til`
-        : null,
-      msg,
-    ];
-    status = parts.filter(Boolean).join(' · ');
+  if (running || totals.runs > 0 || brregChecked > 0) {
+    const brregPart = `Brreg: ${brregChecked} sjekket, ${stale} gjenstår`;
+    const aiPart = `AI: ${totals.analyses} vurdert, ${totals.websites} nettsider, kontakter hos ${totals.contacts}${
+      totals.errors ? `, ${totals.errors} feil` : ''
+    }, ${remaining} igjen`;
+    const now = !running
+      ? null
+      : waitLeft > 0
+        ? `venter ${waitLeft} s`
+        : phase === 'brreg'
+          ? 'trinn 1/2: Brønnøysund pågår'
+          : `trinn 2/2: AI-kjøring ${totals.runs + 1} pågår${
+              totals.runs > 0 && totals.processed > 0
+                ? ` (ca. ${Math.ceil(remaining / (totals.processed / totals.runs))} min igjen)`
+                : ''
+            }`;
+    status = ['Oppdater alt', now, brregPart, phase === 'ai' || totals.runs > 0 ? aiPart : null, msg]
+      .filter(Boolean)
+      .join(' · ');
   } else if (msg) {
     status = msg;
   }
@@ -126,11 +166,16 @@ export default function RunAiQueueButton({
         setStopping(true);
       }}
     >
-      {stopping ? 'Stopper…' : 'Stopp AI-køen'}
+      {stopping ? 'Stopper…' : 'Stopp oppdatering'}
     </button>
   ) : (
-    <button className="btn btn-ghost btn-sm" disabled={remaining === 0} onClick={run}>
-      Kjør AI-køen ({remaining} igjen)
+    <button
+      className="btn btn-ghost btn-sm"
+      disabled={stale === 0 && (!aiEnabled || remaining === 0)}
+      onClick={run}
+      title="Kjører Brreg til alle er sjekket, deretter AI-køen til den er tom — så lenge siden er åpen"
+    >
+      Oppdater alt ({stale + (aiEnabled ? remaining : 0)} igjen)
     </button>
   );
 }

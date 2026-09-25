@@ -14,6 +14,7 @@ import {
   listAudit,
   getFreshness,
   countAiPending,
+  countBrregStale,
 } from '@/lib/db';
 import { dateLabel, osloDayStart } from '@/app/format';
 import ScanPanel from './ScanPanel';
@@ -58,7 +59,7 @@ export default async function AdminPage({
   const periodRange = period.range();
   const mode: CoverageMode = searchParams.modus && isCoverageMode(searchParams.modus) ? searchParams.modus : 'har';
 
-  const [activeCount, scans, auditRows, coverage, categoryCompanies, freshness, aiRemaining] = await Promise.all([
+  const [activeCount, scans, auditRows, coverage, categoryCompanies, freshness, aiRemaining, brregStale] = await Promise.all([
     countActiveCompanies(),
     listScans(15),
     listAudit(periodRange ? 1000 : 200, periodRange ?? undefined),
@@ -66,6 +67,7 @@ export default async function AdminPage({
     category ? listCompaniesForCoverage(category, mode) : Promise.resolve(null),
     getFreshness(),
     countAiPending(),
+    countBrregStale(),
   ]);
 
   return (
@@ -251,6 +253,7 @@ export default async function AdminPage({
           activeCount={activeCount}
           selectedScanId={selectedScanId}
           aiRemaining={aiRemaining}
+          brregStale={brregStale}
           aiEnabled={!!process.env.GEMINI_API_KEY}
           tab={searchParams.fane === 'oversikt' ? 'oversikt' : 'siste'}
         />
