@@ -1116,3 +1116,17 @@ a {
   box-shadow: 0 0 0 3px var(--focus-ring);
   border-radius: var(--radius-control) var(--radius-control) 0 0;
 }
+
+/* A box that should be read first (company page: «Tilrådd inngang»). */
+.box-featured {
+  border-color: var(--accent-border);
+  border-left: 4px solid var(--accent);
+}
+.box-featured > .box-header {
+  background: var(--accent-soft);
+}
+.entry-contact {
+  padding: 12px 14px;
+  border-radius: var(--radius-control);
+  background: var(--accent-soft);
+}
