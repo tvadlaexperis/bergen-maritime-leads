@@ -393,10 +393,14 @@ a {
   color: var(--text-primary);
   border-color: var(--border-strong);
 }
-.btn-ghost.active {
-  color: var(--accent);
-  background: var(--accent-soft);
-  border-color: var(--accent-border);
+/* Selected view/tab (admin views, Skann tabs, Logg periods). Must differ from
+   the resting ghost button by more than text colour — both share the soft
+   accent background — so it's filled like .chip-tab.active. */
+.btn-ghost.active,
+.btn-ghost.active:hover:not(:disabled) {
+  color: #fff;
+  background: var(--accent);
+  border-color: var(--accent);
 }
 
 /* ── Coverage har/mangler toggle — reads as plain text until hovered, so a
