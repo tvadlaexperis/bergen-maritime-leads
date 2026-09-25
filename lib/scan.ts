@@ -1,7 +1,9 @@
 import { orchestrator } from './orchestrator/boot';
 import type { LeadScoreResult } from './orchestrator/providers/score';
 import type { LeadAnalysis } from './orchestrator/providers/ai';
-import type { Company as RawCompany, KonsernInfo, Roller } from './brreg';
+import { websiteFromEmail, type Company as RawCompany, type KonsernInfo, type Roller } from './brreg';
+import { safeFetchText } from './http/safeFetch';
+import { siteMentionsCompany } from './website';
 import { getCompanyNews } from './news';
 import { scoreBand } from './score';
 import type { CompanyFinancials } from './types';
@@ -19,6 +21,7 @@ import {
   setCompanyWebsite,
   setWebsiteSearchAttempted,
   setAiAttempted,
+  setContactsScraped,
   replaceContacts,
   listWebsiteContacts,
   addNotification,
@@ -56,6 +59,8 @@ export interface ScanDetails {
     ceoChanged: number;
     boardUpdated: number;
     scoreChanged: number;
+    emailFound?: number; // optional: absent on scans from before these existed
+    websiteFromEmail?: number;
   };
   ai: {
     enabled: boolean;
@@ -64,6 +69,7 @@ export interface ScanDetails {
     websitesFound: number;
     contactCompanies: number;
     contactPeople: number;
+    sitesScraped?: number; // websites read for contacts (successful Gemini call, found people or not)
   };
   companies: { orgnr: string; name: string; changes: string[] }[];
   changedCount: number; // before `companies` is capped for storage
@@ -81,8 +87,26 @@ function emptyDetails(trigger: ScanTrigger): ScanDetails {
     tookMs: 0,
     stoppedEarly: false,
     discovery: { ran: false, found: 0, added: 0 },
-    brreg: { queued: 0, processed: 0, newFinancials: 0, ceoSet: 0, ceoChanged: 0, boardUpdated: 0, scoreChanged: 0 },
-    ai: { enabled: false, processed: 0, analyses: 0, websitesFound: 0, contactCompanies: 0, contactPeople: 0 },
+    brreg: {
+      queued: 0,
+      processed: 0,
+      newFinancials: 0,
+      ceoSet: 0,
+      ceoChanged: 0,
+      boardUpdated: 0,
+      scoreChanged: 0,
+      emailFound: 0,
+      websiteFromEmail: 0,
+    },
+    ai: {
+      enabled: false,
+      processed: 0,
+      analyses: 0,
+      websitesFound: 0,
+      contactCompanies: 0,
+      contactPeople: 0,
+      sitesScraped: 0,
+    },
     companies: [],
     changedCount: 0,
   };
@@ -203,14 +227,41 @@ async function brregPass(
   errors: ScanError[],
 ): Promise<void> {
   const orgnr = company.orgnr;
-  const [prevFinancials, prevBoard, fin, roller, konsern] = await Promise.all([
+  const [prevFinancials, prevBoard, enhet, fin, roller, konsern] = await Promise.all([
     listFinancials(company.id),
     listWebsiteContacts(company.id, 'brreg'),
+    // Company record: e-post, ansatte, hjemmeside. Used to be read only by
+    // discovery (weekly), so a new field like e-post stayed empty for days.
+    orchestrator.callTool<RawCompany | null>('brreg.getEnhet', { orgnr }, 12_000),
     orchestrator.callTool<CompanyFinancials[]>('brreg.getRegnskap', { orgnr }, 15_000),
     orchestrator.callTool<Roller | null>('brreg.getRoller', { orgnr }, 12_000),
     // null just means "not part of any corporate group" (the common case).
     orchestrator.callTool<KonsernInfo | null>('brreg.getKonsern', { orgnr }, 12_000),
   ]);
+
+  let employees = company.employees;
+  if (enhet.ok && enhet.data) {
+    await upsertCompany(toUpsertInput(enhet.data));
+    employees = enhet.data.employees;
+    if (enhet.data.email && !company.email) {
+      stats.emailFound = (stats.emailFound ?? 0) + 1;
+      log.change(`E-post: ${enhet.data.email}`);
+    }
+  }
+
+  // No website on record, but a company email domain: post@firma.no says
+  // firma.no is theirs. Free, unlike the Gemini search — but only trusted if
+  // the site answers *and* mentions the company, since the address is often
+  // a manager's or parent's (post@obos.no on a boat harbour co-op).
+  const email = (enhet.ok && enhet.data?.email) || company.email;
+  const hasWebsite = !!(company.website || (enhet.ok && enhet.data?.website));
+  const candidate = !hasWebsite ? websiteFromEmail(email) : null;
+  const candidateHtml = candidate ? await safeFetchText(candidate, { timeoutMs: 5_000, maxBytes: 2_000_000 }) : null;
+  if (candidate && candidateHtml && siteMentionsCompany(candidateHtml, company.name, company.orgnr)) {
+    await setCompanyWebsite(company.id, candidate);
+    stats.websiteFromEmail = (stats.websiteFromEmail ?? 0) + 1;
+    log.change(`Nettside fra e-postdomenet: ${candidate}`, true);
+  }
 
   const priorYears = new Set(prevFinancials.map((f) => f.year));
   if (!fin.ok) errors.push({ scope: `regnskap ${orgnr}`, message: fin.error });
@@ -261,7 +312,7 @@ async function brregPass(
   // full stored history instead of this call's result.
   const allFinancials = toCompanyFinancials(newYears.length ? await listFinancials(company.id) : prevFinancials);
   const scored = await orchestrator.callTool<LeadScoreResult>('score.compute', {
-    employees: company.employees,
+    employees,
     financials: allFinancials,
   });
   if (scored.ok) {
@@ -307,13 +358,20 @@ async function aiPass(
   stats: ScanDetails['ai'],
   errors: ScanError[],
   deadline: number,
+  force = false,
 ): Promise<void> {
   const company = await getCompanyByOrgnr(orgnr);
   if (!company) return;
+  // A company can be in the AI queue only because it has a website nobody
+  // has read yet — don't pay for a new analysis if the last one is recent.
+  // `force` (the admin refresh button) always re-analyzes.
+  const analysisFresh =
+    !force && company.ai_analysis_at != null && Date.now() - company.ai_analysis_at < AI_REANALYZE_AFTER_MS;
   await setAiAttempted(company.id);
   const budget = (ms: number) => Math.max(1_000, Math.min(ms, deadline - Date.now()));
 
   const analysisJob = async () => {
+    if (analysisFresh) return;
     const priorSignalLevel = parseBuyingSignalLevel(company.ai_analysis);
     const [history, board, news] = await Promise.all([
       listFinancials(company.id),
@@ -395,6 +453,8 @@ async function aiPass(
       errors.push({ scope: `ai.extractContacts ${orgnr}`, message: contacts.error });
       return;
     }
+    await setContactsScraped(company.id);
+    stats.sitesScraped = (stats.sitesScraped ?? 0) + 1;
     // An empty result from a site that previously listed people is far more
     // likely a fetch hiccup (timeout, bot wall) than everyone leaving — keep
     // the old list rather than wiping it.
@@ -437,6 +497,9 @@ const AI_CONCURRENCY = 4;
 // A company re-checked in Brreg within this many days isn't due again —
 // accounts are filed yearly and board changes are rare.
 const BRREG_STALE_DAYS = 3;
+// An AI analysis younger than this isn't redone when a company is queued
+// only for its website contacts.
+const AI_REANALYZE_AFTER_MS = 30 * 86_400_000;
 const BRREG_UNTIL_MS = 30_000;
 const BRREG_UNTIL_NO_AI_MS = 50_000;
 const HARD_STOP_MS = 54_000;
@@ -559,7 +622,7 @@ async function enrichOne(orgnr: string, errors: ScanError[]): Promise<void> {
   if (!company) return;
   const log = new CompanyLog();
   await brregPass(company, log, emptyDetails('manuell').brreg, errors);
-  await aiPass(orgnr, log, emptyDetails('manuell').ai, errors, Date.now() + HARD_STOP_MS);
+  await aiPass(orgnr, log, emptyDetails('manuell').ai, errors, Date.now() + HARD_STOP_MS, true);
   if (log.notes.length) await addNotification(company.id, company.orgnr, company.name, log.notes.join(' · '));
 }
 

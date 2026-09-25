@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { normalizeEnhet, parseEnhetPage, parseRegnskap, parseDagligLeder, parseRoller, parseKonsernstruktur, cleanEmail, linkedinCompanyName, linkedinRoleSearchUrl, isValidOrgnr } from './brreg';
+import { normalizeEnhet, parseEnhetPage, parseRegnskap, parseDagligLeder, parseRoller, parseKonsernstruktur, cleanEmail, websiteFromEmail, linkedinCompanyName, linkedinRoleSearchUrl, isValidOrgnr } from './brreg';
 import { matchNace } from '../data/maritime-sectors.mjs';
 
 const rawEnhet = {
@@ -225,5 +225,18 @@ describe('LinkedIn search links', () => {
     const url = new URL(linkedinRoleSearchUrl('ALIMAK GROUP NORWAY AS', ['CTO', 'IT-sjef', 'head of IT']));
     expect(url.hostname).toBe('www.linkedin.com');
     expect(url.searchParams.get('keywords')).toBe('"Alimak Group Norway" AND (CTO OR IT-sjef OR "head of IT")');
+  });
+});
+
+describe('websiteFromEmail', () => {
+  it('derives the company domain', () => {
+    expect(websiteFromEmail('post@beerenberg.com')).toBe('https://beerenberg.com');
+    expect(websiteFromEmail('Firmapost@Bmkgenetics.COM')).toBe('https://bmkgenetics.com');
+  });
+  it('ignores free-mail providers and junk', () => {
+    expect(websiteFromEmail('ola.nordmann@gmail.com')).toBeNull();
+    expect(websiteFromEmail('firma@online.no')).toBeNull();
+    expect(websiteFromEmail(null)).toBeNull();
+    expect(websiteFromEmail('ingen-alfakrøll')).toBeNull();
   });
 });

@@ -30,9 +30,18 @@ the guest magic-link flow, `scripts/hash-password.mjs`, `scripts/create-user.mjs
   styreleder/nestleder/styremedlemmer go to `company_contacts` with `source = 'brreg'`
   (varamedlemmer, revisor, regnskapsfører skipped). Only names are read; birth dates in the
   roller payload are deliberately not stored. `lib/brreg.ts#parseRoller`.
-- **Firma-e-post** — Enhetsregisteret's `epostadresse` → `companies.email`, picked up by
-  discovery / `getEnhet`. Shown on the Sentralbord row.
-- **Kontakter fra nettside** — `ai.extractContacts` reads the company's own site;
+- **Firma-e-post** — Enhetsregisteret's `epostadresse` → `companies.email`, read by the Brreg
+  pass (`getEnhet`, alongside regnskap/roller/konsern) and discovery. Shown on the Sentralbord row.
+  Brreg only has it for ~1 in 5 companies.
+- **Nettside fra e-postdomene** — no website on record + a non-free-mail email domain
+  (`websiteFromEmail`) → the site is fetched and stored only if it mentions the company
+  (`siteMentionsCompany`: org.nr, full name, or a distinctive name word). Rejects a manager's /
+  parent's domain (post@obos.no on a boat-harbour co-op). Free; ~22 extra sites locally.
+- **Kontakter fra nettside** — `ai.extractContacts` reads the homepage + up to 4 subpages
+  (`contactPageCandidates`: best menu links, www-tolerant, topped up with /kontakt, /om-oss,
+  /ansatte …); `contacts_scraped_at` records a completed read. A website never read puts the
+  company back in the AI queue (`AI_PENDING` in `lib/db.ts`); its analysis is only redone if
+  older than 30 days;
   `company_contacts` with `source = 'nettside'`. Each source is replaced independently
   (`replaceContacts(companyId, source, rows)`); an empty scrape never wipes a non-empty list.
 - **LinkedIn** — search *links* only (`lib/brreg.ts#linkedin*`): a person search next to each

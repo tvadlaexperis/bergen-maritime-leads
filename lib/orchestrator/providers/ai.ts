@@ -1,7 +1,7 @@
 import type { Provider } from '../types';
 import { safeFetchText, safeFetchResult } from '../../http/safeFetch';
 import { cleanWebsite } from '../../brreg';
-import { stripHtml, findLikelyContactPages } from '../../website';
+import { stripHtml, contactPageCandidates } from '../../website';
 
 // Gemini Flash builds the structured "Om selskapet" analysis (customer-fit
 // score factors, buying signals, recommended entry point). Free-tier
@@ -293,10 +293,10 @@ async function fetchPageText(url: string): Promise<string | null> {
   return safeFetchText(url, { timeoutMs: 6_000, revalidate: 21_600, headers: { Accept: 'text/html' } });
 }
 
-// Kept to one subpage, fetched alongside the homepage rather than after —
-// this runs inside the cron's shared 60s budget for the whole batch
-// (lib/scan.ts), so every second here is a second some other company in the
-// same run doesn't get.
+// Homepage first (its links pick the subpages), then up to four subpages in
+// parallel — best-matching menu links, topped up with common paths like
+// /kontakt and /om-oss. Reading just one subpage missed most team pages.
+// Each fetch is capped at 6s and runs inside the scan's shared budget.
 async function requestContacts(name: string, website: string): Promise<ExtractedContact[]> {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) return [];
@@ -304,7 +304,7 @@ async function requestContacts(name: string, website: string): Promise<Extracted
   const homepageHtml = await fetchPageText(website);
   if (!homepageHtml) return [];
 
-  const subpageUrls = findLikelyContactPages(homepageHtml, website, 1);
+  const subpageUrls = contactPageCandidates(homepageHtml, website, 4);
   const subpageHtmls = await Promise.all(subpageUrls.map((url) => fetchPageText(url)));
   const pages = [{ url: website, html: homepageHtml }];
   subpageUrls.forEach((url, i) => {
@@ -315,7 +315,7 @@ async function requestContacts(name: string, website: string): Promise<Extracted
   const combinedText = pages
     .map((p) => `--- ${p.url} ---\n${stripHtml(p.html).slice(0, 8_000)}`)
     .join('\n\n')
-    .slice(0, 20_000);
+    .slice(0, 32_000);
   if (!combinedText.trim()) return [];
 
   const prompt =

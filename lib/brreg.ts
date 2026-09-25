@@ -110,6 +110,27 @@ export function cleanEmail(raw?: string): string | null {
   return /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/.test(s) ? s : null;
 }
 
+// Mail-provider domains — an address there says nothing about the company's
+// own website.
+const FREE_MAIL_DOMAINS = new Set([
+  'gmail.com', 'googlemail.com', 'hotmail.com', 'hotmail.no', 'outlook.com', 'outlook.no', 'live.com', 'live.no',
+  'msn.com', 'yahoo.com', 'yahoo.no', 'icloud.com', 'me.com', 'mac.com', 'online.no', 'altibox.no', 'lyse.net',
+  'getmail.no', 'frisurf.no', 'start.no', 'c2i.net', 'bkkfiber.no', 'telia.no', 'tele2.no', 'epost.no',
+  'broadpark.no', 'haugnett.no', 'mail.com', 'proton.me', 'protonmail.com', 'nextgentel.com', 'chello.no',
+]);
+
+/**
+ * Candidate company website from a Brreg email address: post@firma.no ->
+ * https://firma.no. Null for free-mail providers. The caller must still
+ * check the site actually responds before storing it.
+ */
+export function websiteFromEmail(email: string | null | undefined): string | null {
+  const domain = (email ?? '').split('@')[1]?.trim().toLowerCase();
+  if (!domain || !/^[a-z0-9.-]+\.[a-z]{2,}$/.test(domain)) return null;
+  if (FREE_MAIL_DOMAINS.has(domain)) return null;
+  return `https://${domain}`;
+}
+
 export interface EnhetPage {
   companies: Company[];
   page: number;

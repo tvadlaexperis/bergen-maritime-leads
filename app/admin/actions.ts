@@ -143,6 +143,8 @@ export async function runScanAction(full: boolean): Promise<{ summary: string }>
     d.discovery.ran ? `${d.discovery.added} nye selskaper` : null,
     `${d.brreg.processed} sjekket i Brreg`,
     d.brreg.newFinancials ? `${d.brreg.newFinancials} nye regnskap` : null,
+    d.brreg.emailFound ? `${d.brreg.emailFound} e-poster` : null,
+    d.brreg.websiteFromEmail ? `${d.brreg.websiteFromEmail} nettsider fra e-postdomene` : null,
     d.ai.enabled ? `${d.ai.analyses} AI-vurderinger` : null,
     d.ai.contactCompanies ? `kontakter hos ${d.ai.contactCompanies}` : null,
     r.errors.length ? `${r.errors.length} feil` : null,
@@ -166,6 +168,7 @@ export async function runAiQueueAction(): Promise<
       analyses: number;
       contacts: number;
       websites: number;
+      scraped: number;
       errors: number;
       rateLimited: boolean;
       firstError: string | null;
@@ -187,6 +190,7 @@ export async function runAiQueueAction(): Promise<
     analyses: d.analyses,
     contacts: d.contactCompanies,
     websites: d.websitesFound,
+    scraped: d.sitesScraped ?? 0,
     errors: r.errors.length,
     rateLimited: r.errors.some((e) => /HTTP 429|RESOURCE_EXHAUSTED|quota/i.test(e.message)),
     firstError: r.errors[0] ? `${r.errors[0].scope}: ${r.errors[0].message}` : null,

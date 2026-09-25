@@ -63,12 +63,12 @@ export default function RunAiQueueButton({
         setRemaining(r.remaining);
         router.refresh();
         if (r.remaining === 0) {
-          setMsg('Ferdig — alle selskaper har vært gjennom AI-trinnet.');
+          setMsg('Ferdig — alle selskaper er AI-vurdert og alle kjente nettsider er lest.');
           break;
         }
         // Gemini's per-minute quota: back off and carry on rather than stop,
         // up to a point — five waits in a row means the daily quota is gone.
-        if (r.rateLimited && r.analyses === 0) {
+        if (r.rateLimited && r.analyses === 0 && r.scraped === 0) {
           rateLimitWaits++;
           if (rateLimitWaits > 5) {
             setMsg(`Stoppet: Gemini avviser fortsatt (kvote brukt opp?). ${r.firstError ?? ''}`);
@@ -79,9 +79,9 @@ export default function RunAiQueueButton({
           continue;
         }
         rateLimitWaits = 0;
-        // Two runs in a row with no successful analysis (and not a rate
-        // limit) means something is actually broken — stop and say what.
-        idleRuns = r.analyses === 0 ? idleRuns + 1 : 0;
+        // Two runs in a row with nothing done — no analysis and no website
+        // read (and not a rate limit) — means something is actually broken.
+        idleRuns = r.analyses === 0 && r.scraped === 0 ? idleRuns + 1 : 0;
         if (idleRuns >= 2) {
           setMsg(`Stoppet: to kjøringer på rad uten AI-vurdering. Første feil: ${r.firstError ?? 'ingen feil registrert'}`);
           break;

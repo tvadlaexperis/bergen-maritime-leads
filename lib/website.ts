@@ -46,6 +46,44 @@ const CONTACT_PAGE_KEYWORDS = [
   'ansatte', 'crew', 'people', 'staff', 'ledelse', 'organisasjon', 'our-team',
 ];
 
+// firma.no and www.firma.no are the same site — a stored website without
+// "www." used to discard every menu link that had it (and vice versa).
+function sameSite(a: string, b: string): boolean {
+  const bare = (h: string) => h.toLowerCase().replace(/^www\./, '');
+  return bare(a) === bare(b);
+}
+
+// Where Norwegian company sites usually keep their people, for when the
+// homepage menu doesn't link to them in a way findLikelyContactPages spots
+// (JS-rendered menus, icon-only links).
+const COMMON_CONTACT_PATHS = ['/kontakt', '/om-oss', '/ansatte', '/kontakt-oss', '/contact', '/about-us', '/team', '/people'];
+
+/**
+ * Pages to read for contacts: the best-matching links from the homepage,
+ * topped up with common paths on the same site, de-duplicated, capped to
+ * `limit`.
+ */
+export function contactPageCandidates(html: string, baseUrl: string, limit = 4): string[] {
+  const found = findLikelyContactPages(html, baseUrl, limit);
+  let base: URL;
+  try {
+    base = new URL(baseUrl);
+  } catch {
+    return found;
+  }
+  const seen = new Set(found.map((u) => u.replace(/\/$/, '').toLowerCase()));
+  const out = [...found];
+  for (const path of COMMON_CONTACT_PATHS) {
+    if (out.length >= limit) break;
+    const url = new URL(path, base).toString();
+    const key = url.replace(/\/$/, '').toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(url);
+  }
+  return out;
+}
+
 /**
  * Finds same-site links whose href or link text suggest an "about us" /
  * "contact" / "team" style page, ranked by how many keywords matched.
@@ -80,7 +118,7 @@ export function findLikelyContactPages(html: string, baseUrl: string, limit = 3)
     } catch {
       continue;
     }
-    if (abs.hostname !== base.hostname) continue; // same-site only
+    if (!sameSite(abs.hostname, base.hostname)) continue;
 
     const key = abs.toString();
     scores.set(key, Math.max(scores.get(key) ?? 0, score));
@@ -90,4 +128,31 @@ export function findLikelyContactPages(html: string, baseUrl: string, limit = 3)
     .sort((a, b) => b[1] - a[1])
     .slice(0, limit)
     .map(([url]) => url);
+}
+
+// Words too common in maritime company names to identify one on their own.
+const GENERIC_NAME_WORDS = new Set([
+  'as', 'asa', 'sa', 'da', 'ans', 'ks', 'nuf', 'norway', 'norge', 'norwegian', 'bergen', 'group', 'gruppen',
+  'holding', 'holdings', 'shipping', 'service', 'services', 'marine', 'maritime', 'invest', 'eiendom', 'rederi',
+  'offshore', 'subsea', 'teknikk', 'technology', 'solutions', 'og', 'and', 'the', 'of',
+]);
+
+/**
+ * Does this page look like the company's own site? Used before trusting a
+ * website derived from an email domain — post@obos.no on a boat harbour
+ * co-op means OBOS manages it, not that obos.no is the harbour's site.
+ * True if the page text has the org.nr, the full name (minus company form),
+ * or a distinctive (non-generic, 4+ letter) word from the name.
+ */
+export function siteMentionsCompany(html: string, companyName: string, orgnr: string): boolean {
+  const text = stripHtml(html).toLowerCase();
+  if (text.replace(/\s/g, '').includes(orgnr)) return true;
+  const words = companyName
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s&-]/gu, ' ')
+    .split(/\s+/)
+    .filter(Boolean);
+  const core = words.filter((w) => !['as', 'asa', 'sa', 'da', 'ans', 'ks', 'nuf'].includes(w)).join(' ');
+  if (core && text.includes(core)) return true;
+  return words.some((w) => w.length >= 4 && !GENERIC_NAME_WORDS.has(w) && text.includes(w));
 }

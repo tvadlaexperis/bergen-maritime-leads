@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { stripHtml, findLikelyContactPages } from './website';
+import { stripHtml, findLikelyContactPages, contactPageCandidates, siteMentionsCompany } from './website';
 
 describe('stripHtml', () => {
   it('removes tags, scripts and styles, decoding common entities', () => {
@@ -63,5 +63,33 @@ describe('findLikelyContactPages', () => {
     `;
     const links = findLikelyContactPages(html, 'https://firma.no', 2);
     expect(links).toHaveLength(2);
+  });
+});
+
+describe('contactPageCandidates', () => {
+  it('treats www and bare host as the same site', () => {
+    const html = '<a href="https://www.firma.no/kontakt">Kontakt</a><a href="https://annet.no/team">Team</a>';
+    expect(contactPageCandidates(html, 'https://firma.no', 1)).toEqual(['https://www.firma.no/kontakt']);
+  });
+  it('tops up with common paths, without duplicates', () => {
+    const html = '<a href="/kontakt">Kontakt oss</a>';
+    expect(contactPageCandidates(html, 'https://firma.no', 3)).toEqual([
+      'https://firma.no/kontakt',
+      'https://firma.no/om-oss',
+      'https://firma.no/ansatte',
+    ]);
+  });
+});
+
+describe('siteMentionsCompany', () => {
+  it('accepts a page naming the company', () => {
+    expect(siteMentionsCompany('<h1>Beerenberg</h1><p>Welcome</p>', 'BEERENBERG SERVICES AS', '123456789')).toBe(true);
+    expect(siteMentionsCompany('<p>Bergen Marine Service AS</p>', 'BERGEN MARINE SERVICE AS', '123456789')).toBe(true);
+    expect(siteMentionsCompany('<footer>Org.nr 996 824 888</footer>', 'NOE HELT ANNET AS', '996824888')).toBe(true);
+  });
+  it("rejects a manager's or group's site", () => {
+    expect(siteMentionsCompany('<h1>OBOS</h1><p>Bolig i Bergen</p>', 'ELSESRO BÅTHAVN SA', '912345678')).toBe(false);
+    // Only generic words shared: not enough.
+    expect(siteMentionsCompany('<p>Marine services in Bergen</p>', 'BERGEN MARINE SERVICE AS', '123456789')).toBe(false);
   });
 });

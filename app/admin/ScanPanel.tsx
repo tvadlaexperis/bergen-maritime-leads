@@ -268,7 +268,7 @@ export default function ScanPanel({
                     {cell(<Num n={d ? d.brreg.newFinancials : s.financials_fetched} />)}
                     {cell(<Num n={d ? d.brreg.ceoSet + d.brreg.ceoChanged + d.brreg.boardUpdated : null} />)}
                     {cell(<Num n={d ? (d.ai.enabled ? d.ai.analyses : null) : null} />)}
-                    {cell(<Num n={d ? (d.ai.enabled ? d.ai.websitesFound : null) : null} />)}
+                    {cell(<Num n={d ? (d.ai.enabled ? d.ai.websitesFound : 0) + (d.brreg.websiteFromEmail ?? 0) : null} />)}
                     {cell(
                       d && d.ai.enabled ? (
                         <>
@@ -359,7 +359,9 @@ function ScanDetailsView({
           <>
             Brreg: {d.brreg.processed} av {d.brreg.queued} i køen sjekket — {d.brreg.newFinancials} nye regnskap,{' '}
             {d.brreg.ceoSet} daglig leder funnet, {d.brreg.ceoChanged} ny daglig leder, {d.brreg.boardUpdated} styrer
-            oppdatert, {d.brreg.scoreChanged} endret score.{' '}
+            oppdatert, {d.brreg.scoreChanged} endret score
+            {d.brreg.emailFound ? `, ${d.brreg.emailFound} e-poster` : ''}
+            {d.brreg.websiteFromEmail ? `, ${d.brreg.websiteFromEmail} nettsider fra e-postdomene` : ''}.{' '}
           </>
         ) : d.trigger !== 'ai' ? (
           <>Brreg: ingen selskaper forfalt. </>
@@ -367,7 +369,8 @@ function ScanDetailsView({
         {d.ai.enabled ? (
           <>
             AI: {d.ai.processed} selskaper — {d.ai.analyses} vurderinger, {d.ai.websitesFound} nettsider funnet,
-            kontakter hos {d.ai.contactCompanies} ({d.ai.contactPeople} personer).
+            kontakter hos {d.ai.contactCompanies} ({d.ai.contactPeople} personer)
+            {d.ai.sitesScraped != null && `, ${d.ai.sitesScraped} nettsider lest`}.
           </>
         ) : (
           <span className="muted">AI-trinnet er av (GEMINI_API_KEY mangler).</span>

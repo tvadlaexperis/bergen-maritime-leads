@@ -66,6 +66,7 @@ export interface Company {
   ai_analysis_at: number | null;
   website_search_attempted_at: number | null;
   ai_attempted_at: number | null;
+  contacts_scraped_at: number | null;
   discovered_at: number;
   last_refreshed_at: number | null;
   updated_at: number;
@@ -193,6 +194,7 @@ const CONTACT_COLUMNS = [
   'website_search_attempted_at INTEGER',
   'email TEXT',
   'ai_attempted_at INTEGER',
+  'contacts_scraped_at INTEGER',
 ];
 
 async function addColumnsIfMissing(table: string, columns: string[]): Promise<void> {
@@ -974,6 +976,11 @@ export async function setCompanyAiAnalysis(id: number, analysisJson: string): Pr
   });
 }
 
+export async function setContactsScraped(id: number): Promise<void> {
+  const c = await db();
+  await c.execute({ sql: 'UPDATE companies SET contacts_scraped_at = ? WHERE id = ?', args: [Date.now(), id] });
+}
+
 export async function setAiAttempted(id: number): Promise<void> {
   const c = await db();
   await c.execute({ sql: 'UPDATE companies SET ai_attempted_at = ? WHERE id = ?', args: [Date.now(), id] });
@@ -1057,20 +1064,27 @@ export async function listCompaniesToRefresh(limit: number, staleDays = 3): Prom
   return plain<CompanyWithScore>(res.rows);
 }
 
+// A website we've never successfully read for contacts (and that has none
+// stored — rows from before contacts_scraped_at existed count as read).
+const NEEDS_CONTACT_SCRAPE = `(co.website IS NOT NULL AND co.contacts_scraped_at IS NULL
+  AND NOT EXISTS (SELECT 1 FROM company_contacts cc WHERE cc.company_id = co.id AND cc.source = 'nettside'))`;
+const AI_PENDING = `(co.ai_analysis_at IS NULL OR ${NEEDS_CONTACT_SCRAPE})`;
+
 // The AI pass (ai.analyze / findWebsite / extractContacts) is the slow,
 // paid part of enrichment — a handful of companies per run at most — so it
-// gets its own queue instead of riding along with the Brreg rotation: never-
-// analyzed companies first — never-attempted before previously-failed, best
-// lead score first within that — then the oldest analysis. The sales team
-// sees the top of the list covered first. Within each group the *attempt*
-// time orders the rotation, so a company Gemini keeps failing on moves back
-// behind the others instead of blocking the head of the queue every run.
+// gets its own queue instead of riding along with the Brreg rotation.
+// Pending companies first (never analyzed, or a website never read for
+// contacts — e.g. one just derived from the email domain), best lead score
+// first within that; then everyone else by oldest analysis. Within each
+// group the *attempt* time orders the rotation, so a company Gemini keeps
+// failing on moves back behind the others instead of blocking the head of
+// the queue every run.
 export async function listCompaniesForAi(limit: number): Promise<CompanyWithScore[]> {
   const c = await db();
   const res = await c.execute({
     sql: `SELECT co.*, ${SCORE_COLS} FROM companies co ${SCORE_JOIN}
           WHERE co.status = 'active'
-          ORDER BY (co.ai_analysis_at IS NOT NULL), COALESCE(co.ai_attempted_at, co.ai_analysis_at, 0) ASC,
+          ORDER BY (NOT ${AI_PENDING}), COALESCE(co.ai_attempted_at, co.ai_analysis_at, 0) ASC,
             COALESCE(sc.lead_score, -1) DESC
           LIMIT ?`,
     args: [limit],
@@ -1078,11 +1092,12 @@ export async function listCompaniesForAi(limit: number): Promise<CompanyWithScor
   return plain<CompanyWithScore>(res.rows);
 }
 
-// Companies with no AI analysis yet — what "Kjør AI-køen" counts down. Only
-// a successful analysis takes a company off this count, not a failed attempt.
+// What "Kjør AI-køen" counts down: no AI analysis yet, or a website we've
+// never read for contacts. Only a success takes a company off the count,
+// not a failed attempt.
 export async function countAiPending(): Promise<number> {
   const c = await db();
-  const res = await c.execute("SELECT COUNT(*) AS n FROM companies WHERE status = 'active' AND ai_analysis_at IS NULL");
+  const res = await c.execute(`SELECT COUNT(*) AS n FROM companies co WHERE co.status = 'active' AND ${AI_PENDING}`);
   return Number((res.rows[0] as unknown as { n: number }).n);
 }
 
