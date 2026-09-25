@@ -227,6 +227,7 @@ export default function ScanPanel({
                   Ledelse/styre
                 </th>
                 <th className="col-right">AI-vurdert</th>
+                <th className="col-right" title="Nye nyhetsartikler funnet i nettsøk">Nyheter</th>
                 <th className="col-right">Nettsider</th>
                 <th
                   className="col-right"
@@ -271,6 +272,7 @@ export default function ScanPanel({
                     {cell(<Num n={d ? d.brreg.newFinancials : s.financials_fetched} />)}
                     {cell(<Num n={d ? d.brreg.ceoSet + d.brreg.ceoChanged + d.brreg.boardUpdated : null} />)}
                     {cell(<Num n={d ? (d.ai.enabled ? d.ai.analyses : null) : null} />)}
+                    {cell(<Num n={d && d.ai.enabled ? (d.ai.newsFound ?? null) : null} />)}
                     {cell(<Num n={d ? (d.ai.enabled ? d.ai.websitesFound : 0) + (d.brreg.websiteFromEmail ?? 0) : null} />)}
                     {cell(
                       d && d.ai.enabled ? (
@@ -296,7 +298,7 @@ export default function ScanPanel({
                   open && (
                     <tr key={`${s.id}-details`}>
                       <td
-                        colSpan={11}
+                        colSpan={12}
                         style={{
                           padding: '12px 20px 18px',
                           background: 'var(--surface-raised)',
@@ -310,7 +312,7 @@ export default function ScanPanel({
               })}
               {scans.length === 0 && (
                 <tr>
-                  <td colSpan={11} className="muted" style={{ textAlign: 'center', padding: 24 }}>
+                  <td colSpan={12} className="muted" style={{ textAlign: 'center', padding: 24 }}>
                     Ingen skann ennå.
                   </td>
                 </tr>
@@ -373,7 +375,8 @@ function ScanDetailsView({
           <>
             AI: {d.ai.processed} selskaper — {d.ai.analyses} vurderinger, {d.ai.websitesFound} nettsider funnet,
             kontakter hos {d.ai.contactCompanies} ({d.ai.contactPeople} personer)
-            {d.ai.sitesScraped != null && `, ${d.ai.sitesScraped} nettsider lest`}.
+            {d.ai.sitesScraped != null && `, ${d.ai.sitesScraped} nettsider lest`}
+            {d.ai.newsSearched != null && `, nyheter søkt for ${d.ai.newsSearched} (${d.ai.newsFound ?? 0} nye artikler)`}.
           </>
         ) : (
           <span className="muted">AI-trinnet er av (GEMINI_API_KEY mangler).</span>

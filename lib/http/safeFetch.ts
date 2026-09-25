@@ -74,7 +74,9 @@ export interface SafeFetchOptions {
   body?: string;
 }
 
-export type SafeFetchResult = { ok: true; text: string } | { ok: false; reason: string };
+export type SafeFetchResult =
+  | { ok: true; text: string; finalUrl: string }
+  | { ok: false; reason: string; status?: number };
 
 /** Fetches a URL, returning the body text, or null on any failure/violation. */
 export async function safeFetchText(rawUrl: string, opts: SafeFetchOptions = {}): Promise<string | null> {
@@ -133,7 +135,7 @@ export async function safeFetchResult(rawUrl: string, opts: SafeFetchOptions = {
         } catch {
           // body unreadable — the status alone will do
         }
-        return { ok: false, reason: `HTTP ${res.status}${snippet ? `: ${snippet}` : ''}` };
+        return { ok: false, reason: `HTTP ${res.status}${snippet ? `: ${snippet}` : ''}`, status: res.status };
       }
 
       // Read with a byte cap.
@@ -150,7 +152,11 @@ export async function safeFetchResult(rawUrl: string, opts: SafeFetchOptions = {
         }
         chunks.push(value);
       }
-      return { ok: true, text: Buffer.concat(chunks.map((c) => Buffer.from(c))).toString('utf8') };
+      return {
+        ok: true,
+        text: Buffer.concat(chunks.map((c) => Buffer.from(c))).toString('utf8'),
+        finalUrl: current.toString(),
+      };
     }
     return { ok: false, reason: 'for mange omdirigeringer' };
   } catch (e) {

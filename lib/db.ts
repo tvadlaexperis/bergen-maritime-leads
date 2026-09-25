@@ -67,6 +67,7 @@ export interface Company {
   website_search_attempted_at: number | null;
   ai_attempted_at: number | null;
   contacts_scraped_at: number | null;
+  news_checked_at: number | null;
   discovered_at: number;
   last_refreshed_at: number | null;
   updated_at: number;
@@ -103,6 +104,18 @@ export interface WebsiteContact {
   email: string | null;
   phone: string | null;
   source: ContactSource;
+  fetched_at: number;
+}
+
+export interface CompanyNewsRow {
+  id: number;
+  company_id: number;
+  title: string;
+  url: string;
+  source: string | null;
+  published_at: string | null; // YYYY-MM-DD
+  summary: string | null;
+  category: string;
   fetched_at: number;
 }
 
@@ -195,6 +208,7 @@ const CONTACT_COLUMNS = [
   'email TEXT',
   'ai_attempted_at INTEGER',
   'contacts_scraped_at INTEGER',
+  'news_checked_at INTEGER',
 ];
 
 async function addColumnsIfMissing(table: string, columns: string[]): Promise<void> {
@@ -317,6 +331,19 @@ async function ensureSchema(): Promise<void> {
         fetched_at INTEGER NOT NULL
       );
       CREATE INDEX IF NOT EXISTS idx_contacts_company ON company_contacts(company_id);
+
+      CREATE TABLE IF NOT EXISTS company_news (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+        title TEXT NOT NULL,
+        url TEXT NOT NULL,
+        source TEXT,
+        published_at TEXT,
+        summary TEXT,
+        category TEXT NOT NULL DEFAULT 'annet',
+        fetched_at INTEGER NOT NULL
+      );
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_news_company_url ON company_news(company_id, url);
 
       CREATE TABLE IF NOT EXISTS notifications (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -535,6 +562,7 @@ export interface DataCoverage {
   withCeo: number;
   withEmail: number;
   withBoard: number;
+  withNews: number;
 }
 
 // One query, not `listCompaniesWithScore()` + counting in JS — this is a
@@ -553,7 +581,8 @@ export async function getDataCoverage(): Promise<DataCoverage> {
       COUNT(CASE WHEN EXISTS (SELECT 1 FROM company_contacts cc WHERE cc.company_id = co.id AND cc.source = 'nettside') THEN 1 END) AS with_website_contacts,
       COUNT(CASE WHEN co.ceo_name IS NOT NULL THEN 1 END) AS with_ceo,
       COUNT(CASE WHEN co.email IS NOT NULL THEN 1 END) AS with_email,
-      COUNT(CASE WHEN EXISTS (SELECT 1 FROM company_contacts cc WHERE cc.company_id = co.id AND cc.source = 'brreg') THEN 1 END) AS with_board
+      COUNT(CASE WHEN EXISTS (SELECT 1 FROM company_contacts cc WHERE cc.company_id = co.id AND cc.source = 'brreg') THEN 1 END) AS with_board,
+      COUNT(CASE WHEN EXISTS (SELECT 1 FROM company_news n WHERE n.company_id = co.id) THEN 1 END) AS with_news
     FROM companies co
     WHERE co.status = 'active'
   `);
@@ -568,6 +597,7 @@ export async function getDataCoverage(): Promise<DataCoverage> {
     withCeo: Number(r.with_ceo),
     withEmail: Number(r.with_email),
     withBoard: Number(r.with_board),
+    withNews: Number(r.with_news),
   };
 }
 
@@ -580,6 +610,7 @@ export const COVERAGE_CATEGORIES = [
   'ceo',
   'email',
   'board',
+  'news',
 ] as const;
 export type CoverageCategory = (typeof COVERAGE_CATEGORIES)[number];
 
@@ -599,6 +630,7 @@ const COVERAGE_WHERE: Record<CoverageCategory, string> = {
   ceo: 'co.ceo_name IS NOT NULL',
   email: 'co.email IS NOT NULL',
   board: "EXISTS (SELECT 1 FROM company_contacts cc WHERE cc.company_id = co.id AND cc.source = 'brreg')",
+  news: 'EXISTS (SELECT 1 FROM company_news n WHERE n.company_id = co.id)',
 };
 
 export type CoverageMode = 'har' | 'mangler';
@@ -976,6 +1008,54 @@ export async function setCompanyAiAnalysis(id: number, analysisJson: string): Pr
   });
 }
 
+export async function listCompanyNews(companyId: number, limit = 6): Promise<CompanyNewsRow[]> {
+  const c = await db();
+  const res = await c.execute({
+    sql: `SELECT * FROM company_news WHERE company_id = ?
+          ORDER BY (published_at IS NULL), published_at DESC, fetched_at DESC LIMIT ?`,
+    args: [companyId, limit],
+  });
+  return plain<CompanyNewsRow>(res.rows);
+}
+
+// Adds newly found articles (unique per company+url) and prunes ones older
+// than ~18 months, keeping the 10 newest. Merges rather than replaces: a
+// search that misses an article this month doesn't mean it stopped existing.
+// Returns the articles that weren't stored before.
+export async function mergeCompanyNews(
+  companyId: number,
+  items: { title: string; url: string; source: string; date: string | null; summary: string; category: string }[],
+): Promise<typeof items> {
+  const c = await db();
+  const now = Date.now();
+  const existing = new Set(
+    (await c.execute({ sql: 'SELECT url FROM company_news WHERE company_id = ?', args: [companyId] })).rows.map((r) =>
+      String((r as unknown as { url: string }).url),
+    ),
+  );
+  const fresh = items.filter((n) => !existing.has(n.url));
+  const cutoff = new Date(now - 548 * 86_400_000).toISOString().slice(0, 10);
+  await c.batch(
+    [
+      ...fresh.map((n) => ({
+        sql: `INSERT OR IGNORE INTO company_news (company_id, title, url, source, published_at, summary, category, fetched_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        args: [companyId, n.title, n.url, n.source, n.date, n.summary, n.category, now],
+      })),
+      { sql: 'DELETE FROM company_news WHERE company_id = ? AND published_at IS NOT NULL AND published_at < ?', args: [companyId, cutoff] },
+      {
+        sql: `DELETE FROM company_news WHERE company_id = ? AND id NOT IN (
+                SELECT id FROM company_news WHERE company_id = ?
+                ORDER BY (published_at IS NULL), published_at DESC, fetched_at DESC LIMIT 10)`,
+        args: [companyId, companyId],
+      },
+      { sql: 'UPDATE companies SET news_checked_at = ? WHERE id = ?', args: [now, companyId] },
+    ],
+    'write',
+  );
+  return fresh;
+}
+
 export async function setContactsScraped(id: number): Promise<void> {
   const c = await db();
   await c.execute({ sql: 'UPDATE companies SET contacts_scraped_at = ? WHERE id = ?', args: [Date.now(), id] });
@@ -1082,7 +1162,12 @@ export async function countBrregStale(staleDays = 3): Promise<number> {
 // stored — rows from before contacts_scraped_at existed count as read).
 const NEEDS_CONTACT_SCRAPE = `(co.website IS NOT NULL AND co.contacts_scraped_at IS NULL
   AND NOT EXISTS (SELECT 1 FROM company_contacts cc WHERE cc.company_id = co.id AND cc.source = 'nettside'))`;
-const AI_PENDING = `(co.ai_analysis_at IS NULL OR ${NEEDS_CONTACT_SCRAPE})`;
+// News is re-searched every NEWS_REFRESH_DAYS (Google Search-grounded, billed
+// per search — 5,000/month free across Gemini 3.x).
+export const NEWS_REFRESH_DAYS = 30;
+const NEWS_DUE = `(co.news_checked_at IS NULL
+  OR co.news_checked_at < CAST(strftime('%s', 'now') AS INTEGER) * 1000 - ${NEWS_REFRESH_DAYS} * 86400000)`;
+const AI_PENDING = `(co.ai_analysis_at IS NULL OR ${NEEDS_CONTACT_SCRAPE} OR ${NEWS_DUE})`;
 
 // The AI pass (ai.analyze / findWebsite / extractContacts) is the slow,
 // paid part of enrichment — a handful of companies per run at most — so it

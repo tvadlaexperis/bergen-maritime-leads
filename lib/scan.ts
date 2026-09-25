@@ -4,7 +4,7 @@ import type { LeadAnalysis } from './orchestrator/providers/ai';
 import { websiteFromEmail, type Company as RawCompany, type KonsernInfo, type Roller } from './brreg';
 import { safeFetchText } from './http/safeFetch';
 import { siteMentionsCompany } from './website';
-import { getCompanyNews } from './news';
+import type { FoundNews } from './companyNews';
 import { scoreBand } from './score';
 import type { CompanyFinancials } from './types';
 import {
@@ -22,6 +22,9 @@ import {
   setWebsiteSearchAttempted,
   setAiAttempted,
   setContactsScraped,
+  listCompanyNews,
+  mergeCompanyNews,
+  NEWS_REFRESH_DAYS,
   replaceContacts,
   listWebsiteContacts,
   addNotification,
@@ -70,6 +73,8 @@ export interface ScanDetails {
     contactCompanies: number;
     contactPeople: number;
     sitesScraped?: number; // websites read for contacts (successful Gemini call, found people or not)
+    newsSearched?: number; // companies whose news search completed
+    newsFound?: number; // articles not stored before
   };
   companies: { orgnr: string; name: string; changes: string[] }[];
   changedCount: number; // before `companies` is capped for storage
@@ -106,6 +111,8 @@ function emptyDetails(trigger: ScanTrigger): ScanDetails {
       contactCompanies: 0,
       contactPeople: 0,
       sitesScraped: 0,
+      newsSearched: 0,
+      newsFound: 0,
     },
     companies: [],
     changedCount: 0,
@@ -370,13 +377,46 @@ async function aiPass(
   await setAiAttempted(company.id);
   const budget = (ms: number) => Math.max(1_000, Math.min(ms, deadline - Date.now()));
 
+  // News first, so a fresh analysis gets to use it (buying signals). Found
+  // articles are merged into company_news; an analysis done only because of
+  // new news would be wasteful, so news alone never forces one.
+  const newsDue =
+    force ||
+    company.news_checked_at == null ||
+    Date.now() - company.news_checked_at > NEWS_REFRESH_DAYS * 86_400_000;
+  const newsJob = async () => {
+    if (!newsDue) return;
+    const found = await orchestrator.callTool<FoundNews[]>(
+      'ai.findNews',
+      { name: company.name, orgnr: company.orgnr, poststed: company.poststed, website: company.website },
+      budget(30_000),
+    );
+    if (!found.ok) {
+      errors.push({ scope: `ai.findNews ${orgnr}`, message: found.error });
+      return;
+    }
+    const fresh = await mergeCompanyNews(company.id, found.data);
+    stats.newsSearched = (stats.newsSearched ?? 0) + 1;
+    stats.newsFound = (stats.newsFound ?? 0) + fresh.length;
+    if (fresh.length) {
+      log.change(`${fresh.length} ${fresh.length === 1 ? 'ny nyhet' : 'nye nyheter'}`);
+      // Only recent, concrete news goes to the bell — "annet" and old
+      // articles found on a first search are just background.
+      const recent = fresh.filter(
+        (n) => n.category !== 'annet' && n.date && Date.now() - Date.parse(n.date) < 60 * 86_400_000,
+      );
+      for (const n of recent.slice(0, 2)) log.change(`Nyhet: ${n.title}`, true);
+    }
+  };
+
   const analysisJob = async () => {
+    await newsJob();
     if (analysisFresh) return;
     const priorSignalLevel = parseBuyingSignalLevel(company.ai_analysis);
     const [history, board, news] = await Promise.all([
       listFinancials(company.id),
       listWebsiteContacts(company.id),
-      getCompanyNews(company.name, 5),
+      listCompanyNews(company.id, 5),
     ]);
     const contacts: { role: string; name: string }[] = [
       { role: 'Daglig leder', name: company.ceo_name },
@@ -402,7 +442,13 @@ async function aiPass(
         })),
         leadScore: company.lead_score,
         band: company.lead_score != null ? scoreBand(company.lead_score) : null,
-        news: news.map((n) => ({ title: n.title, date: n.seenAt, domain: n.domain })),
+        news: news.map((n) => ({
+          title: n.title,
+          date: n.published_at,
+          domain: n.source ?? '',
+          summary: n.summary ?? undefined,
+          category: n.category,
+        })),
         contacts,
       },
       budget(40_000),

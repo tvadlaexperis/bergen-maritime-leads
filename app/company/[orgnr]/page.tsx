@@ -1,7 +1,16 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
-import { getCompanyByOrgnr, getCompany, listFinancials, getScoreHistory, listSiblingCompanies, listWebsiteContacts } from '@/lib/db';
+import {
+  getCompanyByOrgnr,
+  getCompany,
+  listFinancials,
+  getScoreHistory,
+  listSiblingCompanies,
+  listWebsiteContacts,
+  listCompanyNews,
+} from '@/lib/db';
+import { NEWS_CATEGORY_LABEL, type NewsCategory } from '@/lib/companyNews';
 import { getCurrentUser } from '@/lib/auth';
 import {
   isValidOrgnr,
@@ -12,7 +21,7 @@ import {
   linkedinPeopleUrl,
   linkedinRoleSearchUrl,
 } from '@/lib/brreg';
-import { getCompanyNews, type NewsItem } from '@/lib/news';
+import { getCompanyNews } from '@/lib/news';
 import { fmtNok, fmtPct, fmtInt, dateLabel } from '@/app/format';
 import { bandFor } from '@/app/components/ScoreBadge';
 import type { LeadAnalysis, ScoreVerdict, SignalLevel } from '@/lib/orchestrator/providers/ai';
@@ -61,14 +70,34 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
   if (!co) notFound();
 
   const base = await getCompany(co.id);
-  const [financials, history, user, news, siblings, allContacts] = await Promise.all([
+  const [financials, history, user, storedNews, siblings, allContacts] = await Promise.all([
     listFinancials(co.id),
     getScoreHistory(co.id, 12),
     getCurrentUser(),
-    getCompanyNews(co.name),
+    listCompanyNews(co.id, 6),
     co.parent_orgnr ? listSiblingCompanies(co.parent_orgnr, co.orgnr) : Promise.resolve([]),
     listWebsiteContacts(co.id),
   ]);
+  // Stored news from the AI pass's web search; companies it hasn't searched
+  // yet fall back to a live GDELT lookup (often empty — see lib/companyNews.ts).
+  const news: { title: string; url: string; source: string; date: string | null; summary: string | null; category: string | null }[] =
+    co.news_checked_at != null
+      ? storedNews.map((n) => ({
+          title: n.title,
+          url: n.url,
+          source: n.source ?? '',
+          date: n.published_at,
+          summary: n.summary,
+          category: n.category,
+        }))
+      : (await getCompanyNews(co.name)).map((n) => ({
+          title: n.title,
+          url: n.url,
+          source: n.domain,
+          date: n.seenAt,
+          summary: null,
+          category: null,
+        }));
   const websiteContacts = allContacts.filter((c) => c.source !== 'brreg');
   const boardContacts = allContacts.filter((c) => c.source === 'brreg');
   const liName = linkedinCompanyName(co.name);
@@ -388,19 +417,27 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
           <div className="box">
             <div className="box-header">
               <span className="box-title">Nyheter</span>
-              <span className="muted">GDELT</span>
+              <span className="muted" style={{ fontSize: '0.72rem' }}>
+                {co.news_checked_at != null ? `nettsøk · sjekket ${dateLabel(co.news_checked_at)}` : 'GDELT'}
+              </span>
             </div>
             <div className="box-pad">
               {news.length === 0 ? (
-                <p className="muted" style={{ fontSize: '0.85rem' }}>Ingen nyhetstreff siste tiden.</p>
+                <p className="muted" style={{ fontSize: '0.85rem' }}>
+                  {co.news_checked_at != null ? 'Ingen nyheter funnet siste 12 måneder.' : 'Ingen nyhetstreff siste tiden.'}
+                </p>
               ) : (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12 }}>
-                  {news.map((n: NewsItem) => (
+                  {news.map((n) => (
                     <a key={n.url} href={n.url} target="_blank" rel="noopener noreferrer" className="news-card">
+                      {n.category && n.category !== 'annet' && (
+                        <span className="news-card-tag">{NEWS_CATEGORY_LABEL[n.category as NewsCategory] ?? n.category}</span>
+                      )}
                       <span className="news-card-title">{n.title}</span>
+                      {n.summary && <span className="news-card-summary">{n.summary}</span>}
                       <span className="muted" style={{ fontSize: '0.72rem' }}>
-                        {n.domain}
-                        {n.seenAt ? ` · ${dateLabel(n.seenAt)}` : ''}
+                        {n.source}
+                        {n.date ? ` · ${dateLabel(n.date)}` : ''}
                       </span>
                     </a>
                   ))}

@@ -119,6 +119,7 @@ export default async function AdminPage({
               { key: 'ceo', label: 'Daglig leder (Brreg)', value: coverage.withCeo },
               { key: 'board', label: 'Styre (Brreg)', value: coverage.withBoard },
               { key: 'email', label: 'Firma-e-post (Brreg)', value: coverage.withEmail },
+              { key: 'news', label: 'Nyheter funnet (siste 12 mnd)', value: coverage.withNews },
             ] as const;
             const selectedLabel = rows.find((r) => r.key === category)?.label;
 

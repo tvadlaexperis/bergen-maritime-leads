@@ -4,8 +4,16 @@ import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { runAiQueueAction, runScanAction } from './actions';
 
-type Totals = { runs: number; processed: number; analyses: number; contacts: number; websites: number; errors: number };
-const ZERO: Totals = { runs: 0, processed: 0, analyses: 0, contacts: 0, websites: 0, errors: 0 };
+type Totals = {
+  runs: number;
+  processed: number;
+  analyses: number;
+  contacts: number;
+  websites: number;
+  news: number;
+  errors: number;
+};
+const ZERO: Totals = { runs: 0, processed: 0, analyses: 0, contacts: 0, websites: 0, news: 0, errors: 0 };
 
 type Phase = 'brreg' | 'ai';
 
@@ -89,6 +97,7 @@ export default function RunUpdateAllButton({
           analyses: t.analyses + r.analyses,
           contacts: t.contacts + r.contacts,
           websites: t.websites + r.websites,
+          news: t.news + r.newsFound,
           errors: t.errors + r.errors,
         };
         setTotals(t);
@@ -100,7 +109,8 @@ export default function RunUpdateAllButton({
         }
         // Gemini's per-minute quota: back off and carry on rather than stop,
         // up to a point — five waits in a row means the daily quota is gone.
-        if (r.rateLimited && r.analyses === 0 && r.scraped === 0) {
+        const didWork = r.analyses > 0 || r.scraped > 0 || r.newsSearched > 0;
+        if (r.rateLimited && !didWork) {
           rateLimitWaits++;
           if (rateLimitWaits > 5) {
             setMsg(`Stoppet: Gemini avviser fortsatt (kvote brukt opp?). ${r.firstError ?? ''}`);
@@ -111,9 +121,9 @@ export default function RunUpdateAllButton({
           continue;
         }
         rateLimitWaits = 0;
-        // Two runs in a row with nothing done — no analysis and no website
-        // read (and not a rate limit) — means something is actually broken.
-        idleRuns = r.analyses === 0 && r.scraped === 0 ? idleRuns + 1 : 0;
+        // Two runs in a row with nothing done — no analysis, website read or
+        // news search (and not a rate limit) — means something is broken.
+        idleRuns = didWork ? 0 : idleRuns + 1;
         if (idleRuns >= 2) {
           setMsg(`Stoppet: to kjøringer på rad uten AI-vurdering. Første feil: ${r.firstError ?? 'ingen feil registrert'}`);
           break;
@@ -135,7 +145,7 @@ export default function RunUpdateAllButton({
   let status: string | null = null;
   if (running || totals.runs > 0 || brregChecked > 0) {
     const brregPart = `Brreg: ${brregChecked} sjekket, ${stale} gjenstår`;
-    const aiPart = `AI: ${totals.analyses} vurdert, ${totals.websites} nettsider, kontakter hos ${totals.contacts}${
+    const aiPart = `AI: ${totals.analyses} vurdert, ${totals.news} nyheter, ${totals.websites} nettsider, kontakter hos ${totals.contacts}${
       totals.errors ? `, ${totals.errors} feil` : ''
     }, ${remaining} igjen`;
     const now = !running

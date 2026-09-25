@@ -170,6 +170,8 @@ export async function runAiQueueAction(): Promise<
       contacts: number;
       websites: number;
       scraped: number;
+      newsSearched: number;
+      newsFound: number;
       errors: number;
       rateLimited: boolean;
       firstError: string | null;
@@ -182,7 +184,7 @@ export async function runAiQueueAction(): Promise<
   const d = r.details.ai;
   await audit('scan.ai', {
     actor: user.email,
-    detail: `${d.processed} forsøkt, ${d.analyses} vurderinger, ${d.websitesFound} nettsider, kontakter hos ${d.contactCompanies}, ${r.errors.length} feil`,
+    detail: `${d.processed} forsøkt, ${d.analyses} vurderinger, ${d.websitesFound} nettsider, kontakter hos ${d.contactCompanies}, ${d.newsFound ?? 0} nyheter, ${r.errors.length} feil`,
   });
   revalidatePath('/');
   revalidatePath('/admin');
@@ -192,6 +194,8 @@ export async function runAiQueueAction(): Promise<
     contacts: d.contactCompanies,
     websites: d.websitesFound,
     scraped: d.sitesScraped ?? 0,
+    newsSearched: d.newsSearched ?? 0,
+    newsFound: d.newsFound ?? 0,
     errors: r.errors.length,
     rateLimited: r.errors.some((e) => /HTTP 429|RESOURCE_EXHAUSTED|quota/i.test(e.message)),
     firstError: r.errors[0] ? `${r.errors[0].scope}: ${r.errors[0].message}` : null,

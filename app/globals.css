@@ -461,6 +461,27 @@ a {
   border-color: var(--accent-border);
   background: var(--accent-soft);
 }
+.news-card-tag {
+  align-self: flex-start;
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-border);
+  border-radius: var(--radius-pill);
+  padding: 1px 8px;
+}
+.news-card-summary {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
 .news-card-title {
   font-size: 0.86rem;
   font-weight: 600;

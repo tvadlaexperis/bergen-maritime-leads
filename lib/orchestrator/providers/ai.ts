@@ -2,6 +2,7 @@ import type { Provider } from '../types';
 import { safeFetchText, safeFetchResult } from '../../http/safeFetch';
 import { cleanWebsite } from '../../brreg';
 import { stripHtml, contactPageCandidates } from '../../website';
+import { parseNewsAnswer, NEWS_CATEGORIES, type FoundNews } from '../../companyNews';
 
 // Gemini Flash builds the structured "Om selskapet" analysis (customer-fit
 // score factors, buying signals, recommended entry point). Free-tier
@@ -19,7 +20,7 @@ export interface LeadAnalysisInput {
   financials: { year: number; revenue: number | null; operatingResult: number | null; profit: number | null }[]; // newest first
   leadScore: number | null;
   band: 'low' | 'mid' | 'high' | null;
-  news: { title: string; date: string | null; domain: string }[];
+  news: { title: string; date: string | null; domain: string; summary?: string; category?: string }[];
   contacts: { role: string; name: string }[]; // whichever of ceo/contact/cto/sales are filled in
 }
 
@@ -117,7 +118,11 @@ function buildPrompt(input: LeadAnalysisInput): string {
     .join('\n');
   const newsLines = input.news
     .slice(0, 5)
-    .map((n) => `  "${n.title}" (${n.domain}${n.date ? `, ${n.date.slice(0, 10)}` : ''})`)
+    .map(
+      (n) =>
+        `  "${n.title}" (${n.domain}${n.date ? `, ${n.date.slice(0, 10)}` : ''}${n.category ? `, ${n.category}` : ''})` +
+        (n.summary ? ` — ${n.summary}` : ''),
+    )
     .join('\n');
   const contactLines = input.contacts.map((c) => `  ${c.role}: ${c.name}`).join('\n');
 
@@ -130,7 +135,7 @@ function buildPrompt(input: LeadAnalysisInput): string {
     input.leadScore != null ? `Beregnet lead-score (størrelse/omsetning/vekst/lønnsomhet): ${input.leadScore}/100 (${input.band})` : null,
     finLines ? `Regnskapstall per år (nyeste først):\n${finLines}` : 'Regnskapstall: ingen registrert.',
     contactLines ? `Registrerte kontaktpersoner:\n${contactLines}` : 'Registrerte kontaktpersoner: ingen.',
-    newsLines ? `Nylige nyhetstreff (GDELT):\n${newsLines}` : 'Nyhetstreff: ingen funnet.',
+    newsLines ? `Nyheter siste 12 måneder (nettsøk):\n${newsLines}` : 'Nyheter: ingen funnet i nettsøk.',
   ]
     .filter(Boolean)
     .join('\n');
@@ -244,6 +249,65 @@ async function requestWebsite(input: FindWebsiteInput): Promise<string | null> {
   return cleanWebsite(text);
 }
 
+// --- News about the company (Google Search-grounded) ----------------------
+// Billed per search query like findWebsite, but refreshed only every ~30 days
+// per company (lib/scan.ts). Structured output isn't combined with the search
+// tool here, so the model is asked for a bare JSON array and
+// lib/companyNews.ts#parseNewsAnswer validates it.
+
+export interface FindNewsInput {
+  name: string;
+  orgnr: string;
+  poststed: string | null;
+  website: string | null;
+}
+
+// The model can return a dead or invented link, or a short-lived Google
+// redirect. Follow each one: keep the final URL when it loads, drop it on
+// 404/410/DNS failure, keep the original on bot walls (401/403/429/5xx) and
+// timeouts — news sites often block non-browsers, which says nothing about
+// whether the article exists.
+async function verifyNewsLink(item: FoundNews): Promise<FoundNews | null> {
+  const res = await safeFetchResult(item.url, { timeoutMs: 6_000, maxBytes: 4 * 1024 * 1024 });
+  if (res.ok) return { ...item, url: res.finalUrl };
+  if (res.status === 404 || res.status === 410) return null;
+  if (res.status != null || /tidsavbrudd|svar over/.test(res.reason)) return item;
+  return null; // DNS failure, blocked address, malformed URL
+}
+
+async function requestNews(input: FindNewsInput): Promise<FoundNews[]> {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) return [];
+
+  let domain: string | null = null;
+  try {
+    domain = input.website ? new globalThis.URL(input.website).hostname.replace(/^www\./, '') : null;
+  } catch {
+    domain = null;
+  }
+  const prompt =
+    `Finn nyhetsartikler fra de siste 12 månedene om det norske selskapet "${input.name}" (org.nr ${input.orgnr}` +
+    `${input.poststed ? `, ${input.poststed}` : ''}${domain ? `, nettside ${domain}` : ''}). ` +
+    'Bruk søk. Se etter f.eks. kontrakter, oppkjøp, investeringer, nye fartøy, ansettelser, ledelsesendringer og resultater.\n\n' +
+    'REGLER (svært viktig):\n' +
+    '- Ta KUN med artikler som tydelig handler om akkurat dette selskapet (eller konsernet det er en del av), ' +
+    'ikke andre selskaper med lignende navn.\n' +
+    '- Ikke ta med katalog- og registersider (proff.no, purehelp, 1881, LinkedIn, Facebook, brreg).\n' +
+    '- Bruk den faktiske URL-en til artikkelen. Ikke finn på lenker, titler eller datoer.\n' +
+    '- Svar KUN med en JSON-liste (maks 5, nyeste først), uten annen tekst: ' +
+    '[{"title": "...", "url": "https://...", "source": "navn på nettstedet", "date": "YYYY-MM-DD eller null", ' +
+    `"summary": "én setning på norsk", "category": "${NEWS_CATEGORIES.join('|')}"}]\n` +
+    '- Finner du ingen relevante artikler, svar nøyaktig [].';
+
+  const text = await geminiText(apiKey, {
+    input: [{ type: 'text', text: prompt }],
+    tools: [{ type: 'google_search' }],
+  });
+  const items = parseNewsAnswer(text);
+  const verified = await Promise.all(items.map(verifyNewsLink));
+  return verified.filter((n): n is FoundNews => n != null);
+}
+
 // --- Contact extraction from a company's own website ----------------------
 // Brønnøysund only ever exposes the statutory daglig leder — a "Kontakter"
 // section that's otherwise limited to admin-typed fields is thin for a
@@ -341,11 +405,12 @@ async function requestContacts(name: string, website: string): Promise<Extracted
 
 export const aiProvider: Provider = {
   id: 'ai',
-  tools: ['analyze', 'findWebsite', 'extractContacts'],
+  tools: ['analyze', 'findWebsite', 'findNews', 'extractContacts'],
   isEnabled: () => !!process.env.GEMINI_API_KEY,
   async call(tool, args) {
     if (tool === 'analyze') return requestAnalysis(args as unknown as LeadAnalysisInput);
     if (tool === 'findWebsite') return requestWebsite(args as unknown as FindWebsiteInput);
+    if (tool === 'findNews') return requestNews(args as unknown as FindNewsInput);
     if (tool === 'extractContacts') {
       const { name, website } = args as { name: string; website: string };
       return requestContacts(name, website);

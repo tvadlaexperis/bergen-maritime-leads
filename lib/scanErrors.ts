@@ -15,6 +15,7 @@ const STEP_LABELS: Record<string, string> = {
   'ai.analyze': 'AI-vurdering',
   'ai.findWebsite': 'Nettsidesøk',
   'ai.extractContacts': 'Kontakter fra nettside',
+  'ai.findNews': 'Nyhetssøk',
   ai: 'AI',
   regnskap: 'Regnskap (Brreg)',
   roller: 'Roller (Brreg)',
@@ -50,7 +51,7 @@ function hintFor(message: string, step: string): string | null {
   }
   if (/429/.test(message)) return 'For mange kall per minutt — «Kjør AI-køen» venter og prøver igjen automatisk.';
   if (/tidsavbrudd/i.test(message)) {
-    return step.startsWith('Nettside') || step.startsWith('Kontakter') || step.startsWith('AI')
+    return ['Nettside', 'Kontakter', 'AI', 'Nyhet'].some((p) => step.startsWith(p))
       ? 'Gemini svarte ikke innen tidsgrensen for kjøringen — selskapet prøves igjen senere.'
       : 'Brønnøysund svarte ikke i tide — prøves igjen ved neste kjøring.';
   }

@@ -51,7 +51,16 @@ the guest magic-link flow, `scripts/hash-password.mjs`, `scripts/create-user.mjs
 - **Kontaktperson / CTO / Salgssjef** — not in any public registry, so these are admin-entered
   free text (name/e-post/telefon) via `AdminControls` → `updateContactsAction` →
   `setCompanyContacts()`. Same pattern as the existing `notes` field.
-- **Nyheter** — `lib/orchestrator/providers/news.ts` queries the GDELT DOC 2.0 API
+- **Nyheter (primær)** — `ai.findNews` in the AI pass: Google Search-grounded Gemini call for
+  articles from the last 12 months (kontrakt / oppkjøp / investering / ansettelse / ledelse /
+  resultat / nybygg / annet, with a one-sentence summary). `lib/companyNews.ts#parseNewsAnswer`
+  validates the JSON; every link is fetched (final URL kept after redirects, dropped on 404/410/DNS
+  failure, kept on bot walls). Merged into `company_news` (unique per company+url, pruned to 10 /
+  18 months), `news_checked_at` refreshed every 30 days (`NEWS_REFRESH_DAYS`, part of
+  `AI_PENDING`). Runs *before* `ai.analyze` so buying signals can use it; recent concrete
+  articles go to the notification bell. ~1–3 searches per company per month, inside the 5,000
+  free/month.
+- **Nyheter (fallback)** — only for companies never news-searched: `lib/orchestrator/providers/news.ts` queries the GDELT DOC 2.0 API
   (`api.gdeltproject.org`, free, keyless) for the company name, 6h `revalidate` cache
   (GDELT rate-limits to ~1 req/5s). `SKIP_NEWS=1` hides the section entirely.
 - Both are best-effort like every other provider: a failed/rate-limited news fetch or missing
