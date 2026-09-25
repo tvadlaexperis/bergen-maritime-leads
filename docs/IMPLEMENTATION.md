@@ -60,6 +60,16 @@ the guest magic-link flow, `scripts/hash-password.mjs`, `scripts/create-user.mjs
   `AI_PENDING`). Runs *before* `ai.analyze` so buying signals can use it; recent concrete
   articles go to the notification bell. ~1–3 searches per company per month, inside the 5,000
   free/month.
+- **Nyheter — parsing:** search-grounded answers carry citation markers ("[1]") around the JSON;
+  `findJsonArray` tries every `[`…`]` span instead of first-to-last (which silently returned
+  nothing and left news at ~1 %). An answer with no list at all is now a visible scan error.
+  The prompt also gets the everyday name and the group name to search with.
+- **Utfordringer i bransjen** — `industryChallenges` in the AI analysis: 2–4 segment-level
+  challenges (general industry knowledge, explicitly excepted from the "facts only" rule and
+  labelled as such in the UI), each with why it can open a conversation. Shown at the bottom
+  of «Tilrådd inngang».
+- **One-off data fixes** run once per database via `ONCE_MIGRATIONS` in `lib/db.ts` (tracked
+  in `app_meta`).
 - **Nyheter (fallback)** — only for companies never news-searched: `lib/orchestrator/providers/news.ts` queries the GDELT DOC 2.0 API
   (`api.gdeltproject.org`, free, keyless) for the company name, 6h `revalidate` cache
   (GDELT rate-limits to ~1 req/5s). `SKIP_NEWS=1` hides the section entirely.

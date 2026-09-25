@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseNewsAnswer } from './companyNews';
+import { parseNewsAnswer, findJsonArray } from './companyNews';
 
 const NOW = Date.parse('2026-09-25T12:00:00Z');
 
@@ -37,5 +37,26 @@ describe('parseNewsAnswer', () => {
     expect(parseNewsAnswer('Fant ingen nyheter.', NOW)).toEqual([]);
     expect(parseNewsAnswer('[{broken', NOW)).toEqual([]);
     expect(parseNewsAnswer('[]', NOW)).toEqual([]);
+  });
+});
+
+describe('citation markers around the JSON (search-grounded answers)', () => {
+  const item = '{"title":"X vinner kontrakt","url":"https://e24.no/a","source":"E24","date":"2026-08-01","summary":"S.","category":"kontrakt"}';
+  it.each([
+    ['before', `Jeg fant én sak [1].
+[${item}]`],
+    ['after', `[${item}]
+Kilde: [1] e24.no`],
+    ['fenced, both sides', `Resultat [1][2]:
+\`\`\`json
+[${item}]
+\`\`\`
+[1] e24`],
+  ])('finds the list with a marker %s', (_, text) => {
+    expect(parseNewsAnswer(text, NOW).map((n) => n.url)).toEqual(['https://e24.no/a']);
+  });
+  it('tells "no list at all" (null) apart from an empty list', () => {
+    expect(findJsonArray('Fant ingenting relevant [1].')).toBeNull();
+    expect(findJsonArray('[]')).toEqual([]);
   });
 });

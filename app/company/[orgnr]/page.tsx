@@ -22,7 +22,7 @@ import {
   linkedinRoleSearchUrl,
 } from '@/lib/brreg';
 import { getCompanyNews } from '@/lib/news';
-import { fmtNok, fmtPct, fmtInt, dateLabel } from '@/app/format';
+import { fmtPct, fmtInt, dateLabel } from '@/app/format';
 import { bandFor } from '@/app/components/ScoreBadge';
 import type { LeadAnalysis, ScoreVerdict, SignalLevel } from '@/lib/orchestrator/providers/ai';
 import BackArrow from '@/app/components/BackArrow';
@@ -30,6 +30,7 @@ import AdminControls from './AdminControls';
 import { AdminPanelProvider, AdminPanelToggle, AdminPanelModal } from './AdminPanel';
 import AutoRefreshTrigger from './AutoRefreshTrigger';
 import ContactsEditForm from './ContactsEditForm';
+import BoxTabs from './BoxTabs';
 import FinancialsTabs from './FinancialsTabs';
 import NotesBox from './NotesBox';
 
@@ -207,13 +208,6 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
             {isAdmin && <AdminPanelToggle />}
           </div>
         </div>
-        <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', marginTop: 10 }}>
-          <Fact label="Omsetning (siste)" value={fmtNok(co.revenue_latest, { compact: true })} />
-          <Fact label="Vekst å/å" value={co.revenue_growth_pct != null ? fmtPct(co.revenue_growth_pct, 0) : '—'} />
-          <Fact label="Driftsmargin" value={co.operating_margin_pct != null ? fmtPct(co.operating_margin_pct, 0) : '—'} />
-          <Fact label="Registrert" value={dateLabel(co.registered_at)} />
-          <Fact label="Siste årsregnskap" value={co.last_annual_report ?? '—'} />
-        </div>
       </div>
 
       {analysis?.conclusion && (
@@ -223,233 +217,240 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
       )}
       {needsAutoRefresh && <AutoRefreshTrigger orgnr={co.orgnr} />}
 
+      {/* Two columns all the way down: the sales analysis on the left,
+          the facts (people, news, numbers, notes) on the right. */}
       <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 18, alignItems: 'start' }}>
-        {/* Tilrådd inngang — the salesperson's first question ("who do I call,
-            and what do I say"), so it gets the big box next to Kontakter and
-            an accent edge. The rest of the analysis sits in the row below. */}
-        <div className="box box-featured">
-          <div className="box-header">
-            <span className="box-title">Tilrådd inngang</span>
-            <span className="muted" style={{ fontSize: '0.72rem' }}>hvem, hva og hvordan — AI-vurdert</span>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 18, minWidth: 0 }}>
+          {/* Tilrådd inngang — the salesperson's first question ("who do I call,
+              and what do I say"), so it leads the wide column with an accent
+              edge. Kjøpsmodus is a tab here: it's the same "should I call now?"
+              question. */}
+          <div className="box box-featured">
+            <BoxTabs
+              title="Tilrådd inngang"
+              tabs={[
+                {
+                  key: 'entry',
+                  label: 'Hvem og hva',
+                  content: analysis ? (
+                    <EntryTab analysis={analysis} liCompany={liName} />
+                  ) : (
+                    <p className="muted" style={{ fontSize: '0.86rem' }}>
+                      Ingen AI-vurdering ennå. {isAdmin ? 'Bruk «Oppdater fra registrene» under.' : 'Neste skann beregner en.'}
+                    </p>
+                  ),
+                },
+                {
+                  key: 'buying',
+                  label: 'Kjøpsmodus',
+                  content: analysis ? (
+                    <BuyingSignalTab analysis={analysis} />
+                  ) : (
+                    <p className="muted" style={{ fontSize: '0.86rem' }}>
+                      Ingen AI-vurdering ennå. {isAdmin ? 'Bruk «Oppdater fra registrene» under.' : 'Neste skann beregner en.'}
+                    </p>
+                  ),
+                },
+              ]}
+            />
           </div>
-          <div className="box-pad">
-            {analysis ? (
-              <EntryTab analysis={analysis} liCompany={liName} />
+
+          {/* Score + AI factors (merged: they listed the same factors) */}
+          <div className="box">
+            <div className="box-header">
+              <span className="box-title">Hvorfor aktuell</span>
+              <span className="muted" style={{ fontSize: '0.72rem' }}>lead-score + AI-faktorer</span>
+            </div>
+            <div className="box-pad" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {co.lead_score != null ? (
+              <>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                  <span className="num" data-band={band} style={{ fontSize: '2.4rem', fontWeight: 800, lineHeight: 1 }}>
+                    {co.lead_score}
+                  </span>
+                  <span className="muted" style={{ fontSize: '0.8rem' }}>
+                    / 100
+                    <br />
+                    {band === 'high' ? 'prioritert lead' : band === 'mid' ? 'verdt en vurdering' : 'lav prioritet'}
+                  </span>
+                </div>
+
+                <div style={{ display: 'grid', gap: 8 }}>
+                  {SUBSCORES.map((s) => {
+                    const v = co[s.key] ?? 0;
+                    return (
+                      <div key={s.key} style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 6, alignItems: 'center' }}>
+                        <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+                          {s.label} <span className="muted">{s.weight}</span>
+                        </span>
+                        <span className="num muted" style={{ fontSize: '0.76rem', textAlign: 'right' }}>{v}</span>
+                        <span className="meter" style={{ gridColumn: '1 / -1' }}>
+                          <span style={{ width: `${v}%` }} />
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+                {co.reason && <p style={{ fontSize: '0.86rem', color: 'var(--text-secondary)' }}>{co.reason}</p>}
+                {history.length > 1 && (
+                  <p className="muted" style={{ fontSize: '0.72rem' }}>
+                    Historikk: {history.slice().reverse().map((h) => h.lead_score).join(' → ')}
+                  </p>
+                )}
+                {analysis && analysis.scoreFactors.length > 0 && (
+                  <div style={{ marginTop: 4, paddingTop: 14, borderTop: '1px solid var(--border)' }}>
+                    <span className="muted" style={{ fontSize: '0.72rem', fontWeight: 700 }}>
+                      Faktorer (AI-vurdert)
+                    </span>
+                    <ScoreFactorList factors={analysis.scoreFactors} />
+                  </div>
+                )}
+              </>
             ) : (
-              <p className="muted" style={{ fontSize: '0.86rem' }}>
-                Ingen AI-vurdering ennå. {isAdmin ? 'Bruk «Oppdater fra registrene» under.' : 'Neste skann beregner en.'}
+              <p className="muted">
+                Ingen score ennå. {isAdmin ? 'Bruk «Oppdater fra registrene» under.' : 'Neste skann beregner en.'}
               </p>
             )}
-          </div>
-        </div>
-
-        {/* Contacts */}
-        <div className="box">
-          <div className="box-header">
-            <span className="box-title">Kontakter</span>
-            <span className="muted" style={{ fontSize: '0.72rem' }}>
-              {[boardContacts.length || co.ceo_name ? 'Brreg' : null, websiteContacts.length ? 'nettside' : null]
-                .filter(Boolean)
-                .join(' · ')}
-            </span>
-          </div>
-          <div style={{ overflow: 'auto', maxHeight: 320 }}>
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Rolle</th>
-                  <th>Navn</th>
-                  <th>E-post</th>
-                  <th>Telefon</th>
-                </tr>
-              </thead>
-              <tbody>
-                {co.ceo_name && <ContactRow label="Daglig leder" name={co.ceo_name} company={liName} source="brreg" />}
-                {(co.phone || co.email) && <ContactRow label="Sentralbord" name={null} email={co.email} phone={co.phone} />}
-                <ContactRow label="Kontaktperson" name={co.contact_name} email={co.contact_email} phone={co.contact_phone} company={liName} />
-                <ContactRow label="CTO" name={co.cto_name} email={co.cto_email} phone={co.cto_phone} company={liName} />
-                <ContactRow label="Salgssjef" name={co.sales_name} email={co.sales_email} phone={co.sales_phone} company={liName} />
-                {websiteContacts.map((wc) => (
-                  <ContactRow key={wc.id} label={wc.role ?? 'Ansatt'} name={wc.name} email={wc.email} phone={wc.phone} company={liName} source="nettside" />
-                ))}
-                {boardContacts
-                  .filter((b) => b.name !== co.ceo_name)
-                  .map((b) => (
-                    <ContactRow key={b.id} label={b.role ?? 'Styremedlem'} name={b.name} company={liName} source="brreg" />
-                  ))}
-              </tbody>
-            </table>
-          </div>
-          {!co.contact_name && !co.cto_name && !co.sales_name && websiteContacts.length === 0 && (
-            <div className="box-pad muted" style={{ paddingTop: 0, fontSize: '0.82rem' }}>
-              Ingen navngitte kontakter utover ledelse/styre ennå.{isAdmin ? ' Legg inn under.' : ''}
             </div>
-          )}
-          {/* Search links only — LinkedIn has no open API for people data and
-              forbids scraping, so the salesperson does the lookup in their own
-              logged-in LinkedIn / Sales Navigator session. */}
-          <div className="box-pad" style={{ paddingTop: 0, fontSize: '0.78rem', display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'baseline' }}>
-            <span className="muted">Finn på LinkedIn:</span>
-            <a href={linkedinCompanyUrl(co.name)} target="_blank" rel="noopener noreferrer" className="link-accent">
-              Selskapet ↗
-            </a>
-            <a
-              href={linkedinRoleSearchUrl(co.name, ['IT', 'CTO', 'CIO', 'IT-sjef', 'IT-leder', 'digitalisering', 'teknologi'])}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="link-accent"
-            >
-              IT-/teknologiledere ↗
-            </a>
-            <a
-              href={linkedinRoleSearchUrl(co.name, ['HR', 'rekruttering', 'personal', 'talent'])}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="link-accent"
-            >
-              HR/rekruttering ↗
-            </a>
-            <a href={linkedinPeopleUrl(`"${liName}"`)} target="_blank" rel="noopener noreferrer" className="link-accent">
-              Alle ansatte ↗
-            </a>
           </div>
-          {isAdmin && base && (
-            <ContactsEditForm
-              id={base.id}
-              contacts={{
-                contact_name: base.contact_name,
-                contact_email: base.contact_email,
-                contact_phone: base.contact_phone,
-                cto_name: base.cto_name,
-                cto_email: base.cto_email,
-                cto_phone: base.cto_phone,
-                sales_name: base.sales_name,
-                sales_email: base.sales_email,
-                sales_phone: base.sales_phone,
-              }}
-            />
-          )}
         </div>
-      </div>
 
-      {/* The rest of the analysis — one box each instead of tabs. Score and
-          "Hvorfor aktuell" were merged: both listed the same AI factors, and
-          the conclusion is already in the AI strip above. */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 18, alignItems: 'start' }}>
-        <div className="box">
-          <div className="box-header">
-            <span className="box-title">Hvorfor aktuell</span>
-            <span className="muted" style={{ fontSize: '0.72rem' }}>lead-score + AI-faktorer</span>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 18, minWidth: 0 }}>
+          {/* Contacts */}
+          <div className="box">
+            <div className="box-header">
+              <span className="box-title">Kontakter</span>
+              <span className="muted" style={{ fontSize: '0.72rem' }}>
+                {[boardContacts.length || co.ceo_name ? 'Brreg' : null, websiteContacts.length ? 'nettside' : null]
+                  .filter(Boolean)
+                  .join(' · ')}
+              </span>
+            </div>
+            <div style={{ overflow: 'auto', maxHeight: 320 }}>
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Rolle</th>
+                    <th>Navn</th>
+                    <th>E-post</th>
+                    <th>Telefon</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {co.ceo_name && <ContactRow label="Daglig leder" name={co.ceo_name} company={liName} source="brreg" />}
+                  {(co.phone || co.email) && <ContactRow label="Sentralbord" name={null} email={co.email} phone={co.phone} />}
+                  <ContactRow label="Kontaktperson" name={co.contact_name} email={co.contact_email} phone={co.contact_phone} company={liName} />
+                  <ContactRow label="CTO" name={co.cto_name} email={co.cto_email} phone={co.cto_phone} company={liName} />
+                  <ContactRow label="Salgssjef" name={co.sales_name} email={co.sales_email} phone={co.sales_phone} company={liName} />
+                  {websiteContacts.map((wc) => (
+                    <ContactRow key={wc.id} label={wc.role ?? 'Ansatt'} name={wc.name} email={wc.email} phone={wc.phone} company={liName} source="nettside" />
+                  ))}
+                  {boardContacts
+                    .filter((b) => b.name !== co.ceo_name)
+                    .map((b) => (
+                      <ContactRow key={b.id} label={b.role ?? 'Styremedlem'} name={b.name} company={liName} source="brreg" />
+                    ))}
+                </tbody>
+              </table>
+            </div>
+            {!co.contact_name && !co.cto_name && !co.sales_name && websiteContacts.length === 0 && (
+              <div className="box-pad muted" style={{ paddingTop: 0, fontSize: '0.82rem' }}>
+                Ingen navngitte kontakter utover ledelse/styre ennå.{isAdmin ? ' Legg inn under.' : ''}
+              </div>
+            )}
+            {/* Search links only — LinkedIn has no open API for people data and
+                forbids scraping, so the salesperson does the lookup in their own
+                logged-in LinkedIn / Sales Navigator session. */}
+            <div className="box-pad" style={{ paddingTop: 0, fontSize: '0.78rem', display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'baseline' }}>
+              <span className="muted">Finn på LinkedIn:</span>
+              <a href={linkedinCompanyUrl(co.name)} target="_blank" rel="noopener noreferrer" className="link-accent">
+                Selskapet ↗
+              </a>
+              <a
+                href={linkedinRoleSearchUrl(co.name, ['IT', 'CTO', 'CIO', 'IT-sjef', 'IT-leder', 'digitalisering', 'teknologi'])}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="link-accent"
+              >
+                IT-/teknologiledere ↗
+              </a>
+              <a
+                href={linkedinRoleSearchUrl(co.name, ['HR', 'rekruttering', 'personal', 'talent'])}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="link-accent"
+              >
+                HR/rekruttering ↗
+              </a>
+              <a href={linkedinPeopleUrl(`"${liName}"`)} target="_blank" rel="noopener noreferrer" className="link-accent">
+                Alle ansatte ↗
+              </a>
+            </div>
+            {isAdmin && base && (
+              <ContactsEditForm
+                id={base.id}
+                contacts={{
+                  contact_name: base.contact_name,
+                  contact_email: base.contact_email,
+                  contact_phone: base.contact_phone,
+                  cto_name: base.cto_name,
+                  cto_email: base.cto_email,
+                  cto_phone: base.cto_phone,
+                  sales_name: base.sales_name,
+                  sales_email: base.sales_email,
+                  sales_phone: base.sales_phone,
+                }}
+              />
+            )}
           </div>
-          <div className="box-pad" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          {co.lead_score != null ? (
-            <>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                <span className="num" data-band={band} style={{ fontSize: '2.4rem', fontWeight: 800, lineHeight: 1 }}>
-                  {co.lead_score}
-                </span>
-                <span className="muted" style={{ fontSize: '0.8rem' }}>
-                  / 100
-                  <br />
-                  {band === 'high' ? 'prioritert lead' : band === 'mid' ? 'verdt en vurdering' : 'lav prioritet'}
-                </span>
-              </div>
 
-              <div style={{ display: 'grid', gap: 8 }}>
-                {SUBSCORES.map((s) => {
-                  const v = co[s.key] ?? 0;
-                  return (
-                    <div key={s.key} style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 6, alignItems: 'center' }}>
-                      <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
-                        {s.label} <span className="muted">{s.weight}</span>
-                      </span>
-                      <span className="num muted" style={{ fontSize: '0.76rem', textAlign: 'right' }}>{v}</span>
-                      <span className="meter" style={{ gridColumn: '1 / -1' }}>
-                        <span style={{ width: `${v}%` }} />
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-              {co.reason && <p style={{ fontSize: '0.86rem', color: 'var(--text-secondary)' }}>{co.reason}</p>}
-              {history.length > 1 && (
-                <p className="muted" style={{ fontSize: '0.72rem' }}>
-                  Historikk: {history.slice().reverse().map((h) => h.lead_score).join(' → ')}
+          {/* News — right column, under Kontakter */}
+          <div className="box">
+            <div className="box-header">
+              <span className="box-title">Nyheter</span>
+              <span className="muted" style={{ fontSize: '0.72rem' }}>
+                {co.news_checked_at != null ? `nettsøk · sjekket ${dateLabel(co.news_checked_at)}` : 'GDELT'}
+              </span>
+            </div>
+            <div className="box-pad">
+              {news.length === 0 ? (
+                <p className="muted" style={{ fontSize: '0.85rem' }}>
+                  {co.news_checked_at != null ? 'Ingen nyheter funnet siste 12 måneder.' : 'Ingen nyhetstreff siste tiden.'}
                 </p>
-              )}
-              {analysis && analysis.scoreFactors.length > 0 && (
-                <div style={{ marginTop: 4, paddingTop: 14, borderTop: '1px solid var(--border)' }}>
-                  <span className="muted" style={{ fontSize: '0.72rem', fontWeight: 700 }}>
-                    Faktorer (AI-vurdert)
-                  </span>
-                  <ScoreFactorList factors={analysis.scoreFactors} />
+              ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12 }}>
+                  {news.map((n) => (
+                    <a key={n.url} href={n.url} target="_blank" rel="noopener noreferrer" className="news-card">
+                      {n.category && n.category !== 'annet' && (
+                        <span className="news-card-tag">{NEWS_CATEGORY_LABEL[n.category as NewsCategory] ?? n.category}</span>
+                      )}
+                      <span className="news-card-title">{n.title}</span>
+                      {n.summary && <span className="news-card-summary">{n.summary}</span>}
+                      <span className="muted" style={{ fontSize: '0.72rem' }}>
+                        {n.source}
+                        {n.date ? ` · ${dateLabel(n.date)}` : ''}
+                      </span>
+                    </a>
+                  ))}
                 </div>
               )}
-            </>
-          ) : (
-            <p className="muted">
-              Ingen score ennå. {isAdmin ? 'Bruk «Oppdater fra registrene» under.' : 'Neste skann beregner en.'}
-            </p>
-          )}
-          </div>
-        </div>
-        <div className="box">
-          <div className="box-header">
-            <span className="box-title">Kjøpsmodus</span>
-          </div>
-          <div className="box-pad">
-            {analysis ? (
-              <BuyingSignalTab analysis={analysis} />
-            ) : (
-              <p className="muted" style={{ fontSize: '0.86rem' }}>
-                Ingen AI-vurdering ennå. {isAdmin ? 'Bruk «Oppdater fra registrene» under.' : 'Neste skann beregner en.'}
-              </p>
-            )}
-          </div>
-        </div>
-      </div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 18, alignItems: 'start' }}>
-        {/* News — the wide left column, room for the cards */}
-        <div className="box">
-          <div className="box-header">
-            <span className="box-title">Nyheter</span>
-            <span className="muted" style={{ fontSize: '0.72rem' }}>
-              {co.news_checked_at != null ? `nettsøk · sjekket ${dateLabel(co.news_checked_at)}` : 'GDELT'}
-            </span>
-          </div>
-          <div className="box-pad">
-            {news.length === 0 ? (
-              <p className="muted" style={{ fontSize: '0.85rem' }}>
-                {co.news_checked_at != null ? 'Ingen nyheter funnet siste 12 måneder.' : 'Ingen nyhetstreff siste tiden.'}
-              </p>
-            ) : (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12 }}>
-                {news.map((n) => (
-                  <a key={n.url} href={n.url} target="_blank" rel="noopener noreferrer" className="news-card">
-                    {n.category && n.category !== 'annet' && (
-                      <span className="news-card-tag">{NEWS_CATEGORY_LABEL[n.category as NewsCategory] ?? n.category}</span>
-                    )}
-                    <span className="news-card-title">{n.title}</span>
-                    {n.summary && <span className="news-card-summary">{n.summary}</span>}
-                    <span className="muted" style={{ fontSize: '0.72rem' }}>
-                      {n.source}
-                      {n.date ? ` · ${dateLabel(n.date)}` : ''}
-                    </span>
-                  </a>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Regnskapstall + Notater, stacked in the right column */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-          <div className="box">
-            <FinancialsTabs financials={financials} />
+            </div>
           </div>
 
-          {isAdmin && base && <NotesBox notes={base.notes ?? ''} />}
+            <div className="box">
+              {/* Omsetning (siste) is left out — it's this year's Driftsinntekter. */}
+              <FinancialsTabs
+                financials={financials}
+                keyFigures={[
+                  { label: 'Vekst å/å', value: co.revenue_growth_pct != null ? fmtPct(co.revenue_growth_pct, 0) : '—' },
+                  { label: 'Driftsmargin', value: co.operating_margin_pct != null ? fmtPct(co.operating_margin_pct, 0) : '—' },
+                  { label: 'Siste årsregnskap', value: co.last_annual_report ?? '—' },
+                  { label: 'Registrert', value: dateLabel(co.registered_at) },
+                ]}
+              />
+            </div>
+
+            {isAdmin && base && <NotesBox notes={base.notes ?? ''} />}
         </div>
       </div>
 
@@ -649,15 +650,34 @@ function EntryTab({ analysis, liCompany }: { analysis: LeadAnalysis; liCompany: 
           )}
         </div>
       </div>
-    </div>
-  );
-}
 
-function Fact({ label, value }: { label: string; value: string }) {
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-      <span className="muted" style={{ fontSize: '0.72rem' }}>{label}</span>
-      <span style={{ fontSize: '0.9rem' }}>{value}</span>
+      {/* Segment-level context — general knowledge, labelled as such so it
+          isn't mistaken for something known about this company. */}
+      {analysis.industryChallenges && analysis.industryChallenges.length > 0 && (
+        <div>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
+            {label('Utfordringer i bransjen')}
+            <span className="muted" style={{ fontSize: '0.72rem' }}>
+              generell bransjekunnskap — ikke bekreftet for selskapet
+            </span>
+          </div>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+              gap: 10,
+              marginTop: 8,
+            }}
+          >
+            {analysis.industryChallenges.map((c, i) => (
+              <div key={i} className="challenge-card">
+                <strong style={{ fontSize: '0.86rem' }}>{c.challenge}</strong>
+                <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', lineHeight: 1.45 }}>{c.relevance}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

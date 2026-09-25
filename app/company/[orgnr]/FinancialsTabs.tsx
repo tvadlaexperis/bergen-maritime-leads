@@ -5,8 +5,30 @@ import { fmtNok } from '@/app/format';
 import type { Financial } from '@/lib/db';
 
 // Shows the most recent two years as tabs; older years are revealed one at a
-// time behind the "›" arrow instead of all stacking vertically.
-export default function FinancialsTabs({ financials }: { financials: Financial[] }) {
+// time behind the "›" arrow instead of all stacking vertically. `keyFigures`
+// (growth, margin, filing/registration dates — not per-year) sit below.
+export default function FinancialsTabs({
+  financials,
+  keyFigures,
+}: {
+  financials: Financial[];
+  keyFigures: { label: string; value: string }[];
+}) {
+  const keyRow = (
+    <div
+      className="box-pad"
+      style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))',
+        gap: 12,
+        borderTop: '1px solid var(--border)',
+      }}
+    >
+      {keyFigures.map((k) => (
+        <Fact key={k.label} label={k.label} value={k.value} />
+      ))}
+    </div>
+  );
   const [visibleCount, setVisibleCount] = useState(Math.min(2, financials.length));
   const [selectedYear, setSelectedYear] = useState(financials[0]?.year);
 
@@ -17,6 +39,7 @@ export default function FinancialsTabs({ financials }: { financials: Financial[]
         <div className="box-pad">
           <p className="muted" style={{ fontSize: '0.85rem' }}>Ingen regnskapstall hentet ennå.</p>
         </div>
+        {keyRow}
       </>
     );
   }
@@ -63,6 +86,7 @@ export default function FinancialsTabs({ financials }: { financials: Financial[]
         <Fact label="Egenkapital" value={fmtNok(current.equity, { compact: true })} />
         <Fact label="Sum eiendeler" value={fmtNok(current.total_assets, { compact: true })} />
       </div>
+      {keyRow}
     </>
   );
 }

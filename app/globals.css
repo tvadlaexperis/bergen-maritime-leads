@@ -1130,3 +1130,14 @@ a {
   border-radius: var(--radius-control);
   background: var(--accent-soft);
 }
+
+.challenge-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--signal);
+  border-radius: var(--radius-control);
+  background: var(--surface-raised);
+}

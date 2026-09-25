@@ -45,21 +45,46 @@ const NOT_NEWS_HOSTS = /(^|\.)(proff\.no|purehelp\.no|1881\.no|gulesider\.no|lin
 const MAX_AGE_DAYS = 400; // "last 12 months", with some slack for late indexing
 
 /**
- * Parses the model's answer — a JSON array, possibly wrapped in prose or a
- * ```json fence, since structured output isn't available together with the
- * search tool — and keeps only well-formed, recent, non-directory items.
+ * Finds the JSON array in a model answer. Search-grounded answers are prose
+ * around the JSON and often carry citation markers — "[1]", "[1][2]" — before
+ * or after it, so "first '[' to last ']'" (the old approach) grabbed the
+ * wrong span and silently returned nothing. Tries each '[' as a start and
+ * each ']' as an end, longest first, and keeps the first span that parses to
+ * an array of objects (or an empty array). Null when there's none at all.
+ */
+export function findJsonArray(text: string): unknown[] | null {
+  const src = text.replace(/```(?:json)?/gi, '');
+  const starts: number[] = [];
+  const ends: number[] = [];
+  for (let i = 0; i < src.length; i++) {
+    if (src[i] === '[') starts.push(i);
+    else if (src[i] === ']') ends.push(i);
+  }
+  let tries = 0;
+  for (const s of starts) {
+    for (let k = ends.length - 1; k >= 0 && ends[k] > s; k--) {
+      if (++tries > 400) return null;
+      let v: unknown;
+      try {
+        v = JSON.parse(src.slice(s, ends[k] + 1));
+      } catch {
+        continue;
+      }
+      if (Array.isArray(v) && v.every((x) => x && typeof x === 'object' && !Array.isArray(x))) return v;
+    }
+  }
+  return null;
+}
+
+/**
+ * Parses the model's answer — a JSON array, possibly wrapped in prose, a
+ * ```json fence and citation markers, since structured output isn't available
+ * together with the search tool — and keeps only well-formed, recent,
+ * non-directory items.
  */
 export function parseNewsAnswer(text: string, now = Date.now()): FoundNews[] {
-  const start = text.indexOf('[');
-  const end = text.lastIndexOf(']');
-  if (start < 0 || end <= start) return [];
-  let raw: unknown;
-  try {
-    raw = JSON.parse(text.slice(start, end + 1));
-  } catch {
-    return [];
-  }
-  if (!Array.isArray(raw)) return [];
+  const raw = findJsonArray(text);
+  if (!raw) return [];
 
   const out: FoundNews[] = [];
   const seen = new Set<string>();

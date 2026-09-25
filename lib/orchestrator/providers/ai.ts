@@ -2,7 +2,8 @@ import type { Provider } from '../types';
 import { safeFetchText, safeFetchResult } from '../../http/safeFetch';
 import { cleanWebsite } from '../../brreg';
 import { stripHtml, contactPageCandidates } from '../../website';
-import { parseNewsAnswer, NEWS_CATEGORIES, type FoundNews } from '../../companyNews';
+import { parseNewsAnswer, findJsonArray, NEWS_CATEGORIES, type FoundNews } from '../../companyNews';
+import { linkedinCompanyName } from '../../brreg';
 
 // Gemini Flash builds the structured "Om selskapet" analysis (customer-fit
 // score factors, buying signals, recommended entry point). Free-tier
@@ -40,6 +41,9 @@ export interface LeadAnalysis {
   icebreaker: string | null;
   questions: string[];
   avoidClaiming: string[];
+  /** Segment-level challenges (general industry knowledge, not facts about
+   *  this company). Absent on analyses made before it was added. */
+  industryChallenges?: { challenge: string; relevance: string }[];
 }
 
 const ANALYSIS_SCHEMA = {
@@ -83,6 +87,14 @@ const ANALYSIS_SCHEMA = {
     icebreaker: { type: ['string', 'null'] },
     questions: { type: 'array', items: { type: 'string' } },
     avoidClaiming: { type: 'array', items: { type: 'string' } },
+    industryChallenges: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: { challenge: { type: 'string' }, relevance: { type: 'string' } },
+        required: ['challenge', 'relevance'],
+      },
+    },
   },
   required: [
     'conclusion',
@@ -93,6 +105,7 @@ const ANALYSIS_SCHEMA = {
     'icebreaker',
     'questions',
     'avoidClaiming',
+    'industryChallenges',
   ],
 } as const;
 
@@ -154,6 +167,12 @@ function buildPrompt(input: LeadAnalysisInput): string {
     'name til null og forklar i reason hvem man bør prøve å identifisere (f.eks. daglig leder eller IT-ansvarlig).\n' +
     '- "avoidClaiming" skal liste 2-4 konkrete ting selgeren IKKE bør påstå som fakta uten å få det bekreftet av kunden ' +
     '(f.eks. antatt teknologibruk, antatte behov).\n' +
+    '- "industryChallenges" er et UNNTAK fra regelen om bare å bruke faktaene over: list 2-4 kjente utfordringer som ' +
+    'selskapets maritime segment/bransje generelt står overfor i dag (f.eks. regulering som EU ETS, FuelEU Maritime og ' +
+    'IMOs klimakrav, utslippsrapportering, cybersikkerhet, mangel på fagfolk, digitalisering av drift og flåtestyring). ' +
+    'Dette er generell bransjekunnskap — skriv det som bransjeutfordringer, ALDRI som påstander om at akkurat dette ' +
+    'selskapet har problemet. "relevance" er én setning om hvorfor utfordringen kan åpne for en samtale om IT-/' +
+    'teknologikonsulenter eller bemanning.\n' +
     '- Skriv kort og konkret, norsk bokmål. "conclusion" er maks 2 setninger. "pitch" er maks 3 setninger. ' +
     '"questions" er 2-5 konkrete spørsmål en selger kan stille.\n\n' +
     facts
@@ -260,6 +279,7 @@ export interface FindNewsInput {
   orgnr: string;
   poststed: string | null;
   website: string | null;
+  parentName?: string | null; // konsern — news is often about the group
 }
 
 // The model can return a dead or invented link, or a short-lived Google
@@ -285,9 +305,15 @@ async function requestNews(input: FindNewsInput): Promise<FoundNews[]> {
   } catch {
     domain = null;
   }
+  // The press writes "Beerenberg", not "BEERENBERG SERVICES AS" — give the
+  // model the everyday name (and the group's) to search with.
+  const shortName = linkedinCompanyName(input.name);
+  const parent = input.parentName ? linkedinCompanyName(input.parentName) : null;
   const prompt =
     `Finn nyhetsartikler fra de siste 12 månedene om det norske selskapet "${input.name}" (org.nr ${input.orgnr}` +
     `${input.poststed ? `, ${input.poststed}` : ''}${domain ? `, nettside ${domain}` : ''}). ` +
+    `Søk på navnet slik pressen skriver det, f.eks. "${shortName}"` +
+    `${parent && parent !== shortName ? ` og konsernet "${parent}"` : ''}, og gjerne sammen med ord som rederi, kontrakt eller skip. ` +
     'Bruk søk. Se etter f.eks. kontrakter, oppkjøp, investeringer, nye fartøy, ansettelser, ledelsesendringer og resultater.\n\n' +
     'REGLER (svært viktig):\n' +
     '- Ta KUN med artikler som tydelig handler om akkurat dette selskapet (eller konsernet det er en del av), ' +
@@ -303,6 +329,11 @@ async function requestNews(input: FindNewsInput): Promise<FoundNews[]> {
     input: [{ type: 'text', text: prompt }],
     tools: [{ type: 'google_search' }],
   });
+  // No list at all (prose, a refusal) is an error worth seeing in the scan
+  // log — it used to be indistinguishable from "no news found".
+  if (!findJsonArray(text)) {
+    throw new Error(`Nyhetssøk: fant ingen JSON-liste i svaret («${text.replace(/\s+/g, ' ').slice(0, 120)}»)`);
+  }
   const items = parseNewsAnswer(text);
   const verified = await Promise.all(items.map(verifyNewsLink));
   return verified.filter((n): n is FoundNews => n != null);

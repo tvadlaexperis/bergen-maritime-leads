@@ -211,6 +211,40 @@ const CONTACT_COLUMNS = [
   'news_checked_at INTEGER',
 ];
 
+// Data fixes that must run exactly once per database, tracked in app_meta.
+const ONCE_MIGRATIONS: { key: string; sql: string }[] = [
+  {
+    // The news parser used to choke on citation markers ("[1]") in
+    // search-grounded answers and record "checked, nothing found". Re-queue
+    // every company without stored news for a fresh search.
+    key: '2026-09-25-news-parser-requeue',
+    sql: `UPDATE companies SET news_checked_at = NULL
+          WHERE news_checked_at IS NOT NULL
+            AND NOT EXISTS (SELECT 1 FROM company_news n WHERE n.company_id = companies.id)`,
+  },
+  {
+    // Analyses gained "industryChallenges" (Utfordringer i bransjen). Mark the
+    // older ones as due so the AI queue redoes them; the old analysis stays
+    // visible until the new one lands.
+    key: '2026-09-25-industry-challenges-requeue',
+    sql: `UPDATE companies SET ai_analysis_at = NULL
+          WHERE ai_analysis IS NOT NULL AND ai_analysis NOT LIKE '%industryChallenges%'`,
+  },
+];
+
+async function runOnceMigrations(): Promise<void> {
+  const c = getClient();
+  await c.execute('CREATE TABLE IF NOT EXISTS app_meta (key TEXT PRIMARY KEY, value TEXT)');
+  for (const m of ONCE_MIGRATIONS) {
+    const done = await c.execute({ sql: 'SELECT 1 FROM app_meta WHERE key = ?', args: [m.key] });
+    if (done.rows.length) continue;
+    await c.batch(
+      [m.sql, { sql: 'INSERT INTO app_meta (key, value) VALUES (?, ?)', args: [m.key, String(Date.now())] }],
+      'write',
+    );
+  }
+}
+
 async function addColumnsIfMissing(table: string, columns: string[]): Promise<void> {
   const c = getClient();
   for (const col of columns) {
@@ -390,6 +424,7 @@ async function ensureSchema(): Promise<void> {
       .then(() => addColumnsIfMissing('company_scores', SCORE_COLUMNS))
       .then(() => addColumnsIfMissing('company_contacts', ["source TEXT NOT NULL DEFAULT 'nettside'"]))
       .then(() => addColumnsIfMissing('scans', ['details TEXT']))
+      .then(() => runOnceMigrations())
       .then(() => ensureSeeded());
   }
   return schemaReady;
@@ -563,6 +598,7 @@ export interface DataCoverage {
   withEmail: number;
   withBoard: number;
   withNews: number;
+  newsSearched: number;
 }
 
 // One query, not `listCompaniesWithScore()` + counting in JS — this is a
@@ -582,7 +618,8 @@ export async function getDataCoverage(): Promise<DataCoverage> {
       COUNT(CASE WHEN co.ceo_name IS NOT NULL THEN 1 END) AS with_ceo,
       COUNT(CASE WHEN co.email IS NOT NULL THEN 1 END) AS with_email,
       COUNT(CASE WHEN EXISTS (SELECT 1 FROM company_contacts cc WHERE cc.company_id = co.id AND cc.source = 'brreg') THEN 1 END) AS with_board,
-      COUNT(CASE WHEN EXISTS (SELECT 1 FROM company_news n WHERE n.company_id = co.id) THEN 1 END) AS with_news
+      COUNT(CASE WHEN EXISTS (SELECT 1 FROM company_news n WHERE n.company_id = co.id) THEN 1 END) AS with_news,
+      COUNT(CASE WHEN co.news_checked_at IS NOT NULL THEN 1 END) AS news_searched
     FROM companies co
     WHERE co.status = 'active'
   `);
@@ -598,6 +635,7 @@ export async function getDataCoverage(): Promise<DataCoverage> {
     withEmail: Number(r.with_email),
     withBoard: Number(r.with_board),
     withNews: Number(r.with_news),
+    newsSearched: Number(r.news_searched),
   };
 }
 

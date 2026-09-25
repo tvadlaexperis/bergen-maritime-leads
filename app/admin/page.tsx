@@ -165,6 +165,11 @@ export default async function AdminPage({
                             {pct} %
                           </span>
                           <span style={{ fontSize: '0.82rem', fontWeight: 600 }}>{row.label}</span>
+                          {row.key === 'news' && (
+                            <span className="muted" style={{ fontSize: '0.72rem' }}>
+                              Søkt for {coverage.newsSearched} av {coverage.total} — resten står i AI-køen
+                            </span>
+                          )}
                           <div className="meter">
                             <span style={{ width: `${pct}%` }} />
                           </div>

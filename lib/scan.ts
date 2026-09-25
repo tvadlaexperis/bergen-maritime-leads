@@ -388,7 +388,13 @@ async function aiPass(
     if (!newsDue) return;
     const found = await orchestrator.callTool<FoundNews[]>(
       'ai.findNews',
-      { name: company.name, orgnr: company.orgnr, poststed: company.poststed, website: company.website },
+      {
+        name: company.name,
+        orgnr: company.orgnr,
+        poststed: company.poststed,
+        website: company.website,
+        parentName: company.parent_name,
+      },
       budget(30_000),
     );
     if (!found.ok) {
