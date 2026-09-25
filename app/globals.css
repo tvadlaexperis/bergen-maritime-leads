@@ -1087,9 +1087,11 @@ a {
 .page-tabs {
   display: flex;
   gap: 4px;
+  flex-wrap: wrap;
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
-  overflow-x: auto;
+  /* No overflow here: the active tab's underline sits 1px over the border
+     (margin-bottom: -1px), which any overflow value turns into a scrollbar. */
 }
 .page-tab {
   padding: 8px 14px 10px;
