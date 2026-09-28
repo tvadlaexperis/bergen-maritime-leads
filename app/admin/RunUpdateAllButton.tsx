@@ -1,8 +1,9 @@
-'use client';
+"use client";
 
-import { useEffect, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { runAiQueueAction, runScanAction } from './actions';
+import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { runAiQueueAction, runScanAction } from "./actions";
+import ConfirmDialog from "./ConfirmDialog";
 
 type Totals = {
   runs: number;
@@ -13,9 +14,17 @@ type Totals = {
   news: number;
   errors: number;
 };
-const ZERO: Totals = { runs: 0, processed: 0, analyses: 0, contacts: 0, websites: 0, news: 0, errors: 0 };
+const ZERO: Totals = {
+  runs: 0,
+  processed: 0,
+  analyses: 0,
+  contacts: 0,
+  websites: 0,
+  news: 0,
+  errors: 0,
+};
 
-type Phase = 'brreg' | 'ai';
+type Phase = "brreg" | "ai";
 
 // «Oppdater alt»: the manual catch-up routine as one click. Phase 1 runs
 // normal scans until no company is left unchecked in Brreg for 3+ days
@@ -40,11 +49,12 @@ export default function RunUpdateAllButton({
   const [totals, setTotals] = useState<Totals>(ZERO);
   const [remaining, setRemaining] = useState(initialRemaining);
   const [stale, setStale] = useState(initialStale);
-  const [phase, setPhase] = useState<Phase>('brreg');
+  const [phase, setPhase] = useState<Phase>("brreg");
   const [brregChecked, setBrregChecked] = useState(0);
   const [msg, setMsg] = useState<string | null>(null);
   const [waitLeft, setWaitLeft] = useState(0);
   const stopRef = useRef(false);
+  const [ask, setAsk] = useState(false);
 
   // Interruptible pause — "Stopp" during a rate-limit wait ends it at once.
   async function pause(seconds: number) {
@@ -68,7 +78,7 @@ export default function RunUpdateAllButton({
     try {
       // Phase 1 — Brreg. Stops when nothing is stale, or when a run checks
       // nobody (everything left is already fresh, or Brreg is failing).
-      setPhase('brreg');
+      setPhase("brreg");
       let checked = 0;
       for (let i = 0; i < 10 && !stopRef.current; i++) {
         const r = await runScanAction(false);
@@ -79,15 +89,18 @@ export default function RunUpdateAllButton({
         if (r.staleRemaining === 0 || r.processed === 0) break;
       }
       if (!aiEnabled) {
-        if (!stopRef.current) setMsg('Ferdig — alle selskaper er sjekket i Brreg (AI er ikke konfigurert).');
+        if (!stopRef.current)
+          setMsg(
+            "Ferdig — alle selskaper er sjekket i Brreg (AI er ikke konfigurert).",
+          );
         return;
       }
 
       // Phase 2 — AI queue.
-      setPhase('ai');
+      setPhase("ai");
       while (!stopRef.current) {
         const r = await runAiQueueAction();
-        if ('error' in r) {
+        if ("error" in r) {
           setMsg(r.error);
           break;
         }
@@ -104,7 +117,9 @@ export default function RunUpdateAllButton({
         setRemaining(r.remaining);
         router.refresh();
         if (r.remaining === 0) {
-          setMsg('Ferdig — alle selskaper er AI-vurdert og alle kjente nettsider er lest.');
+          setMsg(
+            "Ferdig — alle selskaper er AI-vurdert og alle kjente nettsider er lest.",
+          );
           break;
         }
         // Gemini's per-minute quota: back off and carry on rather than stop,
@@ -113,10 +128,12 @@ export default function RunUpdateAllButton({
         if (r.rateLimited && !didWork) {
           rateLimitWaits++;
           if (rateLimitWaits > 5) {
-            setMsg(`Stoppet: Gemini avviser fortsatt (kvote brukt opp?). ${r.firstError ?? ''}`);
+            setMsg(
+              `Stoppet: Gemini avviser fortsatt (kvote brukt opp?). ${r.firstError ?? ""}`,
+            );
             break;
           }
-          setMsg('Gemini-kvoten er nådd — venter før neste kjøring.');
+          setMsg("Gemini-kvoten er nådd — venter før neste kjøring.");
           await pause(60);
           continue;
         }
@@ -125,14 +142,16 @@ export default function RunUpdateAllButton({
         // news search (and not a rate limit) — means something is broken.
         idleRuns = didWork ? 0 : idleRuns + 1;
         if (idleRuns >= 2) {
-          setMsg(`Stoppet: to kjøringer på rad uten AI-vurdering. Første feil: ${r.firstError ?? 'ingen feil registrert'}`);
+          setMsg(
+            `Stoppet: to kjøringer på rad uten AI-vurdering. Første feil: ${r.firstError ?? "ingen feil registrert"}`,
+          );
           break;
         }
         setMsg(null);
       }
-      if (stopRef.current) setMsg('Stoppet.');
+      if (stopRef.current) setMsg("Stoppet.");
     } catch {
-      setMsg('Kjøringen feilet — prøv igjen, eller se «Siste skann».');
+      setMsg("Kjøringen feilet — prøv igjen, eller se «Siste skann».");
     } finally {
       setRunning(false);
       setStopping(false);
@@ -146,22 +165,28 @@ export default function RunUpdateAllButton({
   if (running || totals.runs > 0 || brregChecked > 0) {
     const brregPart = `Brreg: ${brregChecked} sjekket, ${stale} gjenstår`;
     const aiPart = `AI: ${totals.analyses} vurdert, ${totals.news} nyheter, ${totals.websites} nettsider, kontakter hos ${totals.contacts}${
-      totals.errors ? `, ${totals.errors} feil` : ''
+      totals.errors ? `, ${totals.errors} feil` : ""
     }, ${remaining} igjen`;
     const now = !running
       ? null
       : waitLeft > 0
         ? `venter ${waitLeft} s`
-        : phase === 'brreg'
-          ? 'trinn 1/2: Brønnøysund pågår'
+        : phase === "brreg"
+          ? "trinn 1/2: Brønnøysund pågår"
           : `trinn 2/2: AI-kjøring ${totals.runs + 1} pågår${
               totals.runs > 0 && totals.processed > 0
                 ? ` (ca. ${Math.ceil(remaining / (totals.processed / totals.runs))} min igjen)`
-                : ''
+                : ""
             }`;
-    status = ['Oppdater alt', now, brregPart, phase === 'ai' || totals.runs > 0 ? aiPart : null, msg]
+    status = [
+      "Oppdater alt",
+      now,
+      brregPart,
+      phase === "ai" || totals.runs > 0 ? aiPart : null,
+      msg,
+    ]
       .filter(Boolean)
-      .join(' · ');
+      .join(" · ");
   } else if (msg) {
     status = msg;
   }
@@ -176,16 +201,45 @@ export default function RunUpdateAllButton({
         setStopping(true);
       }}
     >
-      {stopping ? 'Stopper…' : 'Stopp oppdatering'}
+      {stopping ? "Stopper…" : "Stopp oppdatering"}
     </button>
   ) : (
-    <button
-      className="btn btn-primary btn-sm"
-      disabled={stale === 0 && (!aiEnabled || remaining === 0)}
-      onClick={run}
-      title="Kjører Brreg til alle er sjekket, deretter AI-køen til den er tom — så lenge siden er åpen"
-    >
-      Oppdater alt ({stale + (aiEnabled ? remaining : 0)} igjen)
-    </button>
+    <>
+      <ConfirmDialog
+        open={ask}
+        title="Oppdater alt"
+        confirmLabel="Start oppdatering"
+        onCancel={() => setAsk(false)}
+        onConfirm={() => {
+          setAsk(false);
+          run();
+        }}
+      >
+        <p>
+          <strong>Trinn 1, Brønnøysund ({stale} selskaper):</strong> henter
+          regnskap, roller, e-post og lead-score for alle som ikke er sjekket de
+          siste 3 dagene. Gratis.
+        </p>
+        {aiEnabled && (
+          <p>
+            <strong>Trinn 2, AI ({remaining} selskaper):</strong> AI-vurdering,
+            nyheter og kontakter fra nettsiden. Dette bruker Gemini og{" "}
+            <strong>koster penger</strong>, og teller mot utgiftsgrensen i
+            Google AI Studio.
+          </p>
+        )}
+        <p className="muted">
+          Kjører så lenge siden er åpen, og kan stoppes underveis.
+        </p>
+      </ConfirmDialog>
+      <button
+        className="btn btn-primary btn-sm"
+        disabled={stale === 0 && (!aiEnabled || remaining === 0)}
+        onClick={() => setAsk(true)}
+        title="Kjører Brreg til alle er sjekket, deretter AI-køen til den er tom — så lenge siden er åpen"
+      >
+        Oppdater alt ({stale + (aiEnabled ? remaining : 0)} igjen)
+      </button>
+    </>
   );
 }
