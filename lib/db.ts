@@ -603,6 +603,7 @@ export async function countActiveCompanies(): Promise<number> {
 }
 
 export interface DataCoverage {
+  unit: CoverageUnit;
   total: number;
   withFinancials: number;
   withGrowth: number;
@@ -614,44 +615,6 @@ export interface DataCoverage {
   withBoard: number;
   withNews: number;
   newsSearched: number;
-}
-
-// One query, not `listCompaniesWithScore()` + counting in JS — this is a
-// dashboard tile that admin/page.tsx renders on every load, so it should
-// cost roughly what countActiveCompanies() already costs, not a full
-// 621-row-with-joins fetch just to read a handful of coverage numbers.
-export async function getDataCoverage(): Promise<DataCoverage> {
-  const c = await db();
-  const res = await c.execute(`
-    SELECT
-      COUNT(*) AS total,
-      COUNT(CASE WHEN EXISTS (SELECT 1 FROM financials f WHERE f.company_id = co.id) THEN 1 END) AS with_financials,
-      COUNT(CASE WHEN (SELECT COUNT(DISTINCT year) FROM financials f WHERE f.company_id = co.id) >= 2 THEN 1 END) AS with_growth,
-      COUNT(CASE WHEN co.ai_analysis IS NOT NULL THEN 1 END) AS with_ai_analysis,
-      COUNT(CASE WHEN co.website IS NOT NULL THEN 1 END) AS with_website,
-      COUNT(CASE WHEN EXISTS (SELECT 1 FROM company_contacts cc WHERE cc.company_id = co.id AND cc.source = 'nettside') THEN 1 END) AS with_website_contacts,
-      COUNT(CASE WHEN co.ceo_name IS NOT NULL THEN 1 END) AS with_ceo,
-      COUNT(CASE WHEN co.email IS NOT NULL THEN 1 END) AS with_email,
-      COUNT(CASE WHEN EXISTS (SELECT 1 FROM company_contacts cc WHERE cc.company_id = co.id AND cc.source = 'brreg') THEN 1 END) AS with_board,
-      COUNT(CASE WHEN EXISTS (SELECT 1 FROM company_news n WHERE n.company_id = co.id) THEN 1 END) AS with_news,
-      COUNT(CASE WHEN co.news_checked_at IS NOT NULL THEN 1 END) AS news_searched
-    FROM companies co
-    WHERE co.status = 'active'
-  `);
-  const r = res.rows[0] as unknown as Record<string, number>;
-  return {
-    total: Number(r.total),
-    withFinancials: Number(r.with_financials),
-    withGrowth: Number(r.with_growth),
-    withAiAnalysis: Number(r.with_ai_analysis),
-    withWebsite: Number(r.with_website),
-    withWebsiteContacts: Number(r.with_website_contacts),
-    withCeo: Number(r.with_ceo),
-    withEmail: Number(r.with_email),
-    withBoard: Number(r.with_board),
-    withNews: Number(r.with_news),
-    newsSearched: Number(r.news_searched),
-  };
 }
 
 export const COVERAGE_CATEGORIES = [
@@ -692,19 +655,100 @@ export function isCoverageMode(v: string): v is CoverageMode {
   return v === 'har' || v === 'mangler';
 }
 
+// What one row of the coverage view counts: a customer (a konsern counted
+// once — the way the company list shows it) or each legal company. A
+// customer "has" something when ANY company in its group has it: 21
+// shipowning shells without a website shouldn't drag coverage down when
+// the operating company has one.
+export type CoverageUnit = 'kunde' | 'selskap';
+
+export function isCoverageUnit(v: string): v is CoverageUnit {
+  return v === 'kunde' || v === 'selskap';
+}
+
+const UNIT_EXPR: Record<CoverageUnit, string> = {
+  kunde: "COALESCE(co.group_key, 'c' || co.id)",
+  selskap: "'c' || co.id",
+};
+
+// One query, not `listCompaniesWithScore()` + counting in JS — this is a
+// dashboard tile that admin/page.tsx renders on every load.
+export async function getDataCoverage(unit: CoverageUnit = 'kunde'): Promise<DataCoverage> {
+  const c = await db();
+  const u = UNIT_EXPR[unit];
+  const count = (cond: string) => `COUNT(DISTINCT CASE WHEN ${cond} THEN ${u} END)`;
+  const res = await c.execute(`
+    SELECT
+      COUNT(DISTINCT ${u}) AS total,
+      ${count(COVERAGE_WHERE.financials)} AS with_financials,
+      ${count(COVERAGE_WHERE.growth)} AS with_growth,
+      ${count(COVERAGE_WHERE.ai)} AS with_ai_analysis,
+      ${count(COVERAGE_WHERE.website)} AS with_website,
+      ${count(COVERAGE_WHERE.contacts)} AS with_website_contacts,
+      ${count(COVERAGE_WHERE.ceo)} AS with_ceo,
+      ${count(COVERAGE_WHERE.email)} AS with_email,
+      ${count(COVERAGE_WHERE.board)} AS with_board,
+      ${count(COVERAGE_WHERE.news)} AS with_news,
+      ${count('co.news_checked_at IS NOT NULL')} AS news_searched
+    FROM companies co
+    WHERE co.status = 'active'
+  `);
+  const r = res.rows[0] as unknown as Record<string, number>;
+  return {
+    unit,
+    total: Number(r.total),
+    withFinancials: Number(r.with_financials),
+    withGrowth: Number(r.with_growth),
+    withAiAnalysis: Number(r.with_ai_analysis),
+    withWebsite: Number(r.with_website),
+    withWebsiteContacts: Number(r.with_website_contacts),
+    withCeo: Number(r.with_ceo),
+    withEmail: Number(r.with_email),
+    withBoard: Number(r.with_board),
+    withNews: Number(r.with_news),
+    newsSearched: Number(r.news_searched),
+  };
+}
+
+// The "Har" / "Mangler" drill-down. Per customer: one entry per unit, named
+// after its operating company (most employees, then revenue, then score) —
+// not a ship-owning shell that happens to score higher.
 export async function listCompaniesForCoverage(
   category: CoverageCategory,
   mode: CoverageMode = 'har',
-): Promise<{ orgnr: string; name: string }[]> {
+  unit: CoverageUnit = 'kunde',
+): Promise<{ orgnr: string; name: string; groupSize: number }[]> {
   const c = await db();
-  // Parens around the whole fragment matter — e.g. growth's fragment is a
-  // numeric subquery compared with >= 2; NOT must wrap the full comparison,
-  // not just the subquery, or it'd coerce the count to a boolean first.
-  const where = mode === 'har' ? COVERAGE_WHERE[category] : `NOT (${COVERAGE_WHERE[category]})`;
   const res = await c.execute(
-    `SELECT orgnr, name FROM companies co WHERE co.status = 'active' AND ${where} ORDER BY name COLLATE NOCASE`,
+    `SELECT ${UNIT_EXPR[unit]} AS unit, co.orgnr, co.name, co.employees, sc.revenue_latest, sc.lead_score,
+            CASE WHEN ${COVERAGE_WHERE[category]} THEN 1 ELSE 0 END AS has
+     FROM companies co ${SCORE_JOIN}
+     WHERE co.status = 'active'`,
   );
-  return res.rows as unknown as { orgnr: string; name: string }[];
+  type Row = {
+    unit: string;
+    orgnr: string;
+    name: string;
+    employees: number | null;
+    revenue_latest: number | null;
+    lead_score: number | null;
+    has: number;
+  };
+  const units = new Map<string, Row[]>();
+  for (const r of res.rows as unknown as Row[]) units.set(r.unit, [...(units.get(r.unit) ?? []), r]);
+  const out: { orgnr: string; name: string; groupSize: number }[] = [];
+  for (const members of units.values()) {
+    const has = members.some((m) => Number(m.has) === 1);
+    if (has !== (mode === 'har')) continue;
+    const best = [...members].sort(
+      (a, b) =>
+        (b.employees ?? -1) - (a.employees ?? -1) ||
+        (b.revenue_latest ?? -1) - (a.revenue_latest ?? -1) ||
+        (b.lead_score ?? -1) - (a.lead_score ?? -1),
+    )[0];
+    out.push({ orgnr: best.orgnr, name: best.name, groupSize: members.length });
+  }
+  return out.sort((a, b) => a.name.localeCompare(b.name, 'nb'));
 }
 
 export async function listCompaniesWithScore(): Promise<CompanyWithScore[]> {

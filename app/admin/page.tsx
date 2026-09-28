@@ -8,6 +8,8 @@ import {
   listCompaniesForCoverage,
   isCoverageCategory,
   isCoverageMode,
+  isCoverageUnit,
+  type CoverageUnit,
   type CoverageCategory,
   type CoverageMode,
   listScans,
@@ -64,7 +66,7 @@ const PERIODS = [
 export default async function AdminPage({
   searchParams,
 }: {
-  searchParams: { view?: string; kategori?: string; modus?: string; scan?: string; periode?: string };
+  searchParams: { view?: string; kategori?: string; modus?: string; scan?: string; periode?: string; enhet?: string };
 }) {
   const user = await getCurrentUser();
   if (!user || user.role !== 'admin') redirect('/login?next=/admin');
@@ -76,13 +78,16 @@ export default async function AdminPage({
   const period = PERIODS.find((p) => p.key === searchParams.periode) ?? PERIODS.find((p) => p.key === 'idag')!;
   const periodRange = period.range();
   const mode: CoverageMode = searchParams.modus && isCoverageMode(searchParams.modus) ? searchParams.modus : 'har';
+  const unit: CoverageUnit = searchParams.enhet && isCoverageUnit(searchParams.enhet) ? searchParams.enhet : 'kunde';
+  // Keeps the chosen unit when drilling into a category or closing it.
+  const dq = (extra = '') => `/admin?view=datakvalitet${unit === 'selskap' ? '&enhet=selskap' : ''}${extra}`;
 
   const [activeCount, scans, auditRows, coverage, categoryCompanies, freshness, aiRemaining, brregStale] = await Promise.all([
     countActiveCompanies(),
     listScans(15),
     listAudit(periodRange ? 1000 : 200, periodRange ?? undefined),
-    getDataCoverage(),
-    category ? listCompaniesForCoverage(category, mode) : Promise.resolve(null),
+    getDataCoverage(unit),
+    category ? listCompaniesForCoverage(category, mode, unit) : Promise.resolve(null),
     getFreshness(),
     countAiPending(),
     countBrregStale(),
@@ -132,7 +137,12 @@ export default async function AdminPage({
             return (
               <>
                 <div className="box box-pad" style={{ flexShrink: 0, gap: 14 }}>
-                  <span className="box-title">Hvor oppdatert er dataene</span>
+                  <span className="box-title">
+                    Hvor oppdatert er dataene{' '}
+                    <span className="muted" style={{ fontSize: '0.74rem', fontWeight: 400 }}>
+                      · per selskap, siden innhentingen skjer selskap for selskap
+                    </span>
+                  </span>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 18 }}>
                     <FreshnessTile label="Brreg sjekket" value={freshness.brregWeek} total={freshness.total} hint="siste 7 dager" />
                     <FreshnessTile label="Brreg sjekket" value={freshness.brregMonth} total={freshness.total} hint="siste 30 dager" />
@@ -146,10 +156,26 @@ export default async function AdminPage({
                   </div>
                 </div>
                 <div style={{ flexShrink: 0 }}>
-                  <p style={{ fontSize: '0.9rem', fontWeight: 700, marginBottom: 4 }}>Hvor mye vet vi</p>
-                  <p className="muted" style={{ fontSize: '0.8rem', marginBottom: 14 }}>
-                    Om de {coverage.total} selskapene — klikk «Har» eller «Mangler» på en kategori for å se hvem
-                  </p>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12, flexWrap: 'wrap', marginBottom: 14 }}>
+                    <div>
+                      <p style={{ fontSize: '0.9rem', fontWeight: 700, marginBottom: 4 }}>Hvor mye vet vi</p>
+                      <p className="muted" style={{ fontSize: '0.8rem' }}>
+                        {unit === 'kunde'
+                          ? `Om de ${coverage.total} kundene — et konsern telles én gang og «har» noe hvis ett av selskapene har det.`
+                          : `Om alle ${coverage.total} selskapene, hvert for seg — også datterselskaper og skallselskaper.`}{' '}
+                        Klikk «Har» eller «Mangler» for å se hvem.
+                      </p>
+                    </div>
+                    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                      <span className="muted" style={{ fontSize: '0.78rem' }}>Tell per</span>
+                      <Link href="/admin?view=datakvalitet" className={`chip${unit === 'kunde' ? ' active' : ''}`}>
+                        kunde (konsern samlet)
+                      </Link>
+                      <Link href="/admin?view=datakvalitet&enhet=selskap" className={`chip${unit === 'selskap' ? ' active' : ''}`}>
+                        selskap
+                      </Link>
+                    </div>
+                  </div>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14 }}>
                     {rows.map((row) => {
                       const pct = coverage.total > 0 ? Math.round((row.value / coverage.total) * 100) : 0;
@@ -175,13 +201,13 @@ export default async function AdminPage({
                           </div>
                           <div style={{ display: 'flex', gap: 12, marginTop: 4 }}>
                             <Link
-                              href={cardActive && mode === 'har' ? '/admin?view=datakvalitet' : `/admin?view=datakvalitet&kategori=${row.key}&modus=har`}
+                              href={cardActive && mode === 'har' ? dq() : dq(`&kategori=${row.key}&modus=har`)}
                               className={`coverage-link${cardActive && mode === 'har' ? ' active' : ''}`}
                             >
                               Har ({row.value})
                             </Link>
                             <Link
-                              href={cardActive && mode === 'mangler' ? '/admin?view=datakvalitet' : `/admin?view=datakvalitet&kategori=${row.key}&modus=mangler`}
+                              href={cardActive && mode === 'mangler' ? dq() : dq(`&kategori=${row.key}&modus=mangler`)}
                               className={`coverage-link${cardActive && mode === 'mangler' ? ' active' : ''}`}
                             >
                               Mangler ({missing})
@@ -197,9 +223,9 @@ export default async function AdminPage({
                   <div className="box" style={{ flex: 1, minHeight: 0 }}>
                     <div className="box-header">
                       <span className="box-title">
-                        {categoryCompanies.length} selskaper {mode === 'har' ? 'har' : 'mangler'} — {selectedLabel}
+                        {categoryCompanies.length} {unit === 'kunde' ? 'kunder' : 'selskaper'} {mode === 'har' ? 'har' : 'mangler'} — {selectedLabel}
                       </span>
-                      <Link href="/admin?view=datakvalitet" className="muted" style={{ fontSize: '0.78rem' }}>✕ lukk</Link>
+                      <Link href={dq()} className="muted" style={{ fontSize: '0.78rem' }}>✕ lukk</Link>
                     </div>
                     <div className="box-scroll">
                       {categoryCompanies.length === 0 ? (
@@ -209,6 +235,7 @@ export default async function AdminPage({
                           {categoryCompanies.map((co) => (
                             <Link key={co.orgnr} href={`/company/${co.orgnr}`} className="link-accent" style={{ fontSize: '0.84rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                               {co.name}
+                              {co.groupSize > 1 && <span className="muted"> · konsern ({co.groupSize})</span>}
                             </Link>
                           ))}
                         </div>
