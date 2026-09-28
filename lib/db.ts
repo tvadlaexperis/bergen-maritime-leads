@@ -245,6 +245,16 @@ const ONCE_MIGRATIONS: { key: string; sql: string }[] = [
     key: '2026-09-28-konsern-root-refresh',
     sql: `UPDATE companies SET last_refreshed_at = NULL WHERE parent_orgnr IS NOT NULL`,
   },
+  {
+    // The contact crawler used to rank "About us" pages above /contacts and
+    // never went a level deeper (wilsonship.no: people on
+    // /contacts/office/bergen-headquarter). Re-read every site that gave no
+    // named people; the AI analysis itself isn't redone if under 30 days.
+    key: '2026-09-28-contacts-recrawl',
+    sql: `UPDATE companies SET contacts_scraped_at = NULL
+          WHERE website IS NOT NULL
+            AND NOT EXISTS (SELECT 1 FROM company_contacts cc WHERE cc.company_id = companies.id AND cc.source = 'nettside')`,
+  },
 ];
 
 async function runOnceMigrations(): Promise<void> {

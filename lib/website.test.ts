@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { stripHtml, findLikelyContactPages, contactPageCandidates, siteMentionsCompany } from './website';
+import { stripHtml, findLikelyContactPages, contactPageCandidates, siteMentionsCompany, deeperContactPages } from './website';
 
 describe('stripHtml', () => {
   it('removes tags, scripts and styles, decoding common entities', () => {
@@ -91,5 +91,29 @@ describe('siteMentionsCompany', () => {
     expect(siteMentionsCompany('<h1>OBOS</h1><p>Bolig i Bergen</p>', 'ELSESRO BÅTHAVN SA', '912345678')).toBe(false);
     // Only generic words shared: not enough.
     expect(siteMentionsCompany('<p>Marine services in Bergen</p>', 'BERGEN MARINE SERVICE AS', '123456789')).toBe(false);
+  });
+});
+
+describe('people pages over "about us" (wilsonship.no)', () => {
+  const home =
+    '<a href="/about-us">About Us</a><a href="/about-us/our-history">Our History</a>' +
+    '<a href="/about-us/group-structure">Group Structure</a><a href="/about-us/privacy-policy">Privacy Policy</a>' +
+    '<a href="/contacts">Contacts</a><a href="/contacts/">Contacts</a>';
+  it('puts /contacts first, reads it once, and never picks history or privacy', () => {
+    const picks = findLikelyContactPages(home, 'https://wilsonship.no', 4).map((u) => new URL(u).pathname);
+    expect(picks[0].replace(/\/$/, '')).toBe('/contacts');
+    expect(picks.filter((p) => p.replace(/\/$/, '') === '/contacts')).toHaveLength(1);
+    expect(picks).not.toContain('/about-us/our-history');
+    expect(picks).not.toContain('/about-us/privacy-policy');
+  });
+  it('goes one level down to the head office before offices abroad', () => {
+    const hub =
+      '<a href="/contacts/office/madrid">Madrid</a><a href="/contacts/office/bergen-headquarter">Bergen</a>' +
+      '<a href="/contacts/department/executive-management">Executive Management</a>';
+    const deeper = deeperContactPages([{ url: 'https://wilsonship.no/contacts', html: hub }], new Set(['https://wilsonship.no/contacts']), 2);
+    expect(deeper.map((u) => new URL(u).pathname).sort()).toEqual([
+      '/contacts/department/executive-management',
+      '/contacts/office/bergen-headquarter',
+    ]);
   });
 });

@@ -1,7 +1,7 @@
 import type { Provider } from '../types';
 import { safeFetchText, safeFetchResult } from '../../http/safeFetch';
 import { cleanWebsite } from '../../brreg';
-import { stripHtml, contactPageCandidates } from '../../website';
+import { stripHtml, contactPageCandidates, deeperContactPages } from '../../website';
 import { parseNewsAnswer, findJsonArray, NEWS_CATEGORIES, type FoundNews } from '../../companyNews';
 import { linkedinCompanyName } from '../../brreg';
 
@@ -390,7 +390,8 @@ async function fetchPageText(url: string): Promise<string | null> {
 
 // Homepage first (its links pick the subpages), then up to four subpages in
 // parallel — best-matching menu links, topped up with common paths like
-// /kontakt and /om-oss. Reading just one subpage missed most team pages.
+// /kontakt and /om-oss — then up to four pages one level deeper (office /
+// department pages). Reading just one subpage missed most team pages.
 // Each fetch is capped at 6s and runs inside the scan's shared budget.
 async function requestContacts(name: string, website: string): Promise<ExtractedContact[]> {
   const apiKey = process.env.GEMINI_API_KEY;
@@ -399,18 +400,23 @@ async function requestContacts(name: string, website: string): Promise<Extracted
   const homepageHtml = await fetchPageText(website);
   if (!homepageHtml) return [];
 
-  const subpageUrls = contactPageCandidates(homepageHtml, website, 4);
-  const subpageHtmls = await Promise.all(subpageUrls.map((url) => fetchPageText(url)));
-  const pages = [{ url: website, html: homepageHtml }];
-  subpageUrls.forEach((url, i) => {
-    const html = subpageHtmls[i];
-    if (html) pages.push({ url, html });
-  });
+  const fetchAll = async (urls: string[]) =>
+    (await Promise.all(urls.map(async (url) => ({ url, html: await fetchPageText(url) })))).filter(
+      (p): p is { url: string; html: string } => !!p.html,
+    );
+  const level1 = await fetchAll(contactPageCandidates(homepageHtml, website, 4));
+  // One level further: many sites keep the people on office/department pages
+  // under a /contacts hub (wilsonship.no), which the homepage never links to.
+  const visited = new Set([website, ...level1.map((p) => p.url)]);
+  const level2 = await fetchAll(deeperContactPages(level1, visited, 4));
 
+  // Most specific pages first, so the text cap trims the homepage, not the
+  // page that actually lists the people.
+  const pages = [...level2, ...level1, { url: website, html: homepageHtml }];
   const combinedText = pages
-    .map((p) => `--- ${p.url} ---\n${stripHtml(p.html).slice(0, 8_000)}`)
+    .map((p) => `--- ${p.url} ---\n${stripHtml(p.html).slice(0, 9_000)}`)
     .join('\n\n')
-    .slice(0, 32_000);
+    .slice(0, 40_000);
   if (!combinedText.trim()) return [];
 
   const prompt =
@@ -431,7 +437,7 @@ async function requestContacts(name: string, website: string): Promise<Extracted
     }),
   );
   if (!isValidContacts(parsed)) throw new Error('Gemini: kontaktlisten hadde feil format');
-  return parsed.contacts.filter((ct) => ct.name?.trim()).slice(0, 20);
+  return parsed.contacts.filter((ct) => ct.name?.trim()).slice(0, 30);
 }
 
 export const aiProvider: Provider = {

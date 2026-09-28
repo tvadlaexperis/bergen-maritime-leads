@@ -44,6 +44,11 @@ the guest magic-link flow, `scripts/hash-password.mjs`, `scripts/create-user.mjs
   older than 30 days;
   `company_contacts` with `source = 'nettside'`. Each source is replaced independently
   (`replaceContacts(companyId, source, rows)`); an empty scrape never wipes a non-empty list.
+- **Contact crawl** — people pages (kontakt, contact, team, ansatte, ledelse, management …) outrank
+  «about us» pages; history/privacy/investor/news/careers are never read. Up to 4 pages from the
+  homepage, then up to 4 one level deeper (office/department pages, head office/management/Bergen
+  first) — wilsonship.no keeps its people on /contacts/office/bergen-headquarter. The deepest pages
+  go first in the 40k-character text sent to Gemini; up to 30 people per site.
 - **LinkedIn** — search *links* only (`lib/brreg.ts#linkedin*`): a person search next to each
   named contact, plus company / IT-leder / HR searches. No API calls or scraping — LinkedIn has
   no open people API and its ToS forbids automated access; the salesperson clicks through in

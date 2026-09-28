@@ -239,6 +239,27 @@ export default function CompanyList({
     }
     return map;
   }, [rows]);
+  // Employees and revenue summed over the group — Brreg counts per legal
+  // company, and a group's staff and turnover are spread over management,
+  // shipowning and chartering companies (Wilson: 134 ansatte in one, the
+  // revenue in three others).
+  const groupTotals = useMemo(() => {
+    const sum = (vals: (number | null)[]) => {
+      const known = vals.filter((v): v is number => v != null);
+      return known.length ? known.reduce((a, b) => a + b, 0) : null;
+    };
+    const map = new Map<string, { employees: number | null; revenue: number | null; result: number | null }>();
+    for (const [key, members] of membersByGroup) {
+      map.set(key, {
+        employees: sum(members.map((m) => m.employees)),
+        revenue: sum(members.map((m) => m.revenue_latest)),
+        result: sum(members.map((m) => m.operating_result_latest)),
+      });
+    }
+    return map;
+  }, [membersByGroup]);
+  const GROUP_SUM_NOTE =
+    'Sum av selskapenes egne tall i Brønnøysund — kan inneholde interne transaksjoner, og utenlandske selskaper og mannskap ansatt i utlandet er ikke med.';
   const groupBasisText = (r: CompanyWithScore) => {
     if (!r.group_basis) return '';
     try {
@@ -295,15 +316,33 @@ export default function CompanyList({
       return mul * ((av as number) - (bv as number));
     });
     if (!mergeGroups) return sorted;
-    // One row per group: whichever member ranks first under the current sort
-    // and filters stands in for the rest.
+    // One row per group, at the position of its best-ranked member under the
+    // current sort — but shown as its operating company (most employees,
+    // then revenue, then score), not whichever holding or shipowning shell
+    // happened to rank first (Wilson showed "Wilson Ship Management, 10
+    // ansatte" while Wilson Management has 134).
+    const inList = new Set(list.map((r) => r.id));
+    const operating = (key: string) =>
+      [...(membersByGroup.get(key) ?? [])]
+        .filter((m) => inList.has(m.id))
+        .sort(
+          (a, b) =>
+            (b.employees ?? -1) - (a.employees ?? -1) ||
+            (b.revenue_latest ?? -1) - (a.revenue_latest ?? -1) ||
+            (b.lead_score ?? -1) - (a.lead_score ?? -1),
+        )[0];
     const seen = new Set<string>();
-    return sorted.filter((r) => {
-      if (!r.group_key || (membersByGroup.get(r.group_key)?.length ?? 0) < 2) return true;
-      if (seen.has(r.group_key)) return false;
+    const out: CompanyWithScore[] = [];
+    for (const r of sorted) {
+      if (!r.group_key || (membersByGroup.get(r.group_key)?.length ?? 0) < 2) {
+        out.push(r);
+        continue;
+      }
+      if (seen.has(r.group_key)) continue;
       seen.add(r.group_key);
-      return true;
-    });
+      out.push(operating(r.group_key) ?? r);
+    }
+    return out;
   }, [rows, group, bransje, orgForm, kommuneFilter, minSize, minGrowth, minScore, signalFilter, signalById, contactFilter, search, favorites, lockFavorites, sortKey, sortDir, mergeGroups, membersByGroup]);
 
   return (
@@ -596,6 +635,13 @@ export default function CompanyList({
             <tbody>
               {filtered.map((r, i) => {
                 const groupMembers = r.group_key ? (membersByGroup.get(r.group_key) ?? []) : [];
+                // A merged group row shows the group's totals throughout, so
+                // revenue, result and margin describe the same thing.
+                const tot = mergeGroups && groupMembers.length > 1 ? groupTotals.get(r.group_key!) : undefined;
+                const opResult = tot ? tot.result : r.operating_result_latest;
+                const opMargin = tot
+                  ? tot.result != null && tot.revenue ? (tot.result / tot.revenue) * 100 : null
+                  : r.operating_margin_pct;
                 return (
                 <tr key={r.id}>
                   <td className="num muted">{i + 1}</td>
@@ -634,8 +680,22 @@ export default function CompanyList({
                     )}
                   </td>
                   <td style={{ whiteSpace: 'nowrap' }} className="muted">{r.matched_group ?? '—'}</td>
-                  <td className="col-right num">{fmtInt(r.employees)}</td>
-                  <td className="col-right num" style={{ whiteSpace: 'nowrap' }}>{fmtNok(r.revenue_latest, { compact: true })}</td>
+                  <td className="col-right num">
+                    {mergeGroups && groupMembers.length > 1 ? (
+                      <span title={`Sum i konsernet (${fmtInt(r.employees)} i ${r.name}). ${GROUP_SUM_NOTE}`}>
+                        {fmtInt(groupTotals.get(r.group_key!)?.employees ?? null)}
+                      </span>
+                    ) : (
+                      fmtInt(r.employees)
+                    )}
+                  </td>
+                  <td className="col-right num" style={{ whiteSpace: 'nowrap' }}>{mergeGroups && groupMembers.length > 1 ? (
+                      <span title={`Sum i konsernet (${fmtNok(r.revenue_latest, { compact: true })} i ${r.name}). ${GROUP_SUM_NOTE}`}>
+                        {fmtNok(groupTotals.get(r.group_key!)?.revenue ?? null, { compact: true })}
+                      </span>
+                    ) : (
+                      fmtNok(r.revenue_latest, { compact: true })
+                    )}</td>
                   <td
                     className="col-right num"
                     style={{ whiteSpace: 'nowrap', color: r.revenue_growth_pct != null ? (r.revenue_growth_pct >= 0 ? 'var(--positive)' : 'var(--negative)') : undefined }}
@@ -644,15 +704,16 @@ export default function CompanyList({
                   </td>
                   <td
                     className="col-right num"
-                    style={{ whiteSpace: 'nowrap', color: r.operating_result_latest != null ? (r.operating_result_latest >= 0 ? 'var(--positive)' : 'var(--negative)') : undefined }}
+                    style={{ whiteSpace: 'nowrap', color: opResult != null ? (opResult >= 0 ? 'var(--positive)' : 'var(--negative)') : undefined }}
+                    title={tot ? `Sum i konsernet. ${GROUP_SUM_NOTE}` : undefined}
                   >
-                    {fmtNok(r.operating_result_latest, { compact: true })}
+                    {fmtNok(opResult, { compact: true })}
                   </td>
                   <td
                     className="col-right num"
-                    style={{ whiteSpace: 'nowrap', color: r.operating_margin_pct != null ? (r.operating_margin_pct >= 0 ? 'var(--positive)' : 'var(--negative)') : undefined }}
+                    style={{ whiteSpace: 'nowrap', color: opMargin != null ? (opMargin >= 0 ? 'var(--positive)' : 'var(--negative)') : undefined }}
                   >
-                    {r.operating_margin_pct != null ? fmtPct(r.operating_margin_pct, 0) : '—'}
+                    {opMargin != null ? fmtPct(opMargin, 0) : '—'}
                   </td>
                   <td className="col-right">
                     <ScoreBadge score={r.lead_score} reason={r.reason} />

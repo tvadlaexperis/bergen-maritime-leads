@@ -83,6 +83,9 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
   // The rest of the group (lib/groups.ts): their website contacts and news
   // are shown here too — for a salesperson the group is one customer.
   const otherMembers = groupMembers.filter((m) => m.orgnr !== co.orgnr);
+  const groupEmployeeTotal = groupMembers.some((m) => m.employees != null)
+    ? groupMembers.reduce((sum, m) => sum + (m.employees ?? 0), 0)
+    : null;
   const [groupContactLists, groupNewsLists] = await Promise.all([
     Promise.all(otherMembers.map((m) => listWebsiteContacts(m.id, 'nettside'))),
     Promise.all(otherMembers.map((m) => listCompanyNews(m.id, 6))),
@@ -256,6 +259,12 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
                 )}
                 <span>
                   Ansatte: <span style={{ color: 'var(--text-primary)' }}>{fmtInt(co.employees)}</span>
+                {groupMembers.length > 1 && groupEmployeeTotal != null && groupEmployeeTotal !== co.employees && (
+                  <span title="Registrerte ansatte summert over selskapene i konsernet (Brønnøysund)">
+                    {' '}
+                    ({fmtInt(groupEmployeeTotal)} i konsernet)
+                  </span>
+                )}
                 </span>
               </span>
               {isAdmin && <AdminPanelToggle />}
