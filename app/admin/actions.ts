@@ -138,7 +138,9 @@ export async function refreshCompanyAction(orgnr: string): Promise<{ ok: boolean
 // for new companies and picks up register-side changes (e-post, ansatte).
 export async function runScanAction(full: boolean): Promise<{ summary: string; processed: number; staleRemaining: number }> {
   const user = await guard('admin-scan');
-  const r = await runScan({ full, skipDiscovery: !full, trigger: full ? 'full' : 'manuell' });
+  // Brreg only: Gemini costs money, and the AI queue has its own button
+  // («Oppdater alt» phase 2) and the nightly cron.
+  const r = await runScan({ full, noAi: true, skipDiscovery: !full, trigger: full ? 'full' : 'manuell' });
   const d = r.details;
   const parts = [
     d.discovery.ran ? `${d.discovery.added} nye selskaper` : null,

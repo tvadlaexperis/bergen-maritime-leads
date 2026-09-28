@@ -99,7 +99,7 @@ export default function ScanPanel({
             (gratis, raskt): regnskap, daglig leder, styre, konsern og lead-score for selskaper som ikke er sjekket de
             siste 3 dagene — er alle oppdatert, hoppes trinnet over. <strong>2. AI</strong> (tregt): AI-vurdering,
             nettsidesøk og kontakter fra nettsiden for inntil {aiBatch} selskaper — de som aldri er vurdert og har
-            høyest score går først. «Full oppdatering» sjekker alle i Brreg uansett alder og leter etter nye selskaper.
+            høyest score går først. «Kjør skann» og «Full oppdatering» kjører bare trinn 1 og er gratis; «Full oppdatering» sjekker alle i Brreg uansett alder og leter etter nye selskaper.
             «Oppdater alt» kjører Brreg til alle er sjekket, deretter AI-køen til den er tom (ca. {aiBatch} selskaper i
             minuttet) — så lenge siden er åpen. Den nattlige kjøringen gjør det samme i det små hver natt.
           </>

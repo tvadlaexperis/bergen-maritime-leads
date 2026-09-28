@@ -723,6 +723,8 @@ export interface RunScanOptions {
   full?: boolean;
   /** Skip the Brreg pass entirely — the whole budget goes to the AI queue ("Kjør AI-køen"). */
   aiOnly?: boolean;
+  /** Skip the AI pass — Brreg (and NAV) only, costs nothing ("Kjør skann" / "Full oppdatering"). */
+  noAi?: boolean;
   /** How many companies the Brreg pass may consider this run (ignored when `full`). */
   limit?: number;
   /** Skip discovery — only refresh known companies. */
@@ -760,7 +762,7 @@ export async function runScan(opts: RunScanOptions = {}): Promise<ScanResult> {
     if (!entry) logs.set(co.orgnr, (entry = { name: co.name, log: new CompanyLog() }));
     return entry.log;
   };
-  const aiEnabled = !!process.env.GEMINI_API_KEY;
+  const aiEnabled = !!process.env.GEMINI_API_KEY && !opts.noAi;
   details.ai.enabled = aiEnabled;
 
   if (!opts.skipDiscovery) {
