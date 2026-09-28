@@ -24,6 +24,7 @@ import {
   setAiAttempted,
   setContactsScraped,
   setCompanyTech,
+  setCompanyGeo,
   listCompanyNews,
   mergeCompanyNews,
   NEWS_REFRESH_DAYS,
@@ -290,6 +291,33 @@ async function brregPass(
     await setCompanyWebsite(company.id, candidate);
     stats.websiteFromEmail = (stats.websiteFromEmail ?? 0) + 1;
     log.change(`Nettside fra e-postdomenet: ${candidate}`, true);
+  }
+
+  // Map position (Kartverket), only when the address is new or changed.
+  // Sole proprietorships (ENK) are never placed: their business address is
+  // often the owner's home, so we store "skjult" instead of coordinates.
+  const fresh = enhet.ok ? enhet.data : null;
+  const address = fresh ? fresh.address : company.address;
+  const postnummer = fresh ? fresh.postnummer : company.postnummer;
+  const geoKey = `${address ?? ''}|${postnummer ?? ''}`;
+  if (geoKey !== '|' && geoKey !== company.geocoded_for) {
+    if (/enkeltperson/i.test(company.org_form ?? '')) {
+      await setCompanyGeo(company.id, { lat: null, lon: null, precision: 'skjult', forAddress: geoKey });
+    } else {
+      const geo = await orchestrator.callTool<{ lat: number; lon: number; precision: string } | null>(
+        'geo.geocode',
+        { address, postnummer },
+        10_000,
+      );
+      if (geo.ok) {
+        await setCompanyGeo(company.id, {
+          lat: geo.data?.lat ?? null,
+          lon: geo.data?.lon ?? null,
+          precision: geo.data?.precision ?? null,
+          forAddress: geoKey,
+        });
+      }
+    }
   }
 
   const priorYears = new Set(prevFinancials.map((f) => f.year));

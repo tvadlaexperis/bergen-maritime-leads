@@ -75,6 +75,10 @@ export interface Company {
   group_key: string | null; // shared by every company recomputeGroups() put in the same group; null = standalone
   group_basis: string | null; // JSON GroupBasis — why they were grouped (lib/groups.ts)
   tech_json: string | null; // JSON { technologies, itEnvironment, digitalProducts, checkedAt } from the website read
+  lat: number | null;
+  lon: number | null;
+  geo_precision: string | null; // 'adresse' | 'postnummer' | 'skjult' (sole proprietorship — not placed, GDPR)
+  geocoded_for: string | null; // the address the coordinates belong to; a new address triggers a new lookup
   discovered_at: number;
   last_refreshed_at: number | null;
   updated_at: number;
@@ -222,6 +226,10 @@ const CONTACT_COLUMNS = [
   'group_key TEXT',
   'group_basis TEXT',
   'tech_json TEXT',
+  'lat REAL',
+  'lon REAL',
+  'geo_precision TEXT',
+  'geocoded_for TEXT',
 ];
 
 // Data fixes that must run exactly once per database, tracked in app_meta.
@@ -1410,6 +1418,17 @@ export async function listGroupMembers(groupKey: string): Promise<GroupMember[]>
     args: [groupKey],
   });
   return plain<GroupMember>(res.rows);
+}
+
+export async function setCompanyGeo(
+  id: number,
+  geo: { lat: number | null; lon: number | null; precision: string | null; forAddress: string },
+): Promise<void> {
+  const c = await db();
+  await c.execute({
+    sql: 'UPDATE companies SET lat = ?, lon = ?, geo_precision = ?, geocoded_for = ? WHERE id = ?',
+    args: [geo.lat, geo.lon, geo.precision, geo.forAddress, id],
+  });
 }
 
 export async function setCompanyTech(id: number, tech: unknown): Promise<void> {

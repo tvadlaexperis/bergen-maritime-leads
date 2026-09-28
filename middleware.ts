@@ -16,7 +16,7 @@ function buildCsp(nonce: string): string {
     default-src 'self';
     script-src ${scriptSrc};
     style-src 'self' 'unsafe-inline';
-    img-src 'self' data:;
+    img-src 'self' data: https://cache.kartverket.no;
     font-src 'self';
     connect-src 'self';
     object-src 'none';
