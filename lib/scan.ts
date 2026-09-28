@@ -1,6 +1,6 @@
 import { orchestrator } from './orchestrator/boot';
 import type { LeadScoreResult } from './orchestrator/providers/score';
-import type { LeadAnalysis } from './orchestrator/providers/ai';
+import type { LeadAnalysis, WebsiteInsights } from './orchestrator/providers/ai';
 import { websiteFromEmail, type Company as RawCompany, type KonsernInfo, type Roller } from './brreg';
 import { safeFetchText } from './http/safeFetch';
 import { siteMentionsCompany } from './website';
@@ -23,6 +23,7 @@ import {
   setWebsiteSearchAttempted,
   setAiAttempted,
   setContactsScraped,
+  setCompanyTech,
   listCompanyNews,
   mergeCompanyNews,
   NEWS_REFRESH_DAYS,
@@ -489,6 +490,7 @@ async function aiPass(
           category: n.category,
         })),
         contacts,
+        ...techForAnalysis(company.tech_json),
         jobAds: jobAds.slice(0, 8).map((j) => ({
           title: j.title,
           occupation: j.occupation,
@@ -535,15 +537,24 @@ async function aiPass(
     // Free-form Gemini read of the company's own about/contact/team pages —
     // fine to repeat on every AI cycle, since staff on a team page turn over.
     const prior = await listWebsiteContacts(company.id, 'nettside');
-    const contacts = await orchestrator.callTool<{ name: string; role: string | null; email: string | null; phone: string | null }[]>(
+    const insights = await orchestrator.callTool<WebsiteInsights>(
       'ai.extractContacts',
       { name: company.name, website },
       budget(40_000),
     );
-    if (!contacts.ok) {
-      errors.push({ scope: `ai.extractContacts ${orgnr}`, message: contacts.error });
+    if (!insights.ok) {
+      errors.push({ scope: `ai.extractContacts ${orgnr}`, message: insights.error });
       return;
     }
+    const contacts = { data: insights.data.contacts };
+    // Technology named on the site (verified quotes only — lib/.../ai.ts),
+    // read in the same call as the contacts: no extra cost.
+    await setCompanyTech(company.id, {
+      technologies: insights.data.technologies,
+      itEnvironment: insights.data.itEnvironment,
+      digitalProducts: insights.data.digitalProducts,
+      checkedAt: Date.now(),
+    });
     await setContactsScraped(company.id);
     stats.sitesScraped = (stats.sitesScraped ?? 0) + 1;
     // An empty result from a site that previously listed people is far more
@@ -563,9 +574,24 @@ async function aiPass(
   stats.processed++;
 }
 
+// What the analysis gets from the last website read (documented only).
+function techForAnalysis(raw: string | null): { technologies?: string[]; itEnvironment?: string | null; digitalProducts?: string | null } {
+  if (!raw) return {};
+  try {
+    const t = JSON.parse(raw) as { technologies?: { name: string }[]; itEnvironment?: { value: string }; digitalProducts?: { value: string } };
+    return {
+      technologies: (t.technologies ?? []).map((x) => x.name),
+      itEnvironment: t.itEnvironment?.value ?? null,
+      digitalProducts: t.digitalProducts?.value ?? null,
+    };
+  } catch {
+    return {};
+  }
+}
+
 // --- Pass: NAV job ads ------------------------------------------------------
 // Reads NAV's vacancy feed forward from where the last run stopped (the
-// cursor is a feed page id in app_meta; a first run starts 30 days back),
+// cursor is a feed page id in app_meta; a first run starts 14 days back),
 // pre-filters each line on municipality / employer name, fetches the full ad
 // for the candidates, maps the employer's underenhet to one of our companies
 // and stores it. Stopped/expired ads are retired, as NAV's terms require.

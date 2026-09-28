@@ -36,6 +36,10 @@ export interface FoundNews {
   date: string | null; // YYYY-MM-DD
   summary: string;
   category: NewsCategory;
+  /** AI interpretation (spec §7) — labelled as such in the UI. */
+  relevance: string | null; // possible meaning for Experis
+  buyingSignal: boolean; // could this be a buying signal?
+  question: string | null; // a question it opens in a conversation
 }
 
 // Directory/aggregator sites that aren't news about the company, just
@@ -118,6 +122,9 @@ export function parseNewsAnswer(text: string, now = Date.now()): FoundNews[] {
       date,
       summary: typeof r.summary === 'string' ? r.summary.trim().slice(0, 400) : '',
       category,
+      relevance: typeof r.relevance === 'string' && r.relevance.trim() ? r.relevance.trim().slice(0, 300) : null,
+      buyingSignal: r.buyingSignal === true,
+      question: typeof r.question === 'string' && r.question.trim() ? r.question.trim().slice(0, 200) : null,
     });
   }
   return out.slice(0, 6);

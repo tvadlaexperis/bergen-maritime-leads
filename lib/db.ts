@@ -74,6 +74,7 @@ export interface Company {
   konsern_root_name: string | null;
   group_key: string | null; // shared by every company recomputeGroups() put in the same group; null = standalone
   group_basis: string | null; // JSON GroupBasis — why they were grouped (lib/groups.ts)
+  tech_json: string | null; // JSON { technologies, itEnvironment, digitalProducts, checkedAt } from the website read
   discovered_at: number;
   last_refreshed_at: number | null;
   updated_at: number;
@@ -122,6 +123,9 @@ export interface CompanyNewsRow {
   published_at: string | null; // YYYY-MM-DD
   summary: string | null;
   category: string;
+  relevance: string | null;
+  is_signal: number;
+  question: string | null;
   fetched_at: number;
 }
 
@@ -217,6 +221,7 @@ const CONTACT_COLUMNS = [
   'konsern_root_name TEXT',
   'group_key TEXT',
   'group_basis TEXT',
+  'tech_json TEXT',
 ];
 
 // Data fixes that must run exactly once per database, tracked in app_meta.
@@ -476,6 +481,7 @@ async function ensureSchema(): Promise<void> {
       .then(() => addColumnsIfMissing('company_scores', SCORE_COLUMNS))
       .then(() => addColumnsIfMissing('company_contacts', ["source TEXT NOT NULL DEFAULT 'nettside'"]))
       .then(() => addColumnsIfMissing('scans', ['details TEXT']))
+      .then(() => addColumnsIfMissing('company_news', ['relevance TEXT', 'is_signal INTEGER NOT NULL DEFAULT 0', 'question TEXT']))
       .then(() => runOnceMigrations())
       .then(() => ensureSeeded());
   }
@@ -1163,7 +1169,17 @@ export async function listCompanyNews(companyId: number, limit = 6): Promise<Com
 // Returns the articles that weren't stored before.
 export async function mergeCompanyNews(
   companyId: number,
-  items: { title: string; url: string; source: string; date: string | null; summary: string; category: string }[],
+  items: {
+    title: string;
+    url: string;
+    source: string;
+    date: string | null;
+    summary: string;
+    category: string;
+    relevance?: string | null;
+    buyingSignal?: boolean;
+    question?: string | null;
+  }[],
 ): Promise<typeof items> {
   const c = await db();
   const now = Date.now();
@@ -1177,9 +1193,13 @@ export async function mergeCompanyNews(
   await c.batch(
     [
       ...fresh.map((n) => ({
-        sql: `INSERT OR IGNORE INTO company_news (company_id, title, url, source, published_at, summary, category, fetched_at)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-        args: [companyId, n.title, n.url, n.source, n.date, n.summary, n.category, now],
+        sql: `INSERT OR IGNORE INTO company_news (company_id, title, url, source, published_at, summary, category,
+                relevance, is_signal, question, fetched_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        args: [
+          companyId, n.title, n.url, n.source, n.date, n.summary, n.category,
+          n.relevance ?? null, n.buyingSignal ? 1 : 0, n.question ?? null, now,
+        ],
       })),
       { sql: 'DELETE FROM company_news WHERE company_id = ? AND published_at IS NOT NULL AND published_at < ?', args: [companyId, cutoff] },
       {
@@ -1390,6 +1410,11 @@ export async function listGroupMembers(groupKey: string): Promise<GroupMember[]>
     args: [groupKey],
   });
   return plain<GroupMember>(res.rows);
+}
+
+export async function setCompanyTech(id: number, tech: unknown): Promise<void> {
+  const c = await db();
+  await c.execute({ sql: 'UPDATE companies SET tech_json = ? WHERE id = ?', args: [JSON.stringify(tech), id] });
 }
 
 export async function setContactsScraped(id: number): Promise<void> {

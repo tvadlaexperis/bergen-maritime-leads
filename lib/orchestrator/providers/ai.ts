@@ -24,6 +24,9 @@ export interface LeadAnalysisInput {
   news: { title: string; date: string | null; domain: string; summary?: string; category?: string }[];
   contacts: { role: string; name: string }[]; // whichever of ceo/contact/cto/sales are filled in
   jobAds?: { title: string; occupation: string | null; published: string | null; isTech: boolean }[]; // active NAV ads
+  technologies?: string[]; // named on the company's own website (documented)
+  itEnvironment?: string | null; // 'ja' | 'nei' | 'ukjent', from the website
+  digitalProducts?: string | null;
 }
 
 export type ScoreVerdict = 'positiv' | 'negativ' | 'nøytral' | 'ukjent';
@@ -45,7 +48,20 @@ export interface LeadAnalysis {
   /** Segment-level challenges (general industry knowledge, not facts about
    *  this company). Absent on analyses made before it was added. */
   industryChallenges?: { challenge: string; relevance: string }[];
+  /** Customer relevance class (spec §4) and why. Absent on older analyses. */
+  customerCategory?: CustomerCategory;
+  categoryReason?: string;
 }
+
+export const CUSTOMER_CATEGORIES = [
+  'svært aktuell',
+  'aktuell',
+  'mulig',
+  'lite aktuell',
+  'ikke aktuell',
+  'konkurrent',
+] as const;
+export type CustomerCategory = (typeof CUSTOMER_CATEGORIES)[number];
 
 const ANALYSIS_SCHEMA = {
   type: 'object',
@@ -96,6 +112,8 @@ const ANALYSIS_SCHEMA = {
         required: ['challenge', 'relevance'],
       },
     },
+    customerCategory: { type: 'string', enum: [...CUSTOMER_CATEGORIES] },
+    categoryReason: { type: 'string' },
   },
   required: [
     'conclusion',
@@ -107,6 +125,8 @@ const ANALYSIS_SCHEMA = {
     'questions',
     'avoidClaiming',
     'industryChallenges',
+    'customerCategory',
+    'categoryReason',
   ],
 } as const;
 
@@ -156,6 +176,10 @@ function buildPrompt(input: LeadAnalysisInput): string {
     jobLines
       ? `Aktive stillingsannonser (NAV):\n${jobLines}`
       : 'Stillingsannonser: ingen aktive funnet hos NAV.',
+    input.technologies?.length
+      ? `Teknologi/systemer nevnt på egen nettside: ${input.technologies.join(', ')}`
+      : 'Teknologi: ingen nevnt på nettsiden (eller ikke lest ennå).',
+    `Eget IT-miljø ifølge nettsiden: ${input.itEnvironment ?? 'ukjent'}. Egne digitale produkter: ${input.digitalProducts ?? 'ukjent'}.`,
   ]
     .filter(Boolean)
     .join('\n');
@@ -182,6 +206,12 @@ function buildPrompt(input: LeadAnalysisInput): string {
     'Dette er generell bransjekunnskap — skriv det som bransjeutfordringer, ALDRI som påstander om at akkurat dette ' +
     'selskapet har problemet. "relevance" er én setning om hvorfor utfordringen kan åpne for en samtale om IT-/' +
     'teknologikonsulenter eller bemanning.\n' +
+    '- "customerCategory" klassifiserer selskapet som kunde for Experis: "svært aktuell", "aktuell", "mulig" (krever ' +
+    'mer undersøkelse), "lite aktuell", "ikke aktuell" eller "konkurrent". Bruk "konkurrent" når selskapet selv ' +
+    'primært selger IT-konsulenter, bemanning eller rekruttering — da er det et mulig konkurrent/leverandør, ikke en ' +
+    'kunde. Programvare-/SaaS-selskaper skal IKKE sorteres bort: de kan være gode kunder hvis de har eget ' +
+    'utviklingsmiljø. Ikke press alt inn som salgsmulighet: mangler grunnlaget, velg "mulig" eller lavere. ' +
+    '"categoryReason" er én setning med både det som trekker opp og det som trekker ned.\n' +
     '- Skriv kort og konkret, norsk bokmål. "conclusion" er maks 2 setninger. "pitch" er maks 3 setninger. ' +
     '"questions" er 2-5 konkrete spørsmål en selger kan stille.\n\n' +
     facts
@@ -331,7 +361,10 @@ async function requestNews(input: FindNewsInput): Promise<FoundNews[]> {
     '- Bruk den faktiske URL-en til artikkelen. Ikke finn på lenker, titler eller datoer.\n' +
     '- Svar KUN med en JSON-liste (maks 5, nyeste først), uten annen tekst: ' +
     '[{"title": "...", "url": "https://...", "source": "navn på nettstedet", "date": "YYYY-MM-DD eller null", ' +
-    `"summary": "én setning på norsk", "category": "${NEWS_CATEGORIES.join('|')}"}]\n` +
+    `"summary": "én setning på norsk", "category": "${NEWS_CATEGORIES.join('|')}", "relevance": "én setning: mulig betydning for Experis (IT-/teknologikonsulenter, bemanning)", "buyingSignal": true|false, "question": "ett spørsmål saken åpner for i en kundesamtale"}]\n` +
+    '- "relevance", "buyingSignal" og "question" er DIN tolkning, ikke fakta fra artikkelen. "buyingSignal" er ' +
+    'true bare når saken konkret kan gi behov for kompetanse eller kapasitet (ny kontrakt, vekst, nye fartøy, oppkjøp, ' +
+    'digitalisering, lederskifte) — ikke for rutinenyheter.\n' +
     '- Finner du ingen relevante artikler, svar nøyaktig [].';
 
   const text = await geminiText(apiKey, {
@@ -365,9 +398,39 @@ export interface ExtractedContact {
   phone: string | null;
 }
 
+export const TECH_CATEGORIES = [
+  'programvare',
+  'data og analyse',
+  'AI',
+  'sky og plattform',
+  'cybersikkerhet',
+  'integrasjoner',
+  'ERP/CRM',
+  'maritime systemer',
+  'infrastruktur',
+  'annet',
+] as const;
+
+const YES_NO = { type: 'object', properties: { value: { type: 'string', enum: ['ja', 'nei', 'ukjent'] }, evidence: { type: ['string', 'null'] } }, required: ['value', 'evidence'] };
+
 const CONTACTS_SCHEMA = {
   type: 'object',
   properties: {
+    technologies: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          name: { type: 'string' },
+          category: { type: 'string', enum: [...TECH_CATEGORIES] },
+          evidence: { type: 'string' },
+          sourceUrl: { type: 'string' },
+        },
+        required: ['name', 'category', 'evidence', 'sourceUrl'],
+      },
+    },
+    itEnvironment: YES_NO,
+    digitalProducts: YES_NO,
     contacts: {
       type: 'array',
       items: {
@@ -382,8 +445,40 @@ const CONTACTS_SCHEMA = {
       },
     },
   },
-  required: ['contacts'],
+  required: ['contacts', 'technologies', 'itEnvironment', 'digitalProducts'],
 } as const;
+
+export interface WebsiteTech {
+  name: string;
+  category: string;
+  evidence: string;
+  sourceUrl: string;
+}
+export interface YesNo {
+  value: 'ja' | 'nei' | 'ukjent';
+  evidence: string | null;
+}
+export interface WebsiteInsights {
+  contacts: ExtractedContact[];
+  technologies: WebsiteTech[];
+  itEnvironment: YesNo;
+  digitalProducts: YesNo;
+}
+
+const UNKNOWN: YesNo = { value: 'ukjent', evidence: null };
+const EMPTY_INSIGHTS: WebsiteInsights = { contacts: [], technologies: [], itEnvironment: UNKNOWN, digitalProducts: UNKNOWN };
+
+// The model's evidence must actually be in the text we sent, and its source
+// one of the pages we read — otherwise it's dropped. Spec §3: never claim a
+// technology without a concrete source.
+const squash = (s: string) => s.toLowerCase().replace(/\s+/g, ' ').trim();
+function verifiedYesNo(v: unknown, text: string): YesNo {
+  const o = (v ?? {}) as { value?: string; evidence?: string | null };
+  const value = o.value === 'ja' || o.value === 'nei' ? o.value : 'ukjent';
+  const evidence = typeof o.evidence === 'string' && o.evidence.trim() ? o.evidence.trim().slice(0, 200) : null;
+  if (value !== 'ukjent' && (!evidence || !text.includes(squash(evidence).slice(0, 60)))) return UNKNOWN;
+  return { value, evidence: value === 'ukjent' ? null : evidence };
+}
 
 function isValidContacts(v: unknown): v is { contacts: ExtractedContact[] } {
   if (!v || typeof v !== 'object') return false;
@@ -402,12 +497,12 @@ async function fetchPageText(url: string): Promise<string | null> {
 // /kontakt and /om-oss — then up to four pages one level deeper (office /
 // department pages). Reading just one subpage missed most team pages.
 // Each fetch is capped at 6s and runs inside the scan's shared budget.
-async function requestContacts(name: string, website: string): Promise<ExtractedContact[]> {
+async function requestContacts(name: string, website: string): Promise<WebsiteInsights> {
   const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) return [];
+  if (!apiKey) return EMPTY_INSIGHTS;
 
   const homepageHtml = await fetchPageText(website);
-  if (!homepageHtml) return [];
+  if (!homepageHtml) return EMPTY_INSIGHTS;
 
   const fetchAll = async (urls: string[]) =>
     (await Promise.all(urls.map(async (url) => ({ url, html: await fetchPageText(url) })))).filter(
@@ -426,7 +521,7 @@ async function requestContacts(name: string, website: string): Promise<Extracted
     .map((p) => `--- ${p.url} ---\n${stripHtml(p.html).slice(0, 9_000)}`)
     .join('\n\n')
     .slice(0, 40_000);
-  if (!combinedText.trim()) return [];
+  if (!combinedText.trim()) return EMPTY_INSIGHTS;
 
   const prompt =
     `Du leser tekst hentet fra det norske selskapet "${name}" sin egen nettside, for å finne navngitte ` +
@@ -436,7 +531,14 @@ async function requestContacts(name: string, website: string): Promise<Extracted
     'avdelinger, skjemaer eller "Kontakt oss"-bokser.\n' +
     '- Mangler e-post eller telefon for en person, sett feltet til null. Ikke gjett eller finn på noe.\n' +
     '- Ikke ta med generiske firma-adresser (post@, info@, sentralbord) som om de var en person.\n' +
-    '- Finner du ingen navngitte personer i teksten, returner en tom liste.\n\n' +
+    '- Finner du ingen navngitte personer i teksten, returner en tom liste.\n' +
+    '- "technologies": KUN teknologier, systemer, plattformer eller programvare som er EKSPLISITT nevnt i teksten ' +
+    '(f.eks. navngitte systemer, sky-plattformer, ERP, flåtestyringssystemer). "evidence" er et ordrett sitat fra ' +
+    'teksten (maks 120 tegn); "sourceUrl" er URL-en i "--- url ---"-linjen over avsnittet sitatet står i. Ikke gjett ' +
+    'teknologi ut fra bransje. Ingenting nevnt: tom liste.\n' +
+    '- "itEnvironment": "ja" bare hvis teksten viser egen IT-avdeling, IT-ansatte eller utviklere; "nei" bare hvis den ' +
+    'sier at IT er satt bort; ellers "ukjent". "digitalProducts": "ja" bare hvis selskapet selv utvikler eller selger ' +
+    'programvare/digitale tjenester. "evidence" er et ordrett sitat (null ved "ukjent").\n\n' +
     combinedText;
 
   const parsed = parseJsonOutput(
@@ -446,7 +548,37 @@ async function requestContacts(name: string, website: string): Promise<Extracted
     }),
   );
   if (!isValidContacts(parsed)) throw new Error('Gemini: kontaktlisten hadde feil format');
-  return parsed.contacts.filter((ct) => ct.name?.trim()).slice(0, 30);
+  return verifyWebsiteInsights(parsed, combinedText, pages.map((p) => p.url));
+}
+
+/**
+ * Keeps only what the pages we read actually support: a technology needs its
+ * name and quote to appear in the text and its source to be one of the pages;
+ * an IT-environment / digital-products claim needs its quote in the text, or
+ * it falls back to "ukjent". Exported for tests.
+ */
+export function verifyWebsiteInsights(parsed: { contacts: ExtractedContact[] }, combinedText: string, urls: string[]): WebsiteInsights {
+  const text = squash(combinedText);
+  const pageUrls = new Set(urls);
+  const raw = parsed as unknown as { technologies?: unknown[]; itEnvironment?: unknown; digitalProducts?: unknown };
+  const technologies: WebsiteTech[] = [];
+  for (const t of (raw.technologies ?? []) as Record<string, unknown>[]) {
+    const tech = {
+      name: String(t.name ?? '').trim().slice(0, 60),
+      category: (TECH_CATEGORIES as readonly string[]).includes(String(t.category)) ? String(t.category) : 'annet',
+      evidence: String(t.evidence ?? '').trim().slice(0, 160),
+      sourceUrl: String(t.sourceUrl ?? ''),
+    };
+    if (!tech.name || !pageUrls.has(tech.sourceUrl)) continue;
+    if (!text.includes(squash(tech.evidence).slice(0, 60)) || !text.includes(tech.name.toLowerCase())) continue;
+    if (!technologies.some((x) => x.name.toLowerCase() === tech.name.toLowerCase())) technologies.push(tech);
+  }
+  return {
+    contacts: parsed.contacts.filter((ct) => ct.name?.trim()).slice(0, 30),
+    technologies: technologies.slice(0, 20),
+    itEnvironment: verifiedYesNo(raw.itEnvironment, text),
+    digitalProducts: verifiedYesNo(raw.digitalProducts, text),
+  };
 }
 
 export const aiProvider: Provider = {

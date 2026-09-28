@@ -15,6 +15,9 @@ describe('parseNewsAnswer', () => {
         date: '2026-08-01',
         summary: 'Stor kontrakt.',
         category: 'kontrakt',
+        relevance: null,
+        buyingSignal: false,
+        question: null,
       },
     ]);
   });
@@ -58,5 +61,32 @@ Kilde: [1] e24.no`],
   it('tells "no list at all" (null) apart from an empty list', () => {
     expect(findJsonArray('Fant ingenting relevant [1].')).toBeNull();
     expect(findJsonArray('[]')).toEqual([]);
+  });
+});
+
+describe('commercial assessment per article', () => {
+  it('reads relevance, buying signal and question, strictly typed', () => {
+    const [n] = parseNewsAnswer(
+      JSON.stringify([
+        {
+          title: 'Rederi bestiller fire nye skip',
+          url: 'https://e24.no/skip',
+          date: '2026-09-01',
+          category: 'nybygg',
+          relevance: 'Flåteutvidelse kan gi behov for flere systemer og folk.',
+          buyingSignal: true,
+          question: 'Hvordan planlegger dere å bemanne de nye fartøyene?',
+        },
+      ]),
+      NOW,
+    );
+    expect(n).toMatchObject({
+      relevance: 'Flåteutvidelse kan gi behov for flere systemer og folk.',
+      buyingSignal: true,
+      question: 'Hvordan planlegger dere å bemanne de nye fartøyene?',
+    });
+    // "true" as a string is not a yes
+    const [m] = parseNewsAnswer(JSON.stringify([{ title: 'X', url: 'https://e24.no/x', buyingSignal: 'true' }]), NOW);
+    expect(m.buyingSignal).toBe(false);
   });
 });

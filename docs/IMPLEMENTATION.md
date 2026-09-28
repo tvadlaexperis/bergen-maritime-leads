@@ -96,6 +96,18 @@ the guest magic-link flow, `scripts/hash-password.mjs`, `scripts/create-user.mjs
   NAV); `NAV_FEED_USE_PUBLIC_TOKEN=1` is for local testing only. **Limitation found:** the open
   feed does not carry ads imported from external recruitment systems — 35 days of feed had no
   Odfjell ad although arbeidsplassen.no listed three — so coverage of larger employers is partial.
+- **Teknologi og kunderelevans** — the website read (`ai.extractContacts`, same call as the
+  contacts — no extra cost) also returns technologies explicitly named on the site, plus
+  "eget IT-miljø" / "egne digitale produkter" (ja/nei/ukjent). `verifyWebsiteInsights` drops
+  anything whose quote isn't in the text we sent or whose source isn't a page we read (spec §3:
+  no technology without a source). Stored in `companies.tech_json`. The AI analysis gets it and
+  returns `customerCategory` (spec §4: svært aktuell … konkurrent) + `categoryReason`; SaaS isn't
+  excluded, consultancy/staffing firms are flagged as possible competitors.
+- **Nyheter — commercial reading (spec §7)** — the news search also returns, per article,
+  `relevance` (betydning for Experis), `buyingSignal` and `question`; stored on `company_news`
+  and shown on the card, labelled "AI-vurdering", apart from the article's own facts.
+- New fields fill in as the nightly rotation reaches each company — nothing was re-queued, so
+  these additions cost nothing beyond a few extra output tokens per existing call.
 - **One-off data fixes** run once per database via `ONCE_MIGRATIONS` in `lib/db.ts` (tracked
   in `app_meta`).
 - **Nyheter (fallback)** — only for companies never news-searched: `lib/orchestrator/providers/news.ts` queries the GDELT DOC 2.0 API

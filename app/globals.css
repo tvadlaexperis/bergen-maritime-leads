@@ -1335,3 +1335,63 @@ a {
 .job-ad:hover {
   border-color: var(--accent-border);
 }
+
+/* News card: the AI's commercial reading, set apart from the article facts. */
+.news-card-ai {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 0.76rem;
+  color: var(--text-secondary);
+  border-left: 2px solid var(--accent-border);
+  padding-left: 8px;
+}
+.news-card-ai-label {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  font-size: 0.66rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+.news-card-signal {
+  color: var(--signal);
+  border: 1px solid var(--signal);
+  border-radius: var(--radius-pill);
+  padding: 0 6px;
+}
+/* Teknologi og kunderelevans */
+.tech-chip {
+  font-size: 0.76rem;
+  padding: 3px 10px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border-strong);
+  background: var(--surface-raised);
+  color: var(--text-primary);
+}
+.tech-chip:hover {
+  border-color: var(--accent);
+}
+.category-pill {
+  font-size: 0.74rem;
+  font-weight: 700;
+  padding: 2px 10px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border-strong);
+  white-space: nowrap;
+}
+.category-pill.cat-svært-aktuell,
+.category-pill.cat-aktuell {
+  color: var(--positive);
+  border-color: var(--positive);
+}
+.category-pill.cat-mulig {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.category-pill.cat-konkurrent {
+  color: var(--signal);
+  border-color: var(--signal);
+}

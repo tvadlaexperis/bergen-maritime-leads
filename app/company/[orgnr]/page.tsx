@@ -50,6 +50,32 @@ const SUBSCORES: { key: 'size_score' | 'revenue_score' | 'growth_score' | 'profi
   { key: 'profitability_score', label: 'Lønnsomhet (driftsmargin)', weight: '15 %' },
 ];
 
+const CATEGORY_LABEL: Record<string, string> = {
+  'svært aktuell': 'Svært aktuell kunde',
+  aktuell: 'Aktuell kunde',
+  mulig: 'Mulig kunde – krever mer undersøkelse',
+  'lite aktuell': 'Lite aktuell kunde',
+  'ikke aktuell': 'Ikke aktuell kunde',
+  konkurrent: 'Konkurrent eller leverandør',
+};
+
+interface TechInfo {
+  technologies: { name: string; category: string; evidence: string; sourceUrl: string }[];
+  itEnvironment?: { value: string; evidence: string | null };
+  digitalProducts?: { value: string; evidence: string | null };
+  checkedAt: number;
+}
+
+function parseTech(raw: string | null): TechInfo | null {
+  if (!raw) return null;
+  try {
+    const t = JSON.parse(raw) as TechInfo;
+    return { ...t, technologies: t.technologies ?? [] };
+  } catch {
+    return null;
+  }
+}
+
 function parseAnalysis(raw: string | null): LeadAnalysis | null {
   if (!raw) return null;
   try {
@@ -129,7 +155,17 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
 
   // Stored news from the AI pass's web search; companies it hasn't searched
   // yet fall back to a live GDELT lookup (often empty — see lib/companyNews.ts).
-  const news: { title: string; url: string; source: string; date: string | null; summary: string | null; category: string | null }[] =
+  const news: {
+    title: string;
+    url: string;
+    source: string;
+    date: string | null;
+    summary: string | null;
+    category: string | null;
+    relevance?: string | null;
+    isSignal?: boolean;
+    question?: string | null;
+  }[] =
     co.news_checked_at != null || otherMembers.length > 0
       ? [...storedNews, ...groupNewsLists.flat()]
           .filter((n, i, all) => all.findIndex((x) => x.url === n.url) === i)
@@ -142,6 +178,9 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
           date: n.published_at,
           summary: n.summary,
           category: n.category,
+          relevance: n.relevance,
+          isSignal: n.is_signal === 1,
+          question: n.question,
         }))
       : (await getCompanyNews(co.name)).map((n) => ({
           title: n.title,
@@ -157,6 +196,7 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
   const isAdmin = user?.role === 'admin';
   const band = bandFor(co.lead_score);
   const analysis = parseAnalysis(co.ai_analysis);
+  const tech = parseTech(co.tech_json);
   const aiConfidence = confidenceFor(
     (financials.length > 0 ? 1 : 0) +
       (news.length > 0 ? 1 : 0) +
@@ -399,6 +439,76 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
             </div>
           </div>
 
+          {/* Teknologi og kunderelevans (spec §3–4). Two kinds of information,
+              labelled apart: what the company's own website says (documented,
+              each item linked to its page) and the AI's classification. */}
+          <div className="box">
+            <div className="box-header">
+              <span className="box-title">Teknologi og kunderelevans</span>
+            </div>
+            <div className="box-pad" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div>
+                <span className="muted" style={{ fontSize: '0.72rem', fontWeight: 700 }}>
+                  KUNDERELEVANS <span style={{ fontWeight: 400 }}>· AI-vurdering</span>
+                </span>
+                {analysis?.customerCategory ? (
+                  <p style={{ marginTop: 6, fontSize: '0.88rem', display: 'flex', gap: 10, alignItems: 'baseline', flexWrap: 'wrap' }}>
+                    <span className={`category-pill cat-${analysis.customerCategory.replace(/\s+/g, '-')}`}>
+                      {CATEGORY_LABEL[analysis.customerCategory] ?? analysis.customerCategory}
+                    </span>
+                    <span style={{ color: 'var(--text-secondary)' }}>{analysis.categoryReason}</span>
+                  </p>
+                ) : (
+                  <p className="muted" style={{ marginTop: 6, fontSize: '0.84rem' }}>
+                    Ikke med i denne AI-vurderingen ennå — kommer ved neste kjøring.
+                  </p>
+                )}
+              </div>
+              <div>
+                <span className="muted" style={{ fontSize: '0.72rem', fontWeight: 700 }}>
+                  TEKNOLOGI <span style={{ fontWeight: 400 }}>· dokumentert fra selskapets nettside</span>
+                </span>
+                {!tech ? (
+                  <p className="muted" style={{ marginTop: 6, fontSize: '0.84rem' }}>
+                    {co.website ? 'Nettsiden er ikke lest for teknologi ennå.' : 'Ingen nettside registrert.'}
+                  </p>
+                ) : (
+                  <>
+                    <p style={{ marginTop: 6, fontSize: '0.84rem', display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+                      <span title={tech.itEnvironment?.evidence ?? undefined}>
+                        Eget IT-miljø: <strong>{tech.itEnvironment?.value ?? 'ukjent'}</strong>
+                      </span>
+                      <span title={tech.digitalProducts?.evidence ?? undefined}>
+                        Egne digitale produkter: <strong>{tech.digitalProducts?.value ?? 'ukjent'}</strong>
+                      </span>
+                    </p>
+                    {tech.technologies.length === 0 ? (
+                      <p className="muted" style={{ marginTop: 6, fontSize: '0.84rem' }}>Ingen teknologi eller systemer er nevnt på nettsiden.</p>
+                    ) : (
+                      <span style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8 }}>
+                        {tech.technologies.map((t) => (
+                          <a
+                            key={t.name}
+                            href={t.sourceUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="tech-chip"
+                            title={`«${t.evidence}» — ${t.sourceUrl}`}
+                          >
+                            {t.name} <span className="muted">· {t.category}</span>
+                          </a>
+                        ))}
+                      </span>
+                    )}
+                    <p className="muted" style={{ marginTop: 6, fontSize: '0.72rem' }}>
+                      Lest {dateLabel(tech.checkedAt)}. Hold over en teknologi for sitatet den bygger på.
+                    </p>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+
           {/* Rekruttering — NAV job ads for the group. IT/tech roles are the
               strongest buying signal in the spec, so they're marked. */}
           <div className="box">
@@ -553,6 +663,16 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
                       )}
                       <span className="news-card-title">{n.title}</span>
                       {n.summary && <span className="news-card-summary">{n.summary}</span>}
+                      {(n.relevance || n.question || n.isSignal) && (
+                        // AI interpretation, kept visibly apart from the article's own facts.
+                        <span className="news-card-ai">
+                          <span className="news-card-ai-label">
+                            AI-vurdering{n.isSignal && <span className="news-card-signal">Mulig kjøpssignal</span>}
+                          </span>
+                          {n.relevance && <span>For Experis: {n.relevance}</span>}
+                          {n.question && <span>Spørsmål: «{n.question}»</span>}
+                        </span>
+                      )}
                       <span className="muted" style={{ fontSize: '0.72rem' }}>
                         {n.source}
                         {n.date ? ` · ${dateLabel(n.date)}` : ''}
