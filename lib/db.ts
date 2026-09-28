@@ -154,8 +154,6 @@ export interface Scan {
 }
 
 export interface CompanyWithScore extends Company {
-  /** Named contacts scraped from the company's website — only set by listCompaniesWithScore(). */
-  website_contact_count?: number;
   lead_score: number | null;
   size_score: number | null;
   revenue_score: number | null;
@@ -764,8 +762,7 @@ export async function listCompaniesForCoverage(
 export async function listCompaniesWithScore(): Promise<CompanyWithScore[]> {
   const c = await db();
   const res = await c.execute(`
-    SELECT co.*, ${SCORE_COLS},
-      (SELECT COUNT(*) FROM company_contacts cc WHERE cc.company_id = co.id AND cc.source = 'nettside') AS website_contact_count
+    SELECT co.*, ${SCORE_COLS}
     FROM companies co ${SCORE_JOIN}
     ORDER BY (sc.lead_score IS NULL) ASC, sc.lead_score DESC, co.name COLLATE NOCASE
   `);
