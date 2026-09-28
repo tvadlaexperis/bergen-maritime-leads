@@ -23,6 +23,7 @@ export interface LeadAnalysisInput {
   band: 'low' | 'mid' | 'high' | null;
   news: { title: string; date: string | null; domain: string; summary?: string; category?: string }[];
   contacts: { role: string; name: string }[]; // whichever of ceo/contact/cto/sales are filled in
+  jobAds?: { title: string; occupation: string | null; published: string | null; isTech: boolean }[]; // active NAV ads
 }
 
 export type ScoreVerdict = 'positiv' | 'negativ' | 'nøytral' | 'ukjent';
@@ -138,6 +139,9 @@ function buildPrompt(input: LeadAnalysisInput): string {
     )
     .join('\n');
   const contactLines = input.contacts.map((c) => `  ${c.role}: ${c.name}`).join('\n');
+  const jobLines = (input.jobAds ?? [])
+    .map((j) => `  "${j.title}"${j.occupation ? ` (${j.occupation})` : ''}${j.published ? `, publisert ${j.published}` : ''}${j.isTech ? ' [IT/teknologi]' : ''}`)
+    .join('\n');
 
   const facts = [
     `Navn: ${input.name}`,
@@ -149,6 +153,9 @@ function buildPrompt(input: LeadAnalysisInput): string {
     finLines ? `Regnskapstall per år (nyeste først):\n${finLines}` : 'Regnskapstall: ingen registrert.',
     contactLines ? `Registrerte kontaktpersoner:\n${contactLines}` : 'Registrerte kontaktpersoner: ingen.',
     newsLines ? `Nyheter siste 12 måneder (nettsøk):\n${newsLines}` : 'Nyheter: ingen funnet i nettsøk.',
+    jobLines
+      ? `Aktive stillingsannonser (NAV):\n${jobLines}`
+      : 'Stillingsannonser: ingen aktive funnet hos NAV.',
   ]
     .filter(Boolean)
     .join('\n');
@@ -161,8 +168,10 @@ function buildPrompt(input: LeadAnalysisInput): string {
     '- Ikke finn på fakta som ikke står i listen under. Har du ikke dokumentasjon for noe (f.eks. IT-miljø, digitale ' +
     'produkt, bruk av konsulenter, rekrutteringsaktivitet, ledelsesendringer, risiko for at de er konkurrent/leverandør), ' +
     'sett verdict "ukjent" og skriv i notatet at det ikke er dokumentert i tilgjengelige kilder — ikke gjett.\n' +
-    '- "buyingSignal.signals" skal KUN inneholde signaler som faktisk følger av regnskapstall eller nyhetstreffene over ' +
-    '(f.eks. omsetningsvekst, eller en nyhetssak). Finnes ingen slike, sett level "lav" og tom signals-liste.\n' +
+    '- "buyingSignal.signals" skal KUN inneholde signaler som faktisk følger av regnskapstall, nyhetstreffene eller ' +
+    'stillingsannonsene over. Rekruttering innen IT/teknologi er et sterkt signal (behov for kompetanse/kapasitet), men ' +
+    'en annonse betyr ikke automatisk at de vil kjøpe konsulenter — si det slik. Eksempler: omsetningsvekst, en ' +
+    'nyhetssak eller en IT-stilling. Finnes ingen slike, sett level "lav" og tom signals-liste.\n' +
     '- "recommendedContact" skal bruke en av de registrerte kontaktpersonene hvis noen finnes; hvis ingen finnes, sett ' +
     'name til null og forklar i reason hvem man bør prøve å identifisere (f.eks. daglig leder eller IT-ansvarlig).\n' +
     '- "avoidClaiming" skal liste 2-4 konkrete ting selgeren IKKE bør påstå som fakta uten å få det bekreftet av kunden ' +

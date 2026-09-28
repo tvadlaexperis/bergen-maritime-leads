@@ -81,6 +81,16 @@ async function getRoller(orgnr: string): Promise<Roller | null> {
   return parseRoller(json);
 }
 
+// A job ad's employer orgnr is an underenhet (workplace); its company is
+// `overordnetEnhet`. null when it isn't an underenhet (404) — e.g. the ad
+// already used the company's own orgnr.
+async function getUnderenhetParent(orgnr: string): Promise<string | null> {
+  const json = (await getJson(`https://${BRREG_ENHET_HOST}/enhetsregisteret/api/underenheter/${encodeURIComponent(orgnr)}`)) as
+    | { overordnetEnhet?: string }
+    | null;
+  return json?.overordnetEnhet ?? null;
+}
+
 // 404 (not part of any group) is the common case and comes back as `null`
 // from getJson, same as any other "nothing here" response.
 async function getKonsern(orgnr: string): Promise<KonsernInfo | null> {
@@ -91,7 +101,7 @@ async function getKonsern(orgnr: string): Promise<KonsernInfo | null> {
 
 export const brregProvider: Provider = {
   id: 'brreg',
-  tools: ['searchEnheter', 'getEnhet', 'getRegnskap', 'getRoller', 'getKonsern'],
+  tools: ['searchEnheter', 'getEnhet', 'getRegnskap', 'getRoller', 'getKonsern', 'getUnderenhetParent'],
   isEnabled: () => true,
   async call(tool, args) {
     if (tool === 'searchEnheter') {
@@ -106,6 +116,9 @@ export const brregProvider: Provider = {
     }
     if (tool === 'getRoller') {
       return getRoller(String((args as { orgnr: string }).orgnr));
+    }
+    if (tool === 'getUnderenhetParent') {
+      return getUnderenhetParent(String((args as { orgnr: string }).orgnr));
     }
     if (tool === 'getKonsern') {
       return getKonsern(String((args as { orgnr: string }).orgnr));

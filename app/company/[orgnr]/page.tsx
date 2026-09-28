@@ -9,6 +9,7 @@ import {
   listGroupMembers,
   listWebsiteContacts,
   listCompanyNews,
+  listJobAds,
 } from '@/lib/db';
 import { NEWS_CATEGORY_LABEL, type NewsCategory } from '@/lib/companyNews';
 import { describeGroupBasis, type GroupBasis } from '@/lib/groups';
@@ -99,6 +100,20 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
     }
   })();
 
+  // NAV job ads for the whole group (the ad is usually placed by one
+  // workplace/company; for sales it's the group that's recruiting).
+  const jobAds = await listJobAds([co.id, ...otherMembers.map((m) => m.id)]);
+  const jobsEnabled = !!process.env.NAV_FEED_TOKEN || process.env.NAV_FEED_USE_PUBLIC_TOKEN === '1';
+  const jobContacts = jobAds.flatMap((j) => {
+    try {
+      return (JSON.parse(j.contacts ?? '[]') as { name: string; title: string | null; email: string | null; phone: string | null }[]).map(
+        (c) => ({ name: c.name, role: c.title, email: c.email, phone: c.phone }),
+      );
+    } catch {
+      return [];
+    }
+  });
+
   const people = buildContactPeople({
     ceo: co.ceo_name ? { name: co.ceo_name, isNew: co.ceo_changed_at != null } : null,
     manual: [
@@ -109,6 +124,7 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
     website: allContacts.filter((c) => c.source !== 'brreg'),
     group: otherMembers.flatMap((m, i) => groupContactLists[i].map((c) => ({ ...c, via: linkedinCompanyName(m.name) }))),
     board: allContacts.filter((c) => c.source === 'brreg'),
+    jobAds: jobContacts,
   });
 
   // Stored news from the AI pass's web search; companies it hasn't searched
@@ -380,6 +396,44 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
                 Ingen score ennå. {isAdmin ? 'Bruk «Oppdater fra registrene» under.' : 'Neste skann beregner en.'}
               </p>
             )}
+            </div>
+          </div>
+
+          {/* Rekruttering — NAV job ads for the group. IT/tech roles are the
+              strongest buying signal in the spec, so they're marked. */}
+          <div className="box">
+            <div className="box-header">
+              <span className="box-title">Rekruttering</span>
+              <span className="muted" style={{ fontSize: '0.72rem' }}>
+                {jobsEnabled
+                  ? `NAV · ${jobAds.length} aktive${jobAds.some((j) => j.is_tech) ? ` · ${jobAds.filter((j) => j.is_tech).length} IT` : ''}`
+                  : 'NAV'}
+              </span>
+            </div>
+            <div className="box-pad" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {!jobsEnabled ? (
+                <p className="muted" style={{ fontSize: '0.84rem' }}>
+                  Stillingsannonser fra NAV er ikke slått på ennå (krever egen NAV-token etter avtale om vilkår).
+                </p>
+              ) : jobAds.length === 0 ? (
+                <p className="muted" style={{ fontSize: '0.84rem' }}>Ingen aktive stillingsannonser hos NAV.</p>
+              ) : (
+                jobAds.map((j) => (
+                  <a key={j.uuid} href={j.source_url} target="_blank" rel="noopener noreferrer" className="job-ad">
+                    <span style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
+                      {j.is_tech === 1 && <span className="news-card-tag">IT</span>}
+                      <strong style={{ fontSize: '0.88rem' }}>{j.title}</strong>
+                    </span>
+                    <span className="muted" style={{ fontSize: '0.76rem' }}>
+                      {[j.occupation, j.location, j.employer_name].filter(Boolean).join(' · ')}
+                    </span>
+                    <span className="muted" style={{ fontSize: '0.74rem' }}>
+                      {j.published ? `Publisert ${dateLabel(j.published)}` : ''}
+                      {j.application_due ? ` · frist ${/^\d{4}-/.test(j.application_due) ? dateLabel(j.application_due) : j.application_due}` : ''}
+                    </span>
+                  </a>
+                ))
+              )}
             </div>
           </div>
         </div>
@@ -777,7 +831,7 @@ function KonsernIcon() {
 interface ContactPerson {
   key: string;
   name: string;
-  roles: { label: string; source: 'brreg' | 'nettside' | 'manuell'; via?: string }[];
+  roles: { label: string; source: 'brreg' | 'nettside' | 'manuell' | 'annonse'; via?: string }[];
   emails: string[];
   phones: string[];
   isNew: boolean;
@@ -794,6 +848,7 @@ function buildContactPeople(input: {
   website: SourcedContact[];
   group: (SourcedContact & { via: string })[];
   board: SourcedContact[];
+  jobAds: SourcedContact[];
 }): ContactPerson[] {
   const byKey = new Map<string, ContactPerson>();
   const add = (
@@ -817,6 +872,7 @@ function buildContactPeople(input: {
   for (const m of input.manual) add(m.name, { label: m.label, source: 'manuell' }, m.email, m.phone);
   for (const w of input.website) add(w.name, { label: w.role ?? 'Ansatt', source: 'nettside' }, w.email, w.phone);
   for (const g of input.group) add(g.name, { label: g.role ?? 'Ansatt', source: 'nettside', via: g.via }, g.email, g.phone);
+  for (const j of input.jobAds) add(j.name, { label: j.role ?? 'Kontakt i stillingsannonse', source: 'annonse' }, j.email, j.phone);
   for (const b of input.board) add(b.name, { label: b.role ?? 'Styremedlem', source: 'brreg' });
   return [...byKey.values()];
 }
@@ -825,6 +881,7 @@ const SOURCE_LABEL: Record<ContactPerson['roles'][number]['source'], string> = {
   brreg: 'Brreg',
   nettside: 'nettside',
   manuell: 'lagt inn',
+  annonse: 'stillingsannonse (NAV)',
 };
 
 function PersonCard({ person, company }: { person: ContactPerson; company: string }) {

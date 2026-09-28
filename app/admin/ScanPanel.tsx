@@ -143,6 +143,9 @@ export default function ScanPanel({
               <th className="col-right" title="Nye nyhetsartikler funnet i nettsøk">
                 Nyheter
               </th>
+              <th className="col-right" title="Nye stillingsannonser (NAV) hos selskapene i lista; IT-stillinger i parentes">
+                Stillinger
+              </th>
               <th className="col-right">Nettsider</th>
               <th
                 className="col-right"
@@ -188,6 +191,16 @@ export default function ScanPanel({
                   {cell(<Num n={d ? d.brreg.ceoSet + d.brreg.ceoChanged + d.brreg.boardUpdated : null} />)}
                   {cell(<Num n={d ? (d.ai.enabled ? d.ai.analyses : null) : null} />)}
                   {cell(<Num n={d && d.ai.enabled ? (d.ai.newsFound ?? null) : null} />)}
+                    {cell(
+                      d?.jobs?.enabled ? (
+                        <>
+                          <Num n={d.jobs.newAds} />
+                          {d.jobs.techAds > 0 && <span className="muted"> ({d.jobs.techAds})</span>}
+                        </>
+                      ) : (
+                        <Num n={null} />
+                      ),
+                    )}
                   {cell(
                     <Num n={d ? (d.ai.enabled ? d.ai.websitesFound : 0) + (d.brreg.websiteFromEmail ?? 0) : null} />,
                   )}
@@ -215,7 +228,7 @@ export default function ScanPanel({
                 open && (
                   <tr key={`${s.id}-details`}>
                     <td
-                      colSpan={12}
+                      colSpan={13}
                       style={{
                         padding: '12px 20px 18px',
                         background: 'var(--surface-raised)',
@@ -229,7 +242,7 @@ export default function ScanPanel({
             })}
             {scans.length === 0 && (
               <tr>
-                <td colSpan={12} className="muted" style={{ textAlign: 'center', padding: 24 }}>
+                <td colSpan={13} className="muted" style={{ textAlign: 'center', padding: 24 }}>
                   Ingen skann ennå.
                 </td>
               </tr>
@@ -299,6 +312,12 @@ function ScanDetailsView({
         ) : (
           <span className="muted">AI-trinnet er av (GEMINI_API_KEY mangler).</span>
         )}{' '}
+        {d.jobs?.enabled && (
+          <>
+            NAV: {d.jobs.pages} sider av stillingsfeeden lest, {d.jobs.candidates} annonser i området sjekket,{' '}
+            {d.jobs.newAds} nye hos selskapene i lista ({d.jobs.techAds} IT), {d.jobs.deactivated} stengt.{' '}
+          </>
+        )}
         <span className="muted">Tok {Math.round(d.tookMs / 1000)} s.</span>
       </p>
 

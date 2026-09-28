@@ -1319,3 +1319,19 @@ a {
   color: var(--accent);
   padding: 2px 0;
 }
+
+/* Company page: one NAV job ad. */
+.job-ad {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--surface-raised);
+  color: var(--text-primary);
+  transition: border-color 0.15s;
+}
+.job-ad:hover {
+  border-color: var(--accent-border);
+}

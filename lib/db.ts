@@ -2,6 +2,7 @@ import { createClient, type Client, type InStatement } from '@libsql/client';
 import path from 'path';
 import type { Role, CompanyStatus, CompanyFinancials } from './types';
 import { computeGroups } from './groups';
+import type { JobAd } from './jobAds';
 
 export type { Role, CompanyStatus, CompanyFinancials } from './types';
 
@@ -401,6 +402,34 @@ async function ensureSchema(): Promise<void> {
         fetched_at INTEGER NOT NULL
       );
       CREATE UNIQUE INDEX IF NOT EXISTS idx_news_company_url ON company_news(company_id, url);
+
+      CREATE TABLE IF NOT EXISTS job_ads (
+        uuid TEXT PRIMARY KEY,
+        company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+        employer_orgnr TEXT,
+        employer_name TEXT,
+        title TEXT NOT NULL,
+        job_title TEXT,
+        occupation TEXT,
+        location TEXT,
+        published TEXT,
+        expires TEXT,
+        application_due TEXT,
+        source_url TEXT NOT NULL,
+        contacts TEXT,
+        is_tech INTEGER NOT NULL DEFAULT 0,
+        active INTEGER NOT NULL DEFAULT 1,
+        updated_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_job_ads_company ON job_ads(company_id, active);
+
+      -- Brreg underenhet (a job ad's employer) → its company. parent NULL =
+      -- not an underenhet. Cached: the same workplaces advertise over and over.
+      CREATE TABLE IF NOT EXISTS underenheter (
+        orgnr TEXT PRIMARY KEY,
+        parent_orgnr TEXT,
+        checked_at INTEGER NOT NULL
+      );
 
       CREATE TABLE IF NOT EXISTS notifications (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1164,6 +1193,123 @@ export async function mergeCompanyNews(
     'write',
   );
   return fresh;
+}
+
+// --- Small key/value store (app_meta) ---
+export async function getMeta(key: string): Promise<string | null> {
+  const c = await db();
+  const r = await c.execute({ sql: 'SELECT value FROM app_meta WHERE key = ?', args: [key] });
+  return (r.rows[0] as unknown as { value: string } | undefined)?.value ?? null;
+}
+
+export async function setMeta(key: string, value: string): Promise<void> {
+  const c = await db();
+  await c.execute({
+    sql: 'INSERT INTO app_meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',
+    args: [key, value],
+  });
+}
+
+// --- Job ads (NAV) ---
+export interface JobAdRow {
+  uuid: string;
+  company_id: number;
+  employer_name: string | null;
+  title: string;
+  occupation: string | null;
+  location: string | null;
+  published: string | null;
+  expires: string | null;
+  application_due: string | null;
+  source_url: string;
+  contacts: string | null; // JSON JobAd['contacts']
+  is_tech: number;
+  active: number;
+}
+
+/** Active companies by orgnr, plus the distinctive name words used to pre-filter the feed. */
+export async function listCompanyOrgnrIndex(): Promise<{
+  byOrgnr: Map<string, number>;
+  byId: Map<number, { orgnr: string; name: string }>;
+  names: string[];
+}> {
+  const c = await db();
+  const res = await c.execute("SELECT id, orgnr, name FROM companies WHERE status = 'active'");
+  const rows = res.rows as unknown as { id: number; orgnr: string; name: string }[];
+  return {
+    byOrgnr: new Map(rows.map((r) => [r.orgnr, Number(r.id)])),
+    byId: new Map(rows.map((r) => [Number(r.id), { orgnr: r.orgnr, name: r.name }])),
+    names: rows.map((r) => r.name),
+  };
+}
+
+export async function getCachedUnderenhetParent(orgnr: string): Promise<{ known: boolean; parent: string | null }> {
+  const c = await db();
+  const r = await c.execute({ sql: 'SELECT parent_orgnr FROM underenheter WHERE orgnr = ?', args: [orgnr] });
+  const row = r.rows[0] as unknown as { parent_orgnr: string | null } | undefined;
+  return row ? { known: true, parent: row.parent_orgnr } : { known: false, parent: null };
+}
+
+export async function cacheUnderenhetParent(orgnr: string, parent: string | null): Promise<void> {
+  const c = await db();
+  await c.execute({
+    sql: `INSERT INTO underenheter (orgnr, parent_orgnr, checked_at) VALUES (?, ?, ?)
+          ON CONFLICT(orgnr) DO UPDATE SET parent_orgnr = excluded.parent_orgnr, checked_at = excluded.checked_at`,
+    args: [orgnr, parent, Date.now()],
+  });
+}
+
+/** Returns true when the ad is new to us (for the scan log / notifications). */
+export async function upsertJobAd(companyId: number, ad: JobAd): Promise<boolean> {
+  const c = await db();
+  const before = await c.execute({ sql: 'SELECT 1 FROM job_ads WHERE uuid = ?', args: [ad.uuid] });
+  await c.execute({
+    sql: `INSERT INTO job_ads (uuid, company_id, employer_orgnr, employer_name, title, job_title, occupation, location,
+            published, expires, application_due, source_url, contacts, is_tech, active, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
+          ON CONFLICT(uuid) DO UPDATE SET company_id = excluded.company_id, title = excluded.title,
+            job_title = excluded.job_title, occupation = excluded.occupation, location = excluded.location,
+            published = excluded.published, expires = excluded.expires, application_due = excluded.application_due,
+            contacts = excluded.contacts, is_tech = excluded.is_tech, active = 1, updated_at = excluded.updated_at`,
+    args: [
+      ad.uuid, companyId, ad.employerOrgnr, ad.employerName, ad.title, ad.jobTitle, ad.occupation, ad.location,
+      ad.published, ad.expires, ad.applicationDue, ad.sourceUrl, JSON.stringify(ad.contacts), ad.isTech ? 1 : 0, Date.now(),
+    ],
+  });
+  return before.rows.length === 0;
+}
+
+/** NAV marks stopped/expired ads INACTIVE; their terms require we stop showing them. */
+export async function deactivateJobAds(uuids: string[]): Promise<number> {
+  if (!uuids.length) return 0;
+  const c = await db();
+  let n = 0;
+  for (let i = 0; i < uuids.length; i += 200) {
+    const chunk = uuids.slice(i, i + 200);
+    const r = await c.execute({
+      sql: `UPDATE job_ads SET active = 0, contacts = NULL, updated_at = ? WHERE active = 1 AND uuid IN (${chunk.map(() => '?').join(',')})`,
+      args: [Date.now(), ...chunk],
+    });
+    n += r.rowsAffected;
+  }
+  // Also retire anything past its own expiry date the feed never told us about.
+  await c.execute({
+    sql: "UPDATE job_ads SET active = 0, contacts = NULL WHERE active = 1 AND expires IS NOT NULL AND expires < ?",
+    args: [new Date().toISOString().slice(0, 10)],
+  });
+  return n;
+}
+
+export async function listJobAds(companyIds: number[], activeOnly = true): Promise<JobAdRow[]> {
+  if (!companyIds.length) return [];
+  const c = await db();
+  const res = await c.execute({
+    sql: `SELECT * FROM job_ads WHERE company_id IN (${companyIds.map(() => '?').join(',')})
+          ${activeOnly ? 'AND active = 1' : ''}
+          ORDER BY active DESC, COALESCE(published, '') DESC LIMIT 40`,
+    args: companyIds,
+  });
+  return plain<JobAdRow>(res.rows);
 }
 
 // --- Company groups (konsern) ---

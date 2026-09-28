@@ -83,6 +83,19 @@ the guest magic-link flow, `scripts/hash-password.mjs`, `scripts/create-user.mjs
   if over a day old). The list shows one row per group (toggle «Slå sammen konsern»); the company
   page shows the group panel labelled registrert / delvis registrert / sannsynlig, and pulls in the
   other members' website contacts and news. Locally: 615 companies → 360 rows, 70 groups.
+- **Rekruttering (NAV)** — `lib/orchestrator/providers/nav.ts` reads NAV's vacancy feed
+  (pam-stilling-feed.nav.no) forward from a cursor in `app_meta` (a feed page id; the
+  "modified since" query is used only on the very first run, 14 days back, because NAV sometimes
+  takes 25 s+ to answer it). Each line is pre-filtered (`lib/jobAds.ts#isCandidate`: in our
+  municipalities, or the employer's first distinctive name word matches one of ours), the ad is
+  fetched, and its employer — an **underenhet** — is mapped to our company via Brreg
+  `/underenheter/{orgnr}` (cached in `underenheter`). Stored in `job_ads`; INACTIVE/expired ads
+  are retired (NAV's terms). Shown in «Rekruttering» on the company page (IT roles flagged, whole
+  group), contact persons join the contact cards, and the AI analysis gets the active ads as
+  buying-signal input. Access: `NAV_FEED_TOKEN` (personal token after a written agreement with
+  NAV); `NAV_FEED_USE_PUBLIC_TOKEN=1` is for local testing only. **Limitation found:** the open
+  feed does not carry ads imported from external recruitment systems — 35 days of feed had no
+  Odfjell ad although arbeidsplassen.no listed three — so coverage of larger employers is partial.
 - **One-off data fixes** run once per database via `ONCE_MIGRATIONS` in `lib/db.ts` (tracked
   in `app_meta`).
 - **Nyheter (fallback)** — only for companies never news-searched: `lib/orchestrator/providers/news.ts` queries the GDELT DOC 2.0 API

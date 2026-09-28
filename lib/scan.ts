@@ -5,6 +5,7 @@ import { websiteFromEmail, type Company as RawCompany, type KonsernInfo, type Ro
 import { safeFetchText } from './http/safeFetch';
 import { siteMentionsCompany } from './website';
 import type { FoundNews } from './companyNews';
+import { isCandidate, employerNameKeys, type FeedLine, type JobAd } from './jobAds';
 import { scoreBand } from './score';
 import type { CompanyFinancials } from './types';
 import {
@@ -32,6 +33,14 @@ import {
   listCompaniesForAi,
   getCompanyByOrgnr,
   recomputeGroups,
+  listCompanyOrgnrIndex,
+  getCachedUnderenhetParent,
+  cacheUnderenhetParent,
+  upsertJobAd,
+  deactivateJobAds,
+  listJobAds,
+  getMeta,
+  setMeta,
   listFinancials,
   type Company,
   type CompanyWithScore,
@@ -77,6 +86,16 @@ export interface ScanDetails {
     newsSearched?: number; // companies whose news search completed
     newsFound?: number; // articles not stored before
   };
+  // NAV job ads — optional: absent on scans from before it existed
+  jobs?: {
+    enabled: boolean;
+    pages: number; // feed pages read
+    candidates: number; // ads fetched (in scope by municipality/name)
+    newAds: number; // ads matched to one of our companies, first time seen
+    techAds: number; // of those, IT/tech roles
+    deactivated: number; // ads NAV marked stopped/expired
+    ms?: number; // time spent in the pass
+  };
   companies: { orgnr: string; name: string; changes: string[] }[];
   changedCount: number; // before `companies` is capped for storage
 }
@@ -115,6 +134,7 @@ function emptyDetails(trigger: ScanTrigger): ScanDetails {
       newsSearched: 0,
       newsFound: 0,
     },
+    jobs: { enabled: false, pages: 0, candidates: 0, newAds: 0, techAds: 0, deactivated: 0 },
     companies: [],
     changedCount: 0,
   };
@@ -431,10 +451,11 @@ async function aiPass(
     await newsJob();
     if (analysisFresh) return;
     const priorSignalLevel = parseBuyingSignalLevel(company.ai_analysis);
-    const [history, board, news] = await Promise.all([
+    const [history, board, news, jobAds] = await Promise.all([
       listFinancials(company.id),
       listWebsiteContacts(company.id),
       listCompanyNews(company.id, 5),
+      listJobAds([company.id]),
     ]);
     const contacts: { role: string; name: string }[] = [
       { role: 'Daglig leder', name: company.ceo_name },
@@ -468,6 +489,12 @@ async function aiPass(
           category: n.category,
         })),
         contacts,
+        jobAds: jobAds.slice(0, 8).map((j) => ({
+          title: j.title,
+          occupation: j.occupation,
+          published: j.published,
+          isTech: j.is_tech === 1,
+        })),
       },
       budget(40_000),
     );
@@ -534,6 +561,105 @@ async function aiPass(
 
   await Promise.all([analysisJob(), websiteJob()]);
   stats.processed++;
+}
+
+// --- Pass: NAV job ads ------------------------------------------------------
+// Reads NAV's vacancy feed forward from where the last run stopped (the
+// cursor is a feed page id in app_meta; a first run starts 30 days back),
+// pre-filters each line on municipality / employer name, fetches the full ad
+// for the candidates, maps the employer's underenhet to one of our companies
+// and stores it. Stopped/expired ads are retired, as NAV's terms require.
+
+const JOBS_CURSOR = 'nav_feed_path';
+const JOBS_SINCE = 'nav_feed_since';
+const JOBS_FIRST_RUN_DAYS = 14;
+
+async function jobsPass(
+  stats: NonNullable<ScanDetails['jobs']>,
+  logFor: (co: { orgnr: string; name: string }) => CompanyLog,
+  errors: ScanError[],
+  until: number,
+): Promise<void> {
+  const index = await listCompanyOrgnrIndex();
+  const nameWords = employerNameKeys(index.names);
+  const municipalities = new Set((KOMMUNER as { name: string }[]).map((k) => k.name.toUpperCase()));
+
+  // Employer (usually an underenhet) → our company id, via a cached Brreg lookup.
+  const resolve = async (orgnr: string | null): Promise<number | null> => {
+    if (!orgnr) return null;
+    if (index.byOrgnr.has(orgnr)) return index.byOrgnr.get(orgnr)!;
+    let { known, parent } = await getCachedUnderenhetParent(orgnr);
+    if (!known) {
+      const r = await orchestrator.callTool<string | null>('brreg.getUnderenhetParent', { orgnr }, 8_000);
+      if (!r.ok) return null;
+      parent = r.data;
+      await cacheUnderenhetParent(orgnr, parent);
+    }
+    return parent && index.byOrgnr.has(parent) ? index.byOrgnr.get(parent)! : null;
+  };
+
+  let path = (await getMeta(JOBS_CURSOR)) || null;
+  let since = (await getMeta(JOBS_SINCE)) || new Date(Date.now() - JOBS_FIRST_RUN_DAYS * 86_400_000).toISOString();
+  let errorCount = 0;
+  while (Date.now() < until) {
+    const page = await orchestrator.callTool<{ lines: FeedLine[]; nextUrl: string | null; path: string }>(
+      'nav.feedPage',
+      path ? { path } : { since },
+      26_000,
+    );
+    if (!page.ok) {
+      errors.push({ scope: 'nav.feed', message: page.error });
+      break;
+    }
+    stats.pages++;
+    const lines = page.data.lines;
+    stats.deactivated += await deactivateJobAds(lines.filter((l) => l.status !== 'ACTIVE').map((l) => l.uuid));
+
+    const candidates = lines.filter((l) => isCandidate(l, municipalities, nameWords));
+    let finishedPage = true;
+    for (let i = 0; i < candidates.length; i += 6) {
+      if (Date.now() >= until) {
+        finishedPage = false; // re-read this page next run; upserts are idempotent
+        break;
+      }
+      await Promise.all(
+        candidates.slice(i, i + 6).map(async (line) => {
+          stats.candidates++;
+          const ad = await orchestrator.callTool<JobAd | null>('nav.getAd', { url: line.url, uuid: line.uuid }, 10_000);
+          if (!ad.ok) {
+            if (errorCount++ < 5) errors.push({ scope: `nav.ad ${line.uuid}`, message: ad.error });
+            return;
+          }
+          if (!ad.data) return;
+          const companyId = await resolve(ad.data.employerOrgnr);
+          if (companyId == null) return;
+          if (await upsertJobAd(companyId, ad.data)) {
+            stats.newAds++;
+            if (ad.data.isTech) stats.techAds++;
+            const co = index.byId.get(companyId);
+            if (co) logFor(co).change(`Ny stilling: ${ad.data.title}${ad.data.isTech ? ' (IT)' : ''}`, ad.data.isTech);
+          }
+        }),
+      );
+    }
+    const last = lines[lines.length - 1]?.modified;
+    if (!finishedPage) break;
+    if (page.data.nextUrl) {
+      path = page.data.nextUrl;
+    } else {
+      // Reached the end of the feed: stay on this last page and re-read it
+      // next run (fast, ~1 s), following next_url once NAV adds pages. Only
+      // a real page id can be a cursor — the bare /api/v1/feed would restart
+      // from the feed's beginning in 2023. The "modified since" query is
+      // only for the very first run: NAV sometimes takes 25 s+ to answer it.
+      path = /^\/api\/v1\/feed\/[\w-]+$/.test(page.data.path) ? page.data.path : null;
+      if (last) since = last;
+      break;
+    }
+    if (last) since = last;
+  }
+  await setMeta(JOBS_CURSOR, path ?? '');
+  await setMeta(JOBS_SINCE, since);
 }
 
 // --- The scan ----------------------------------------------------------
@@ -620,6 +746,23 @@ export async function runScan(opts: RunScanOptions = {}): Promise<ScanResult> {
     }),
   );
   if (details.brreg.processed < batch.length) details.stoppedEarly = true;
+
+  // Pass 1b — NAV job ads, a short slot of its own (the feed is read forward
+  // from a cursor, so a short slot every run keeps up). Not on AI-only runs.
+  if (!opts.aiOnly && orchestrator.hasProvider('nav')) {
+    details.jobs!.enabled = true;
+    // Runs after the Brreg pass (itself capped at 30 s): whatever is left up
+    // to the AI pass's start — at least ~6 s, the whole gap when Brreg had
+    // little to do, which is how a backlog in the feed gets cleared.
+    const jobsUntil = Math.max(Date.now() + 6_000, started + (aiEnabled ? 36_000 : 50_000));
+    const jobsStart = Date.now();
+    try {
+      await jobsPass(details.jobs!, logFor, errors, jobsUntil);
+      details.jobs!.ms = Date.now() - jobsStart;
+    } catch (e) {
+      errors.push({ scope: 'nav', message: e instanceof Error ? e.message : String(e) });
+    }
+  }
 
   // Pass 2 — AI, in whole waves that each still fit before the hard stop.
   if (aiEnabled) {
