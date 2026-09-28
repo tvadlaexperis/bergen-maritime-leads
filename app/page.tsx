@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { listCompaniesWithScore, listScans } from '@/lib/db';
+import { listCompaniesWithScore, listScans, ensureGroupsFresh } from '@/lib/db';
 import { getCurrentUser } from '@/lib/auth';
 import { agoLabel } from './format';
 import CompanyList from './CompanyList';
@@ -7,6 +7,9 @@ import CompanyList from './CompanyList';
 export const dynamic = 'force-dynamic';
 
 export default async function HomePage() {
+  // Groups are recomputed after every scan; this covers a fresh deploy (or a
+  // day without scans) so the list never shows stale/no grouping.
+  await ensureGroupsFresh().catch(() => {});
   const [rows, scans, user] = await Promise.all([
     listCompaniesWithScore(),
     listScans(1),
@@ -15,11 +18,15 @@ export default async function HomePage() {
 
   const active = rows.filter((r) => r.status === 'active');
   const scored = active.filter((r) => r.lead_score != null).length;
+  const groupKeys = new Set(active.map((r) => r.group_key).filter(Boolean));
+  const inGroups = active.filter((r) => r.group_key).length;
   const lastScan = scans[0];
 
   const subtitle = (
     <>
-      {active.length} selskaper · {scored} scoret · sortert etter lead-score ·{' '}
+      {active.length} selskaper
+      {groupKeys.size > 0 && ` (${inGroups} av dem i ${groupKeys.size} konsern)`} · {scored} scoret · sortert etter
+      lead-score ·{' '}
       {lastScan ? `sist skannet ${agoLabel(lastScan.started_at)}` : 'ingen skann ennå'}
     </>
   );

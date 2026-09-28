@@ -131,7 +131,7 @@ export function findLikelyContactPages(html: string, baseUrl: string, limit = 3)
 }
 
 // Words too common in maritime company names to identify one on their own.
-const GENERIC_NAME_WORDS = new Set([
+export const GENERIC_NAME_WORDS = new Set([
   'as', 'asa', 'sa', 'da', 'ans', 'ks', 'nuf', 'norway', 'norge', 'norwegian', 'bergen', 'group', 'gruppen',
   'holding', 'holdings', 'shipping', 'service', 'services', 'marine', 'maritime', 'invest', 'eiendom', 'rederi',
   'offshore', 'subsea', 'teknikk', 'technology', 'solutions', 'og', 'and', 'the', 'of',

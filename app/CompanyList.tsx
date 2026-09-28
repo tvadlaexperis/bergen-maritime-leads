@@ -3,6 +3,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import type { CompanyWithScore } from '@/lib/db';
+import { describeGroupBasis, type GroupBasis } from '@/lib/groups';
 import { fmtNok, fmtPct, fmtInt, dateLabel, agoLabel } from './format';
 import ScoreBadge from './components/ScoreBadge';
 import SignalBadge, { parseBuyingSignalLevel } from './components/SignalBadge';
@@ -29,6 +30,7 @@ interface StoredFilters {
   minScore: ScoreFilter;
   signalFilter: SignalFilter;
   contactFilter: ContactFilter;
+  mergeGroups: boolean;
   filterTab: FilterTab;
   search: string;
 }
@@ -43,6 +45,7 @@ const DEFAULT_FILTERS: StoredFilters = {
   minScore: 'all',
   signalFilter: 'all',
   contactFilter: 'all',
+  mergeGroups: true,
   filterTab: 'segment',
   search: '',
 };
@@ -51,6 +54,18 @@ const DEFAULT_FILTERS: StoredFilters = {
 // scraped from the company's website, or typed in by an admin.
 function hasNamedContact(r: CompanyWithScore): boolean {
   return (r.website_contact_count ?? 0) > 0 || !!(r.contact_name || r.cto_name || r.sales_name);
+}
+
+// Three linked boxes — the "several companies, one group" mark.
+function KonsernIcon() {
+  return (
+    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" aria-hidden="true" style={{ verticalAlign: '-1px' }}>
+      <rect x="9" y="2" width="6" height="6" rx="1" />
+      <rect x="2" y="16" width="6" height="6" rx="1" />
+      <rect x="16" y="16" width="6" height="6" rx="1" />
+      <path d="M12 8v4M5 16v-2h14v2" />
+    </svg>
+  );
 }
 
 function uniqSorted(values: (string | null)[]): string[] {
@@ -96,6 +111,7 @@ export default function CompanyList({
   const [minScore, setMinScore] = useState<ScoreFilter>(DEFAULT_FILTERS.minScore);
   const [signalFilter, setSignalFilter] = useState<SignalFilter>(DEFAULT_FILTERS.signalFilter);
   const [contactFilter, setContactFilter] = useState<ContactFilter>(DEFAULT_FILTERS.contactFilter);
+  const [mergeGroups, setMergeGroups] = useState<boolean>(DEFAULT_FILTERS.mergeGroups);
   const [filterTab, setFilterTab] = useState<FilterTab>(DEFAULT_FILTERS.filterTab);
   const [search, setSearch] = useState<string>(DEFAULT_FILTERS.search);
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
@@ -119,6 +135,7 @@ export default function CompanyList({
         if (saved.minScore) setMinScore(saved.minScore);
         if (saved.signalFilter) setSignalFilter(saved.signalFilter);
         if (saved.contactFilter) setContactFilter(saved.contactFilter);
+        if (typeof saved.mergeGroups === 'boolean') setMergeGroups(saved.mergeGroups);
         if (saved.filterTab) setFilterTab(saved.filterTab);
         if (saved.search) setSearch(saved.search);
       }
@@ -148,6 +165,7 @@ export default function CompanyList({
       minScore,
       signalFilter,
       contactFilter,
+      mergeGroups,
       filterTab,
       search,
     };
@@ -156,7 +174,7 @@ export default function CompanyList({
     } catch {
       // ignore write failures
     }
-  }, [group, bransje, orgForm, kommuneFilter, minSize, minGrowth, minScore, signalFilter, contactFilter, filterTab, search]);
+  }, [group, bransje, orgForm, kommuneFilter, minSize, minGrowth, minScore, signalFilter, contactFilter, mergeGroups, filterTab, search]);
 
   useEffect(() => {
     if (!loadedFavorites.current) return;
@@ -211,20 +229,24 @@ export default function CompanyList({
   // server sent — parsing 600+ small JSON blobs is negligible either way.
   const signalById = useMemo(() => new Map(rows.map((r) => [r.id, parseBuyingSignalLevel(r.ai_analysis)])), [rows]);
   const hasSignalData = useMemo(() => [...signalById.values()].some((v) => v != null), [signalById]);
-  // Companies sharing a parent_orgnr, grouped from the same rows we already
-  // have — no extra query. Only worth flagging when at least one sibling is
-  // also in our own list (a lone subsidiary with an unlisted parent isn't a
-  // cross-sell opportunity within this tool).
-  const siblingsByParent = useMemo(() => {
+  // Company groups (lib/groups.ts, stored as group_key by the scan): every
+  // member in our list, and why they were grouped — for the badge tooltip.
+  const membersByGroup = useMemo(() => {
     const map = new Map<string, CompanyWithScore[]>();
     for (const r of rows) {
-      if (!r.parent_orgnr) continue;
-      const arr = map.get(r.parent_orgnr) ?? [];
-      arr.push(r);
-      map.set(r.parent_orgnr, arr);
+      if (!r.group_key) continue;
+      map.set(r.group_key, [...(map.get(r.group_key) ?? []), r]);
     }
     return map;
   }, [rows]);
+  const groupBasisText = (r: CompanyWithScore) => {
+    if (!r.group_basis) return '';
+    try {
+      return describeGroupBasis(JSON.parse(r.group_basis) as GroupBasis).text;
+    } catch {
+      return '';
+    }
+  };
 
   function toggleSort(col: (typeof COLUMNS)[number]) {
     if (col.key === sortKey) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
@@ -263,7 +285,7 @@ export default function CompanyList({
     });
     const col = COLUMNS.find((c) => c.key === sortKey)!;
     const mul = sortDir === 'asc' ? 1 : -1;
-    return [...list].sort((a, b) => {
+    const sorted = [...list].sort((a, b) => {
       const av = col.value(a);
       const bv = col.value(b);
       if (av == null && bv == null) return 0;
@@ -272,7 +294,17 @@ export default function CompanyList({
       if (typeof av === 'string') return mul * av.localeCompare(bv as string, 'nb');
       return mul * ((av as number) - (bv as number));
     });
-  }, [rows, group, bransje, orgForm, kommuneFilter, minSize, minGrowth, minScore, signalFilter, signalById, contactFilter, search, favorites, lockFavorites, sortKey, sortDir]);
+    if (!mergeGroups) return sorted;
+    // One row per group: whichever member ranks first under the current sort
+    // and filters stands in for the rest.
+    const seen = new Set<string>();
+    return sorted.filter((r) => {
+      if (!r.group_key || (membersByGroup.get(r.group_key)?.length ?? 0) < 2) return true;
+      if (seen.has(r.group_key)) return false;
+      seen.add(r.group_key);
+      return true;
+    });
+  }, [rows, group, bransje, orgForm, kommuneFilter, minSize, minGrowth, minScore, signalFilter, signalById, contactFilter, search, favorites, lockFavorites, sortKey, sortDir, mergeGroups, membersByGroup]);
 
   return (
     <div className="page-fill" style={{ gap: 16 }}>
@@ -292,6 +324,10 @@ export default function CompanyList({
             onChange={(e) => setSearch(e.target.value)}
             aria-label="Søk i selskaper"
           />
+          <label className="merge-toggle" title="Vis selskaper i samme konsern som én rad">
+            <input type="checkbox" checked={mergeGroups} onChange={(e) => setMergeGroups(e.target.checked)} />
+            Slå sammen konsern
+          </label>
         </div>
       </div>
 
@@ -559,7 +595,7 @@ export default function CompanyList({
             </thead>
             <tbody>
               {filtered.map((r, i) => {
-                const siblings = r.parent_orgnr ? (siblingsByParent.get(r.parent_orgnr) ?? []).filter((s) => s.id !== r.id) : [];
+                const groupMembers = r.group_key ? (membersByGroup.get(r.group_key) ?? []) : [];
                 return (
                 <tr key={r.id}>
                   <td className="num muted">{i + 1}</td>
@@ -588,12 +624,12 @@ export default function CompanyList({
                       </span>
                     )}
                     <SignalBadge level={signalById.get(r.id) ?? null} />
-                    {siblings.length > 0 && (
+                    {groupMembers.length > 1 && (
                       <span
                         className="konsern-badge"
-                        title={`Konsern: ${r.parent_name ?? r.parent_orgnr} — også i lista: ${siblings.map((s) => s.name).join(', ')}`}
+                        title={`${groupBasisText(r)}\nSelskaper: ${groupMembers.map((m) => m.name).join(', ')}`}
                       >
-                        Konsern ({siblings.length})
+                        <KonsernIcon /> Konsern · {groupMembers.length}
                       </span>
                     )}
                   </td>

@@ -966,7 +966,10 @@ a {
 /* ── Corporate-group cross-sell flag — informational, not a warning or a buy
    signal, so it reuses the same blue accent as "Ny ledelse" ── */
 .konsern-badge {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
   margin-left: 6px;
   padding: 1px 7px;
   border-radius: var(--radius-pill);
@@ -1203,4 +1206,69 @@ a {
 }
 .page-fill:has(> .split-scroll) > :not(.split-scroll) {
   flex-shrink: 0;
+}
+
+.merge-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.merge-toggle input {
+  accent-color: var(--accent);
+}
+
+/* Company page: the group ("konsern") this company belongs to. */
+.group-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--accent-border);
+  border-radius: var(--radius-control);
+  background: var(--accent-soft);
+  max-width: 760px;
+}
+.group-panel-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--accent);
+}
+.group-panel-basis {
+  font-size: 0.66rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 1px 7px;
+  border-radius: var(--radius-pill);
+  border: 1px dashed var(--signal);
+  color: var(--signal);
+}
+.group-panel-basis.documented {
+  border-style: solid;
+  border-color: var(--positive);
+  color: var(--positive);
+}
+.group-chip {
+  font-size: 0.76rem;
+  padding: 2px 9px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border-strong);
+  background: var(--surface-raised);
+  color: var(--accent);
+}
+.group-chip:hover {
+  border-color: var(--accent);
+}
+.group-chip.current {
+  color: var(--text-primary);
+  font-weight: 700;
+  border-color: var(--accent);
 }

@@ -190,12 +190,17 @@ describe('parseKonsernstruktur', () => {
 
   it('finds the immediate parent of a nested member', () => {
     const info = parseKonsernstruktur(tree, '883462092');
-    expect(info).toEqual({ parentOrgnr: '984669151', parentName: 'ODFJELL DRILLING AS' });
+    expect(info).toEqual({
+      parentOrgnr: '984669151',
+      parentName: 'ODFJELL DRILLING AS',
+      rootOrgnr: '926118056',
+      rootName: 'ODFJELL RIG OWNING LTD',
+    });
   });
 
   it('returns a null parent when the queried company is the root', () => {
     const info = parseKonsernstruktur(tree, '926118056');
-    expect(info).toEqual({ parentOrgnr: null, parentName: null });
+    expect(info).toEqual({ parentOrgnr: null, parentName: null, rootOrgnr: '926118056', rootName: 'ODFJELL RIG OWNING LTD' });
   });
 
   it('returns null when the target orgnr is not in the tree at all', () => {

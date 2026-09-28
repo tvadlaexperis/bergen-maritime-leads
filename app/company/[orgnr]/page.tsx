@@ -6,11 +6,12 @@ import {
   getCompany,
   listFinancials,
   getScoreHistory,
-  listSiblingCompanies,
+  listGroupMembers,
   listWebsiteContacts,
   listCompanyNews,
 } from '@/lib/db';
 import { NEWS_CATEGORY_LABEL, type NewsCategory } from '@/lib/companyNews';
+import { describeGroupBasis, type GroupBasis } from '@/lib/groups';
 import { getCurrentUser } from '@/lib/auth';
 import {
   isValidOrgnr,
@@ -71,19 +72,39 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
   if (!co) notFound();
 
   const base = await getCompany(co.id);
-  const [financials, history, user, storedNews, siblings, allContacts] = await Promise.all([
+  const [financials, history, user, storedNews, groupMembers, allContacts] = await Promise.all([
     listFinancials(co.id),
     getScoreHistory(co.id, 12),
     getCurrentUser(),
     listCompanyNews(co.id, 6),
-    co.parent_orgnr ? listSiblingCompanies(co.parent_orgnr, co.orgnr) : Promise.resolve([]),
+    co.group_key ? listGroupMembers(co.group_key) : Promise.resolve([]),
     listWebsiteContacts(co.id),
   ]);
+  // The rest of the group (lib/groups.ts): their website contacts and news
+  // are shown here too — for a salesperson the group is one customer.
+  const otherMembers = groupMembers.filter((m) => m.orgnr !== co.orgnr);
+  const [groupContactLists, groupNewsLists] = await Promise.all([
+    Promise.all(otherMembers.map((m) => listWebsiteContacts(m.id, 'nettside'))),
+    Promise.all(otherMembers.map((m) => listCompanyNews(m.id, 6))),
+  ]);
+  const groupBasis = (() => {
+    if (!co.group_basis) return null;
+    try {
+      return describeGroupBasis(JSON.parse(co.group_basis) as GroupBasis);
+    } catch {
+      return null;
+    }
+  })();
+
   // Stored news from the AI pass's web search; companies it hasn't searched
   // yet fall back to a live GDELT lookup (often empty — see lib/companyNews.ts).
   const news: { title: string; url: string; source: string; date: string | null; summary: string | null; category: string | null }[] =
-    co.news_checked_at != null
-      ? storedNews.map((n) => ({
+    co.news_checked_at != null || otherMembers.length > 0
+      ? [...storedNews, ...groupNewsLists.flat()]
+          .filter((n, i, all) => all.findIndex((x) => x.url === n.url) === i)
+          .sort((a, b) => (b.published_at ?? '').localeCompare(a.published_at ?? ''))
+          .slice(0, 8)
+          .map((n) => ({
           title: n.title,
           url: n.url,
           source: n.source ?? '',
@@ -137,23 +158,40 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
               {co.poststed ? ` · ${co.poststed}` : ''}
               {co.matched_group ? ` · ${co.matched_group}` : ''}
             </p>
-            {co.parent_orgnr && (
-              <p className="muted" style={{ fontSize: '0.82rem', marginTop: 4 }}>
-                Del av konsernet <span style={{ color: 'var(--text-primary)' }}>{co.parent_name ?? co.parent_orgnr}</span>
-                {siblings.length > 0 && (
-                  <>
-                    {' '}· {siblings.length} {siblings.length === 1 ? 'annet selskap' : 'andre selskaper'} i denne oversikten:{' '}
-                    {siblings.map((s, i) => (
-                      <span key={s.orgnr}>
-                        {i > 0 && ', '}
-                        <Link href={`/company/${s.orgnr}`} className="link-accent">
-                          {s.name}
-                        </Link>
+            {groupMembers.length > 1 ? (
+              // One customer, several legal entities — show them together,
+              // and say whether the register or our inference joined them.
+              <div className="group-panel">
+                <span className="group-panel-title">
+                  <KonsernIcon /> Konsern · {groupMembers.length} selskaper i oversikten
+                  {groupBasis && (
+                    <span className={`group-panel-basis${groupBasis.documented ? ' documented' : ''}`} title={groupBasis.text}>
+                      {groupBasis.documented ? 'registrert' : groupBasis.partly ? 'delvis registrert' : 'sannsynlig'}
+                    </span>
+                  )}
+                </span>
+                <span style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  {groupMembers.map((m) =>
+                    m.orgnr === co.orgnr ? (
+                      <span key={m.orgnr} className="group-chip current">
+                        {m.name}
                       </span>
-                    ))}
-                  </>
-                )}
-              </p>
+                    ) : (
+                      <Link key={m.orgnr} href={`/company/${m.orgnr}`} className="group-chip">
+                        {m.name}
+                      </Link>
+                    ),
+                  )}
+                </span>
+                {groupBasis && <span className="muted" style={{ fontSize: '0.74rem' }}>{groupBasis.text}</span>}
+              </div>
+            ) : (
+              co.parent_orgnr && (
+                <p className="muted" style={{ fontSize: '0.82rem', marginTop: 4 }}>
+                  Del av konsernet{' '}
+                  <span style={{ color: 'var(--text-primary)' }}>{co.konsern_root_name ?? co.parent_name ?? co.parent_orgnr}</span>
+                </p>
+              )
             )}
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'flex-end' }}>
@@ -355,6 +393,22 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
                   {websiteContacts.map((wc) => (
                     <ContactRow key={wc.id} label={wc.role ?? 'Ansatt'} name={wc.name} email={wc.email} phone={wc.phone} company={liName} source="nettside" />
                   ))}
+                  {otherMembers.flatMap((m, i) =>
+                    groupContactLists[i]
+                      .filter((gc) => !websiteContacts.some((wc) => wc.name === gc.name))
+                      .map((gc) => (
+                        <ContactRow
+                          key={`g${gc.id}`}
+                          label={gc.role ?? 'Ansatt'}
+                          name={gc.name}
+                          email={gc.email}
+                          phone={gc.phone}
+                          company={liName}
+                          source="nettside"
+                          via={linkedinCompanyName(m.name)}
+                        />
+                      )),
+                  )}
                   {boardContacts
                     .filter((b) => b.name !== co.ceo_name)
                     .map((b) => (
@@ -699,6 +753,18 @@ function EntryTab({ analysis, liCompany }: { analysis: LeadAnalysis; liCompany: 
   );
 }
 
+// Same mark as in the company list: several companies, one group.
+function KonsernIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" aria-hidden="true" style={{ verticalAlign: '-2px' }}>
+      <rect x="9" y="2" width="6" height="6" rx="1" />
+      <rect x="2" y="16" width="6" height="6" rx="1" />
+      <rect x="16" y="16" width="6" height="6" rx="1" />
+      <path d="M12 8v4M5 16v-2h14v2" />
+    </svg>
+  );
+}
+
 function ContactRow({
   label,
   name,
@@ -706,6 +772,7 @@ function ContactRow({
   phone,
   company,
   source,
+  via,
 }: {
   label: string;
   name: string | null;
@@ -715,6 +782,8 @@ function ContactRow({
   company?: string;
   /** Where a machine-sourced row came from; omitted for admin-entered contacts. */
   source?: 'nettside' | 'brreg';
+  /** Another company in the same group this contact was found at. */
+  via?: string;
 }) {
   return (
     <tr>
@@ -727,6 +796,11 @@ function ContactRow({
             title={source === 'nettside' ? 'Hentet fra selskapets egen nettside' : 'Fra Brønnøysundregistrene'}
           >
             {' '}· {source === 'nettside' ? 'nettside' : 'Brreg'}
+          </span>
+        )}
+        {via && (
+          <span className="muted" style={{ display: 'block', fontSize: '0.7rem' }} title={`Hentet fra nettsiden til ${via} (samme konsern)`}>
+            via {via}
           </span>
         )}
       </td>

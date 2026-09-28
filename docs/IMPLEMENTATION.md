@@ -68,6 +68,16 @@ the guest magic-link flow, `scripts/hash-password.mjs`, `scripts/create-user.mjs
   challenges (general industry knowledge, explicitly excepted from the "facts only" rule and
   labelled as such in the UI), each with why it can open a conversation. Shown at the bottom
   of «Tilrådd inngang».
+- **Konsern (company groups)** — `lib/groups.ts#computeGroups` (pure, tested) links companies by
+  (1) the register: same Brreg konsern top parent (`konsern_root_orgnr`, from `parseKonsernstruktur`)
+  or parent; (2) the same own web/email domain when the domain contains a distinctive word of both
+  names (stops a manager's domain like obos.no merging strangers); (3) shared people — same daglig
+  leder + a shared name word, 2 shared people + a word, or 3 regardless. Needed because Brreg's
+  konsernstruktur misses many small shipowner families (Misje Rederi/Ecobulk: 404). Stored as
+  `group_key` + `group_basis` by `recomputeGroups()` after every scan/refresh (and on a list load
+  if over a day old). The list shows one row per group (toggle «Slå sammen konsern»); the company
+  page shows the group panel labelled registrert / delvis registrert / sannsynlig, and pulls in the
+  other members' website contacts and news. Locally: 615 companies → 360 rows, 70 groups.
 - **One-off data fixes** run once per database via `ONCE_MIGRATIONS` in `lib/db.ts` (tracked
   in `app_meta`).
 - **Nyheter (fallback)** — only for companies never news-searched: `lib/orchestrator/providers/news.ts` queries the GDELT DOC 2.0 API

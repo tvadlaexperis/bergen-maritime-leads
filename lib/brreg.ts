@@ -112,7 +112,7 @@ export function cleanEmail(raw?: string): string | null {
 
 // Mail-provider domains — an address there says nothing about the company's
 // own website.
-const FREE_MAIL_DOMAINS = new Set([
+export const FREE_MAIL_DOMAINS = new Set([
   'gmail.com', 'googlemail.com', 'hotmail.com', 'hotmail.no', 'outlook.com', 'outlook.no', 'live.com', 'live.no',
   'msn.com', 'yahoo.com', 'yahoo.no', 'icloud.com', 'me.com', 'mac.com', 'online.no', 'altibox.no', 'lyse.net',
   'getmail.no', 'frisurf.no', 'start.no', 'c2i.net', 'bkkfiber.no', 'telia.no', 'tele2.no', 'epost.no',
@@ -279,6 +279,11 @@ export function parseRoller(json: unknown): Roller {
 export interface KonsernInfo {
   parentOrgnr: string | null;
   parentName: string | null;
+  /** The group's ultimate parent (the tree root) — the same for every
+   *  member, unlike the immediate parent, so it's what groups siblings,
+   *  nieces and the parent itself together. */
+  rootOrgnr: string;
+  rootName: string | null;
 }
 
 interface RawKonsernNode {
@@ -308,6 +313,8 @@ export function parseKonsernstruktur(json: unknown, targetOrgnr: string): Konser
   return {
     parentOrgnr: found.parentOrganisasjonsnummer ?? null,
     parentName: found.parentNavn ?? null,
+    rootOrgnr: root.organisasjonsnummer,
+    rootName: root.navn ?? null,
   };
 }
 

@@ -31,6 +31,7 @@ import {
   listCompaniesToRefresh,
   listCompaniesForAi,
   getCompanyByOrgnr,
+  recomputeGroups,
   listFinancials,
   type Company,
   type CompanyWithScore,
@@ -308,9 +309,20 @@ async function brregPass(
 
   if (konsern.ok) {
     const newParentOrgnr = konsern.data?.parentOrgnr ?? null;
-    if (newParentOrgnr !== company.parent_orgnr) {
-      await setCompanyParent(company.id, newParentOrgnr, konsern.data?.parentName ?? null);
-      if (newParentOrgnr) log.change(`Del av konsernet ${konsern.data?.parentName ?? newParentOrgnr}`, true);
+    const newRoot = konsern.data?.rootOrgnr ?? null;
+    if (newParentOrgnr !== company.parent_orgnr || newRoot !== company.konsern_root_orgnr) {
+      await setCompanyParent(
+        company.id,
+        newParentOrgnr,
+        konsern.data?.parentName ?? null,
+        newRoot,
+        konsern.data?.rootName ?? null,
+      );
+      // Only a real change of parent is news — filling in the root for the
+      // first time on an existing member isn't.
+      if (newParentOrgnr && newParentOrgnr !== company.parent_orgnr) {
+        log.change(`Del av konsernet ${konsern.data?.parentName ?? newParentOrgnr}`, true);
+      }
     }
   }
 
@@ -637,6 +649,14 @@ export async function runScan(opts: RunScanOptions = {}): Promise<ScanResult> {
       if (co) await addNotification(co.id, orgnr, name, log.notes.join(' · '));
     }
   }
+  // Groups depend on websites, people and konsern data this run may have
+  // changed. Best-effort: a failure here mustn't lose the scan's record.
+  try {
+    await recomputeGroups();
+  } catch (e) {
+    errors.push({ scope: 'konsern', message: e instanceof Error ? e.message : String(e) });
+  }
+
   details.changedCount = details.companies.length;
   details.companies.sort((a, b) => a.name.localeCompare(b.name, 'nb'));
   details.companies = details.companies.slice(0, 400);
@@ -685,6 +705,7 @@ async function doRefreshCompany(orgnr: string): Promise<{ ok: boolean; errors: S
     const enhet = await orchestrator.callTool<RawCompany | null>('brreg.getEnhet', { orgnr }, 12_000);
     if (enhet.ok && enhet.data) await upsertCompany(toUpsertInput(enhet.data));
     await enrichOne(orgnr, errors);
+    await recomputeGroups().catch((e) => errors.push({ scope: 'konsern', message: String(e) }));
     return { ok: errors.length === 0, errors };
   } catch (e) {
     errors.push({ scope: `refresh ${orgnr}`, message: e instanceof Error ? e.message : String(e) });

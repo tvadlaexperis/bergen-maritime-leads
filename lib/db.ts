@@ -1,6 +1,7 @@
 import { createClient, type Client, type InStatement } from '@libsql/client';
 import path from 'path';
 import type { Role, CompanyStatus, CompanyFinancials } from './types';
+import { computeGroups } from './groups';
 
 export type { Role, CompanyStatus, CompanyFinancials } from './types';
 
@@ -68,6 +69,10 @@ export interface Company {
   ai_attempted_at: number | null;
   contacts_scraped_at: number | null;
   news_checked_at: number | null;
+  konsern_root_orgnr: string | null; // registered group's top parent (Brreg konsernstruktur)
+  konsern_root_name: string | null;
+  group_key: string | null; // shared by every company recomputeGroups() put in the same group; null = standalone
+  group_basis: string | null; // JSON GroupBasis — why they were grouped (lib/groups.ts)
   discovered_at: number;
   last_refreshed_at: number | null;
   updated_at: number;
@@ -209,6 +214,10 @@ const CONTACT_COLUMNS = [
   'ai_attempted_at INTEGER',
   'contacts_scraped_at INTEGER',
   'news_checked_at INTEGER',
+  'konsern_root_orgnr TEXT',
+  'konsern_root_name TEXT',
+  'group_key TEXT',
+  'group_basis TEXT',
 ];
 
 // Data fixes that must run exactly once per database, tracked in app_meta.
@@ -229,6 +238,12 @@ const ONCE_MIGRATIONS: { key: string; sql: string }[] = [
     key: '2026-09-25-industry-challenges-requeue',
     sql: `UPDATE companies SET ai_analysis_at = NULL
           WHERE ai_analysis IS NOT NULL AND ai_analysis NOT LIKE '%industryChallenges%'`,
+  },
+  {
+    // konsern_root_orgnr is new; companies with a registered parent need a
+    // Brreg pass to fill it in, so mark them due for the next scan.
+    key: '2026-09-28-konsern-root-refresh',
+    sql: `UPDATE companies SET last_refreshed_at = NULL WHERE parent_orgnr IS NOT NULL`,
   },
 ];
 
@@ -1016,11 +1031,17 @@ export async function setCompanyCeo(id: number, ceoName: string | null, ceoChang
 // for the ~95% of companies with no corporate parent (a 404 upstream, not an
 // error). Storing just the immediate parent (not the whole tree) keeps this
 // cheap: sibling companies are found by matching on parent_orgnr at read time.
-export async function setCompanyParent(id: number, parentOrgnr: string | null, parentName: string | null): Promise<void> {
+export async function setCompanyParent(
+  id: number,
+  parentOrgnr: string | null,
+  parentName: string | null,
+  rootOrgnr: string | null = null,
+  rootName: string | null = null,
+): Promise<void> {
   const c = await db();
   await c.execute({
-    sql: 'UPDATE companies SET parent_orgnr = ?, parent_name = ? WHERE id = ?',
-    args: [parentOrgnr, parentName, id],
+    sql: 'UPDATE companies SET parent_orgnr = ?, parent_name = ?, konsern_root_orgnr = ?, konsern_root_name = ? WHERE id = ?',
+    args: [parentOrgnr, parentName, rootOrgnr, rootName, id],
   });
 }
 
@@ -1092,6 +1113,86 @@ export async function mergeCompanyNews(
     'write',
   );
   return fresh;
+}
+
+// --- Company groups (konsern) ---
+// Recomputed from scratch over all active companies — cheap (one pass over
+// ~600 rows) and it means a link that disappears (a sold subsidiary) also
+// drops the grouping. See lib/groups.ts for the rules.
+export async function recomputeGroups(): Promise<number> {
+  const c = await db();
+  const [cos, people] = await Promise.all([
+    c.execute(`SELECT orgnr, name, website, email, ceo_name, parent_orgnr, konsern_root_orgnr, konsern_root_name
+               FROM companies WHERE status = 'active'`),
+    c.execute(`SELECT co.orgnr, cc.name FROM company_contacts cc JOIN companies co ON co.id = cc.company_id
+               WHERE cc.source = 'brreg' AND co.status = 'active'`),
+  ]);
+  const board = new Map<string, string[]>();
+  for (const r of people.rows as unknown as { orgnr: string; name: string }[]) {
+    board.set(r.orgnr, [...(board.get(r.orgnr) ?? []), r.name]);
+  }
+  type Row = {
+    orgnr: string; name: string; website: string | null; email: string | null; ceo_name: string | null;
+    parent_orgnr: string | null; konsern_root_orgnr: string | null; konsern_root_name: string | null;
+  };
+  const rows = cos.rows as unknown as Row[];
+  const groups = computeGroups(
+    rows.map((r) => ({
+      orgnr: r.orgnr,
+      name: r.name,
+      website: r.website,
+      email: r.email,
+      ceoName: r.ceo_name,
+      parentOrgnr: r.parent_orgnr,
+      rootOrgnr: r.konsern_root_orgnr,
+      rootName: r.konsern_root_name,
+      people: board.get(r.orgnr) ?? [],
+    })),
+  );
+  const statements = rows.map((r) => {
+    const g = groups.get(r.orgnr);
+    return {
+      sql: 'UPDATE companies SET group_key = ?, group_basis = ? WHERE orgnr = ?',
+      args: [g?.key ?? null, g ? JSON.stringify(g.basis) : null, r.orgnr],
+    };
+  });
+  for (let i = 0; i < statements.length; i += 200) await c.batch(statements.slice(i, i + 200), 'write');
+  await c.execute({
+    sql: 'INSERT INTO app_meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',
+    args: ['groups_computed_at', String(Date.now())],
+  });
+  return new Set([...groups.values()].map((g) => g.key)).size;
+}
+
+// For page loads: recompute only if it's never been done or is over a day
+// old (the nightly scan normally does it), so a
+// fresh deploy shows groups without waiting for the next scan.
+export async function ensureGroupsFresh(maxAgeMs = 26 * 3600_000): Promise<void> {
+  const c = await db();
+  const r = await c.execute({ sql: 'SELECT value FROM app_meta WHERE key = ?', args: ['groups_computed_at'] });
+  const at = Number((r.rows[0] as unknown as { value: string } | undefined)?.value ?? 0);
+  if (Date.now() - at > maxAgeMs) await recomputeGroups();
+}
+
+export interface GroupMember {
+  id: number;
+  orgnr: string;
+  name: string;
+  lead_score: number | null;
+  revenue_latest: number | null;
+  employees: number | null;
+}
+
+export async function listGroupMembers(groupKey: string): Promise<GroupMember[]> {
+  const c = await db();
+  const res = await c.execute({
+    sql: `SELECT co.id, co.orgnr, co.name, co.employees, sc.lead_score, sc.revenue_latest
+          FROM companies co ${SCORE_JOIN}
+          WHERE co.group_key = ? AND co.status = 'active'
+          ORDER BY COALESCE(sc.lead_score, -1) DESC, COALESCE(sc.revenue_latest, 0) DESC`,
+    args: [groupKey],
+  });
+  return plain<GroupMember>(res.rows);
 }
 
 export async function setContactsScraped(id: number): Promise<void> {
