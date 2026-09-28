@@ -96,6 +96,18 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
     }
   })();
 
+  const people = buildContactPeople({
+    ceo: co.ceo_name ? { name: co.ceo_name, isNew: co.ceo_changed_at != null } : null,
+    manual: [
+      { label: 'Kontaktperson', name: co.contact_name, email: co.contact_email, phone: co.contact_phone },
+      { label: 'CTO', name: co.cto_name, email: co.cto_email, phone: co.cto_phone },
+      { label: 'Salgssjef', name: co.sales_name, email: co.sales_email, phone: co.sales_phone },
+    ],
+    website: allContacts.filter((c) => c.source !== 'brreg'),
+    group: otherMembers.flatMap((m, i) => groupContactLists[i].map((c) => ({ ...c, via: linkedinCompanyName(m.name) }))),
+    board: allContacts.filter((c) => c.source === 'brreg'),
+  });
+
   // Stored news from the AI pass's web search; companies it hasn't searched
   // yet fall back to a live GDELT lookup (often empty — see lib/companyNews.ts).
   const news: { title: string; url: string; source: string; date: string | null; summary: string | null; category: string | null }[] =
@@ -364,62 +376,50 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
         </div>
 
         <div className="split-scroll-col">
-          {/* Contacts */}
+          {/* Contacts — one card per person, all sources merged (the same
+              person often appears as daglig leder in Brreg AND on the
+              website). Cards, not a table: the column is too narrow for
+              four columns of names, e-mails and phone numbers. */}
           <div className="box">
             <div className="box-header">
               <span className="box-title">Kontakter</span>
               <span className="muted" style={{ fontSize: '0.72rem' }}>
-                {[boardContacts.length || co.ceo_name ? 'Brreg' : null, websiteContacts.length ? 'nettside' : null]
-                  .filter(Boolean)
-                  .join(' · ')}
+                {people.length} {people.length === 1 ? 'person' : 'personer'}
               </span>
             </div>
-            <div style={{ overflow: 'auto', maxHeight: 320 }}>
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>Rolle</th>
-                    <th>Navn</th>
-                    <th>E-post</th>
-                    <th>Telefon</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {co.ceo_name && <ContactRow label="Daglig leder" name={co.ceo_name} company={liName} source="brreg" />}
-                  {(co.phone || co.email) && <ContactRow label="Sentralbord" name={null} email={co.email} phone={co.phone} />}
-                  <ContactRow label="Kontaktperson" name={co.contact_name} email={co.contact_email} phone={co.contact_phone} company={liName} />
-                  <ContactRow label="CTO" name={co.cto_name} email={co.cto_email} phone={co.cto_phone} company={liName} />
-                  <ContactRow label="Salgssjef" name={co.sales_name} email={co.sales_email} phone={co.sales_phone} company={liName} />
-                  {websiteContacts.map((wc) => (
-                    <ContactRow key={wc.id} label={wc.role ?? 'Ansatt'} name={wc.name} email={wc.email} phone={wc.phone} company={liName} source="nettside" />
-                  ))}
-                  {otherMembers.flatMap((m, i) =>
-                    groupContactLists[i]
-                      .filter((gc) => !websiteContacts.some((wc) => wc.name === gc.name))
-                      .map((gc) => (
-                        <ContactRow
-                          key={`g${gc.id}`}
-                          label={gc.role ?? 'Ansatt'}
-                          name={gc.name}
-                          email={gc.email}
-                          phone={gc.phone}
-                          company={liName}
-                          source="nettside"
-                          via={linkedinCompanyName(m.name)}
-                        />
-                      )),
-                  )}
-                  {boardContacts
-                    .filter((b) => b.name !== co.ceo_name)
-                    .map((b) => (
-                      <ContactRow key={b.id} label={b.role ?? 'Styremedlem'} name={b.name} company={liName} source="brreg" />
+            {(co.phone || co.email) && (
+              <div className="contact-switchboard">
+                <span className="muted">Sentralbord</span>
+                {co.phone && (
+                  <a href={`tel:${co.phone.replace(/\s/g, '')}`} className="link-accent">
+                    {co.phone}
+                  </a>
+                )}
+                {co.email && (
+                  <a href={`mailto:${co.email}`} className="link-accent">
+                    {co.email}
+                  </a>
+                )}
+              </div>
+            )}
+            <div className="contact-list">
+              {people.slice(0, 6).map((p) => (
+                <PersonCard key={p.key} person={p} company={liName} />
+              ))}
+              {people.length > 6 && (
+                <details className="contact-more">
+                  <summary>Vis {people.length - 6} til</summary>
+                  <div className="contact-list" style={{ padding: 0, marginTop: 8 }}>
+                    {people.slice(6).map((p) => (
+                      <PersonCard key={p.key} person={p} company={liName} />
                     ))}
-                </tbody>
-              </table>
+                  </div>
+                </details>
+              )}
             </div>
-            {!co.contact_name && !co.cto_name && !co.sales_name && websiteContacts.length === 0 && (
+            {!people.some((p) => p.roles.some((r) => r.source !== 'brreg')) && (
               <div className="box-pad muted" style={{ paddingTop: 0, fontSize: '0.82rem' }}>
-                Ingen navngitte kontakter utover ledelse/styre ennå.{isAdmin ? ' Legg inn under.' : ''}
+                Ingen navngitte kontakter utover ledelse og styre ennå.{isAdmin ? ' Legg inn under.' : ''}
               </div>
             )}
             {/* Search links only — LinkedIn has no open API for people data and
@@ -765,62 +765,115 @@ function KonsernIcon() {
   );
 }
 
-function ContactRow({
-  label,
-  name,
-  email,
-  phone,
-  company,
-  source,
-  via,
-}: {
-  label: string;
-  name: string | null;
-  email?: string | null;
-  phone?: string | null;
-  /** LinkedIn-friendly company name — adds a person search link next to a named contact. */
-  company?: string;
-  /** Where a machine-sourced row came from; omitted for admin-entered contacts. */
-  source?: 'nettside' | 'brreg';
-  /** Another company in the same group this contact was found at. */
-  via?: string;
-}) {
+interface ContactPerson {
+  key: string;
+  name: string;
+  roles: { label: string; source: 'brreg' | 'nettside' | 'manuell'; via?: string }[];
+  emails: string[];
+  phones: string[];
+  isNew: boolean;
+}
+
+type SourcedContact = { name: string; role: string | null; email: string | null; phone: string | null };
+
+// Merges every source into one entry per person (by name, case/space-
+// insensitive), in the order a salesperson would call them: daglig leder,
+// manually entered, website (own, then the rest of the group), board.
+function buildContactPeople(input: {
+  ceo: { name: string; isNew: boolean } | null;
+  manual: { label: string; name: string | null; email: string | null; phone: string | null }[];
+  website: SourcedContact[];
+  group: (SourcedContact & { via: string })[];
+  board: SourcedContact[];
+}): ContactPerson[] {
+  const byKey = new Map<string, ContactPerson>();
+  const add = (
+    name: string | null,
+    role: ContactPerson['roles'][number],
+    email: string | null = null,
+    phone: string | null = null,
+    isNew = false,
+  ) => {
+    if (!name?.trim()) return;
+    const key = name.toLowerCase().replace(/\s+/g, ' ').trim();
+    const p = byKey.get(key) ?? { key, name: name.trim(), roles: [], emails: [], phones: [], isNew: false };
+    if (!p.roles.some((r) => r.label === role.label && r.source === role.source)) p.roles.push(role);
+    if (email && !p.emails.includes(email)) p.emails.push(email);
+    // "+47 55 21 00 10 / +47 908 25 634" — one tel: link each
+    for (const ph of (phone ?? '').split(/\s*[/,;]\s*/).filter(Boolean)) if (!p.phones.includes(ph)) p.phones.push(ph);
+    p.isNew ||= isNew;
+    byKey.set(key, p);
+  };
+  if (input.ceo) add(input.ceo.name, { label: 'Daglig leder', source: 'brreg' }, null, null, input.ceo.isNew);
+  for (const m of input.manual) add(m.name, { label: m.label, source: 'manuell' }, m.email, m.phone);
+  for (const w of input.website) add(w.name, { label: w.role ?? 'Ansatt', source: 'nettside' }, w.email, w.phone);
+  for (const g of input.group) add(g.name, { label: g.role ?? 'Ansatt', source: 'nettside', via: g.via }, g.email, g.phone);
+  for (const b of input.board) add(b.name, { label: b.role ?? 'Styremedlem', source: 'brreg' });
+  return [...byKey.values()];
+}
+
+const SOURCE_LABEL: Record<ContactPerson['roles'][number]['source'], string> = {
+  brreg: 'Brreg',
+  nettside: 'nettside',
+  manuell: 'lagt inn',
+};
+
+function PersonCard({ person, company }: { person: ContactPerson; company: string }) {
   return (
-    <tr>
-      <td className="muted">
-        {label}
-        {source && (
-          <span
-            className="muted"
-            style={{ fontSize: '0.72rem' }}
-            title={source === 'nettside' ? 'Hentet fra selskapets egen nettside' : 'Fra Brønnøysundregistrene'}
-          >
-            {' '}· {source === 'nettside' ? 'nettside' : 'Brreg'}
+    <div className="person-card">
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
+        <strong style={{ fontSize: '0.9rem' }}>{person.name}</strong>
+        <a
+          href={linkedinPeopleUrl(`${person.name} ${company}`)}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="link-accent"
+          title={`Søk etter ${person.name} på LinkedIn`}
+          style={{ fontSize: '0.7rem', fontWeight: 700 }}
+        >
+          in
+        </a>
+        {person.isNew && <span className="ceo-changed-badge">Ny i rollen</span>}
+      </div>
+      <div className="person-card-roles">
+        {person.roles.map((r, i) => (
+          <span key={i}>
+            {r.label}
+            <span className="muted">
+              {' '}
+              · {SOURCE_LABEL[r.source]}
+              {r.via ? ` via ${r.via}` : ''}
+            </span>
           </span>
-        )}
-        {via && (
-          <span className="muted" style={{ display: 'block', fontSize: '0.7rem' }} title={`Hentet fra nettsiden til ${via} (samme konsern)`}>
-            via {via}
-          </span>
-        )}
-      </td>
-      <td>
-        {name ?? <span className="muted">—</span>}
-        {name && company && (
-          <a
-            href={linkedinPeopleUrl(`${name} ${company}`)}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="link-accent"
-            title={`Søk etter ${name} på LinkedIn`}
-            style={{ marginLeft: 6, fontSize: '0.7rem', fontWeight: 700 }}
-          >
-            in
-          </a>
-        )}
-      </td>
-      <td>{email ? <a href={`mailto:${email}`} className="link-accent">{email}</a> : <span className="muted">—</span>}</td>
-      <td>{phone ? <a href={`tel:${phone.replace(/\s/g, '')}`} className="link-accent">{phone}</a> : <span className="muted">—</span>}</td>
-    </tr>
+        ))}
+      </div>
+      {person.emails.map((e) => (
+        <a key={e} href={`mailto:${e}`} className="person-card-line link-accent">
+          <MailIcon /> {e}
+        </a>
+      ))}
+      {person.phones.map((ph) => (
+        <a key={ph} href={`tel:${ph.replace(/\s/g, '')}`} className="person-card-line link-accent">
+          <PhoneSmallIcon /> {ph}
+        </a>
+      ))}
+    </div>
+  );
+}
+
+function MailIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+      <rect x="3" y="5" width="18" height="14" rx="2" />
+      <path d="M3 7l9 6 9-6" />
+    </svg>
+  );
+}
+
+function PhoneSmallIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+      <path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.5c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z" />
+    </svg>
   );
 }
