@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { runAiQueueAction, runScanAction } from "./actions";
+import { runAiQueueAction } from "./actions";
 import ConfirmDialog from "./ConfirmDialog";
 
 type Totals = {
@@ -24,21 +24,15 @@ const ZERO: Totals = {
   errors: 0,
 };
 
-type Phase = "brreg" | "ai";
-
-// «Oppdater alt»: the manual catch-up routine as one click. Phase 1 runs
-// normal scans until no company is left unchecked in Brreg for 3+ days
-// (e-post, roller, regnskap, nettside fra e-postdomene); phase 2 runs AI-only
-// scans until the AI queue is empty. One ≤60s server run after another, for
+// «AI-vurdering»: runs AI-only scans until the AI queue is empty (analysis,
+// news, website contacts). Costs Gemini money — Brreg has its own free button. One ≤60s server run after another, for
 // as long as this page stays open. Stopping only takes effect between runs —
 // the one in flight always finishes and gets logged.
 export default function RunUpdateAllButton({
-  initialStale,
   initialRemaining,
   aiEnabled,
   onStatus,
 }: {
-  initialStale: number;
   initialRemaining: number;
   aiEnabled: boolean;
   onStatus: (msg: string | null) => void;
@@ -48,9 +42,6 @@ export default function RunUpdateAllButton({
   const [stopping, setStopping] = useState(false);
   const [totals, setTotals] = useState<Totals>(ZERO);
   const [remaining, setRemaining] = useState(initialRemaining);
-  const [stale, setStale] = useState(initialStale);
-  const [phase, setPhase] = useState<Phase>("brreg");
-  const [brregChecked, setBrregChecked] = useState(0);
   const [msg, setMsg] = useState<string | null>(null);
   const [waitLeft, setWaitLeft] = useState(0);
   const stopRef = useRef(false);
@@ -72,32 +63,9 @@ export default function RunUpdateAllButton({
     setMsg(null);
     let t = ZERO;
     setTotals(t);
-    setBrregChecked(0);
     let idleRuns = 0;
     let rateLimitWaits = 0;
     try {
-      // Phase 1 — Brreg. Stops when nothing is stale, or when a run checks
-      // nobody (everything left is already fresh, or Brreg is failing).
-      setPhase("brreg");
-      let checked = 0;
-      for (let i = 0; i < 10 && !stopRef.current; i++) {
-        const r = await runScanAction(false);
-        checked += r.processed;
-        setBrregChecked(checked);
-        setStale(r.staleRemaining);
-        router.refresh();
-        if (r.staleRemaining === 0 || r.processed === 0) break;
-      }
-      if (!aiEnabled) {
-        if (!stopRef.current)
-          setMsg(
-            "Ferdig — alle selskaper er sjekket i Brreg (AI er ikke konfigurert).",
-          );
-        return;
-      }
-
-      // Phase 2 — AI queue.
-      setPhase("ai");
       while (!stopRef.current) {
         const r = await runAiQueueAction();
         if ("error" in r) {
@@ -162,8 +130,7 @@ export default function RunUpdateAllButton({
   // Status is reported up (see ScanHeader) rather than rendered here, so
   // this can sit in the header next to the other scan buttons.
   let status: string | null = null;
-  if (running || totals.runs > 0 || brregChecked > 0) {
-    const brregPart = `Brreg: ${brregChecked} sjekket, ${stale} gjenstår`;
+  if (running || totals.runs > 0) {
     const aiPart = `AI: ${totals.analyses} vurdert, ${totals.news} nyheter, ${totals.websites} nettsider, kontakter hos ${totals.contacts}${
       totals.errors ? `, ${totals.errors} feil` : ""
     }, ${remaining} igjen`;
@@ -171,18 +138,15 @@ export default function RunUpdateAllButton({
       ? null
       : waitLeft > 0
         ? `venter ${waitLeft} s`
-        : phase === "brreg"
-          ? "trinn 1/2: Brønnøysund pågår"
-          : `trinn 2/2: AI-kjøring ${totals.runs + 1} pågår${
+        : `AI-kjøring ${totals.runs + 1} pågår${
               totals.runs > 0 && totals.processed > 0
                 ? ` (ca. ${Math.ceil(remaining / (totals.processed / totals.runs))} min igjen)`
                 : ""
             }`;
     status = [
-      "Oppdater alt",
+      "AI-vurdering",
       now,
-      brregPart,
-      phase === "ai" || totals.runs > 0 ? aiPart : null,
+      totals.runs > 0 ? aiPart : null,
       msg,
     ]
       .filter(Boolean)
@@ -201,14 +165,14 @@ export default function RunUpdateAllButton({
         setStopping(true);
       }}
     >
-      {stopping ? "Stopper…" : "Stopp oppdatering"}
+      {stopping ? "Stopper…" : "Stopp AI"}
     </button>
   ) : (
     <>
       <ConfirmDialog
         open={ask}
-        title="Oppdater alt"
-        confirmLabel="Start oppdatering"
+        title="AI-vurdering"
+        confirmLabel="Start AI-vurdering"
         onCancel={() => setAsk(false)}
         onConfirm={() => {
           setAsk(false);
@@ -216,29 +180,23 @@ export default function RunUpdateAllButton({
         }}
       >
         <p>
-          <strong>Trinn 1, Brønnøysund ({stale} selskaper):</strong> henter
-          regnskap, roller, e-post og lead-score for alle som ikke er sjekket de
-          siste 3 dagene. Gratis.
+          Lager AI-vurdering, henter nyheter og leser kontakter fra nettsiden
+          for {remaining} selskaper i køen, de med høyest score først.
         </p>
-        {aiEnabled && (
-          <p>
-            <strong>Trinn 2, AI ({remaining} selskaper):</strong> AI-vurdering,
-            nyheter og kontakter fra nettsiden. Dette bruker Gemini og{" "}
-            <strong>koster penger</strong>, og teller mot utgiftsgrensen i
-            Google AI Studio.
-          </p>
-        )}
+        <p>
+          Bruker Gemini og <strong>koster penger</strong>, og teller mot utgiftsgrensen i Google AI Studio.
+        </p>
         <p className="muted">
           Kjører så lenge siden er åpen, og kan stoppes underveis.
         </p>
       </ConfirmDialog>
       <button
-        className="btn btn-primary btn-sm"
-        disabled={stale === 0 && (!aiEnabled || remaining === 0)}
+        className="btn btn-ghost btn-sm"
+        disabled={!aiEnabled || remaining === 0}
         onClick={() => setAsk(true)}
-        title="Kjører Brreg til alle er sjekket, deretter AI-køen til den er tom — så lenge siden er åpen"
+        title={aiEnabled ? "Kjører AI-køen til den er tom — koster penger" : "AI er ikke konfigurert"}
       >
-        Oppdater alt ({stale + (aiEnabled ? remaining : 0)} igjen)
+        AI-vurdering ({remaining})
       </button>
     </>
   );

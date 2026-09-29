@@ -1,76 +1,81 @@
-"use client";
+'use client';
 
-import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
-import { runScanAction } from "./actions";
-import ConfirmDialog from "./ConfirmDialog";
+import { useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { runScanAction } from './actions';
+import ConfirmDialog from './ConfirmDialog';
 
-// Buttons only — the result line is reported up via `onStatus` so the
-// buttons can sit in the Skann header while the text renders below it.
+// «Oppdater fra Brreg»: free. The first run also looks for new companies in
+// the register; then runs back to back (each ≤60s) until every company has
+// been checked in the last 3 days. Never touches Gemini.
 export default function RunScanButton({
+  initialStale,
   onStatus,
 }: {
+  initialStale: number;
   onStatus: (msg: string | null) => void;
 }) {
   const router = useRouter();
-  const [busy, start] = useTransition();
-  const setMsg = onStatus;
-  const [ask, setAsk] = useState<null | "bunt" | "full">(null);
+  const [running, setRunning] = useState(false);
+  const [ask, setAsk] = useState(false);
+  const [stale, setStale] = useState(initialStale);
+  const stopRef = useRef(false);
 
-  function run(full: boolean) {
-    setMsg(null);
-    start(async () => {
-      try {
-        const r = await runScanAction(full);
-        setMsg(r.summary);
+  async function run() {
+    stopRef.current = false;
+    setRunning(true);
+    let checked = 0;
+    let added = 0;
+    try {
+      for (let i = 0; i < 20 && !stopRef.current; i++) {
+        onStatus(`Brreg: ${checked} sjekket, oppdaterer…`);
+        const r = await runScanAction(i === 0);
+        checked += r.processed;
+        added += r.added;
+        setStale(r.staleRemaining);
         router.refresh();
-      } catch {
-        setMsg("Skann feilet — sjekk loggene.");
+        if (r.staleRemaining === 0 || r.processed === 0) break;
       }
-    });
+      onStatus(
+        `Brreg: ${checked} sjekket${added ? `, ${added} nye selskaper` : ''}${
+          stopRef.current ? ' · stoppet' : ' · ferdig'
+        }.`,
+      );
+    } catch {
+      onStatus('Brreg-oppdateringen feilet — prøv igjen, eller se loggen under.');
+    } finally {
+      setRunning(false);
+      router.refresh();
+    }
   }
 
+  if (running) {
+    return (
+      <button className="btn btn-ghost btn-sm" onClick={() => (stopRef.current = true)}>
+        Stopp Brreg
+      </button>
+    );
+  }
   return (
     <>
-      <button
-        className="btn btn-ghost btn-sm"
-        disabled={busy}
-        onClick={() => setAsk("bunt")}
-      >
-        {busy ? "Skanner…" : "Kjør skann"}
-      </button>
-      <button
-        className="btn btn-ghost btn-sm"
-        disabled={busy}
-        onClick={() => setAsk("full")}
-      >
-        Full oppdatering
+      <button className="btn btn-primary btn-sm" onClick={() => setAsk(true)}>
+        Oppdater fra Brreg{stale > 0 ? ` (${stale})` : ''}
       </button>
       <ConfirmDialog
-        open={ask !== null}
-        title={ask === "full" ? "Full oppdatering" : "Kjør skann"}
+        open={ask}
+        title="Oppdater fra Brreg"
         confirmLabel="Start"
-        onCancel={() => setAsk(null)}
+        onCancel={() => setAsk(false)}
         onConfirm={() => {
-          run(ask === "full");
-          setAsk(null);
+          setAsk(false);
+          run();
         }}
       >
-        {ask === "full" ? (
-          <p>
-            Leter etter nye maritime selskaper i Brønnøysundregistrene, og
-            sjekker deretter alle selskaper på nytt (regnskap, daglig leder,
-            styre, e-post, konsern og lead-score), de som er sjekket lengst
-            siden først.
-          </p>
-        ) : (
-          <p>
-            Sjekker selskaper som ikke er oppdatert fra Brønnøysundregistrene de
-            siste 3 dagene: regnskap, daglig leder, styre, e-post, konsern og
-            lead-score. Leter ikke etter nye selskaper.
-          </p>
-        )}
-        <p>Én kjøring tar inntil ett minutt. Kjør igjen for å ta resten.</p>
+        <p>
+          Leter etter nye maritime selskaper i Brønnøysundregistrene, og henter regnskap, daglig leder, styre, e-post,
+          konsern og lead-score for alle som ikke er sjekket de siste 3 dagene{stale > 0 ? ` (${stale} nå)` : ''}.
+        </p>
+        <p>Tar noen minutter. Kjører så lenge siden er åpen, og kan stoppes underveis.</p>
         <p className="muted">Gratis. Bruker ikke AI (Gemini).</p>
       </ConfirmDialog>
     </>

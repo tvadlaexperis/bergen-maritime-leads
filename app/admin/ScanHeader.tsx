@@ -43,15 +43,9 @@ export default function ScanHeader({
           <span className="muted" style={{ fontSize: '0.75rem' }}>{meta}</span>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-          {/* The one most admins need is first and primary; the single-run
-              buttons are for when you want just one pass. */}
-          <RunUpdateAllButton
-            initialStale={brregStale}
-            initialRemaining={aiRemaining}
-            aiEnabled={aiEnabled}
-            onStatus={setAiStatus}
-          />
-          <RunScanButton onStatus={setScanStatus} />
+          {/* Split by cost: Brreg is free and primary, AI costs Gemini money. */}
+          <RunScanButton initialStale={brregStale} onStatus={setScanStatus} />
+          <RunUpdateAllButton initialRemaining={aiRemaining} aiEnabled={aiEnabled} onStatus={setAiStatus} />
         </div>
       </div>
       {lines.length > 0 && (

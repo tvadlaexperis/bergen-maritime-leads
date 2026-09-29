@@ -132,15 +132,16 @@ export async function refreshCompanyAction(orgnr: string): Promise<{ ok: boolean
   return { ok: r.ok, errors: r.errors.length };
 }
 
-// Manual "run scan". The normal button skips discovery (the company list
-// barely changes day to day, and the nightly cron rediscovers weekly) so the
-// whole 60s budget goes to refreshing data; `full` also re-walks the register
-// for new companies and picks up register-side changes (e-post, ansatte).
-export async function runScanAction(full: boolean): Promise<{ summary: string; processed: number; staleRemaining: number }> {
+// One Brreg-only run for «Oppdater fra Brreg» (never Gemini — that's the
+// AI button). The button calls it back to back; only the first call walks
+// the register for new companies (`discover`), the rest refresh stale ones.
+export async function runScanAction(
+  discover: boolean,
+): Promise<{ summary: string; processed: number; added: number; staleRemaining: number }> {
   const user = await guard('admin-scan');
   // Brreg only: Gemini costs money, and the AI queue has its own button
   // («Oppdater alt» phase 2) and the nightly cron.
-  const r = await runScan({ full, noAi: true, skipDiscovery: !full, trigger: full ? 'full' : 'manuell' });
+  const r = await runScan({ noAi: true, skipDiscovery: !discover, trigger: 'manuell' });
   const d = r.details;
   const parts = [
     d.discovery.ran ? `${d.discovery.added} nye selskaper` : null,
@@ -153,11 +154,11 @@ export async function runScanAction(full: boolean): Promise<{ summary: string; p
     r.errors.length ? `${r.errors.length} feil` : null,
   ].filter(Boolean);
   const summary = parts.join(', ') + '.';
-  await audit('scan.run', { actor: user.email, detail: `${full ? 'full' : 'bunt'}: ${summary}` });
+  await audit('scan.run', { actor: user.email, detail: `brreg: ${summary}` });
   revalidatePath('/');
   revalidatePath('/admin');
   revalidatePath('/dashboard');
-  return { summary, processed: d.brreg.processed, staleRemaining: await countBrregStale() };
+  return { summary, processed: d.brreg.processed, added: d.discovery.added, staleRemaining: await countBrregStale() };
 }
 
 // One AI-only run (no Brreg pass, whole budget to the AI queue). The
