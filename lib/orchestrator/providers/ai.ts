@@ -235,22 +235,26 @@ function buildPrompt(input: LeadAnalysisInput): string {
 // it's skipped for 15 minutes rather than wasting a round trip per call.
 const PAID_BLOCKED_FOR_MS = 15 * 60_000;
 let paidBlockedUntil = 0;
-const isQuotaError = (msg: string) => /429|RESOURCE_EXHAUSTED|quota|spend/i.test(msg);
+// 429 = rate limit / quota; 402 = prepaid credits used up (spend cap).
+const isQuotaError = (msg: string) => /(429|402)|RESOURCE_EXHAUSTED|quota|spend|credits/i.test(msg);
 
 async function geminiText(
   apiKey: string,
   payload: Record<string, unknown>,
-  opts: { allowFreeKey?: boolean } = {},
+  opts: { freePayload?: Record<string, unknown> } = {},
 ): Promise<string> {
-  const freeKey = opts.allowFreeKey ? process.env.GEMINI_API_KEY_FREE : undefined;
-  if (freeKey && Date.now() < paidBlockedUntil) return geminiTextOnce(freeKey, payload);
+  // The free-tier variant of the request (e.g. without people's names), or
+  // none → no fallback for this call.
+  const freeKey = opts.freePayload ? process.env.GEMINI_API_KEY_FREE : undefined;
+  const freeCall = () => geminiTextOnce(freeKey!, opts.freePayload!);
+  if (freeKey && Date.now() < paidBlockedUntil) return freeCall();
   try {
     return await geminiTextOnce(apiKey, payload);
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     if (!freeKey || !isQuotaError(msg)) throw e;
     paidBlockedUntil = Date.now() + PAID_BLOCKED_FOR_MS;
-    return geminiTextOnce(freeKey, payload);
+    return freeCall();
   }
 }
 
@@ -294,11 +298,14 @@ async function requestAnalysis(input: LeadAnalysisInput): Promise<LeadAnalysis |
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) return null;
 
+  const request = (i: LeadAnalysisInput) => ({
+    input: [{ type: 'text', text: buildPrompt(i) }],
+    response_format: { type: 'text', mime_type: 'application/json', schema: ANALYSIS_SCHEMA },
+  });
+  // Free tier: same analysis, but no people's names in the prompt (GDPR —
+  // Google may use free-tier inputs). Company facts and news only.
   const parsed = parseJsonOutput(
-    await geminiText(apiKey, {
-      input: [{ type: 'text', text: buildPrompt(input) }],
-      response_format: { type: 'text', mime_type: 'application/json', schema: ANALYSIS_SCHEMA },
-    }, { allowFreeKey: true }),
+    await geminiText(apiKey, request(input), { freePayload: request({ ...input, contacts: [] }) }),
   );
   if (!isValidAnalysis(parsed)) throw new Error('Gemini: vurderingen manglet påkrevde felt');
   return parsed;

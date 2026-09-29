@@ -1557,13 +1557,18 @@ const AI_PENDING = `(co.ai_analysis_at IS NULL OR ${NEEDS_CONTACT_SCRAPE} OR ${N
 // first within that; then everyone else by oldest analysis. Within each
 // group the *attempt* time orders the rotation, so a company Gemini keeps
 // failing on moves back behind the others instead of blocking the head of
-// the queue every run.
+// the queue every run. Among pending ones, those that need an actual
+// analysis (none, or older than 30 days) go before news/contacts-only work —
+// the analysis is the main value, and the only step that can fall back to
+// the free Gemini key when the paid one is capped.
 export async function listCompaniesForAi(limit: number): Promise<CompanyWithScore[]> {
   const c = await db();
   const res = await c.execute({
     sql: `SELECT co.*, ${SCORE_COLS} FROM companies co ${SCORE_JOIN}
           WHERE co.status = 'active'
-          ORDER BY (NOT ${AI_PENDING}), COALESCE(co.ai_attempted_at, co.ai_analysis_at, 0) ASC,
+          ORDER BY (NOT ${AI_PENDING}),
+            (co.ai_analysis_at IS NOT NULL AND co.ai_analysis_at > ${Date.now() - 30 * 86_400_000}),
+            COALESCE(co.ai_attempted_at, co.ai_analysis_at, 0) ASC,
             COALESCE(sc.lead_score, -1) DESC
           LIMIT ?`,
     args: [limit],
