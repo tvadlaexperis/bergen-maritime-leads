@@ -103,6 +103,14 @@ export default function RunUpdateAllButton({
         // Gemini's per-minute quota: back off and carry on rather than stop,
         // up to a point — five waits in a row means the daily quota is gone.
         const didWork = r.analyses > 0 || r.scraped > 0 || r.newsSearched > 0;
+        // Quota gone for the month (paid, 402) or the day (free key): stop
+        // at once — waiting a minute and retrying only piles up errors.
+        if (r.quotaGone && !didWork) {
+          setMsg(
+            "Stoppet: Gemini-kvoten er brukt opp — den betalte til den nullstilles den 1. i måneden (eller grensen økes i AI Studio), gratisnøkkelen til i morgen. Ingenting er ødelagt; køen fortsetter neste gang.",
+          );
+          break;
+        }
         if (r.rateLimited && !didWork) {
           rateLimitWaits++;
           if (rateLimitWaits > 5) {

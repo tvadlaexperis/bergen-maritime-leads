@@ -162,6 +162,8 @@ export async function runAiQueueAction(): Promise<
       newsFound: number;
       errors: number;
       rateLimited: boolean;
+      /** Paid credits used up (402) or the free key's daily quota gone — waiting minutes won't help. */
+      quotaGone: boolean;
       firstError: string | null;
       remaining: number;
     }
@@ -185,6 +187,7 @@ export async function runAiQueueAction(): Promise<
     newsSearched: d.newsSearched ?? 0,
     newsFound: d.newsFound ?? 0,
     errors: r.errors.length,
+    quotaGone: r.errors.some((e) => /HTTP 402|credits are depleted|per day|free tier/i.test(e.message)),
     rateLimited: r.errors.some((e) => /HTTP 4(29|02)|RESOURCE_EXHAUSTED|quota|credits/i.test(e.message)),
     firstError: r.errors[0] ? `${r.errors[0].scope}: ${r.errors[0].message}` : null,
     remaining: await countAiPending(),
