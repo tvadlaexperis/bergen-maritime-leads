@@ -115,9 +115,9 @@ the guest magic-link flow, `scripts/hash-password.mjs`, `scripts/create-user.mjs
   only. The initial view frames the Bergen cluster (25 km from the median).
 - **One-off data fixes** run once per database via `ONCE_MIGRATIONS` in `lib/db.ts` (tracked
   in `app_meta`).
-- **Nyheter (fallback)** — only for companies never news-searched: `lib/orchestrator/providers/news.ts` queries the GDELT DOC 2.0 API
-  (`api.gdeltproject.org`, free, keyless) for the company name, 6h `revalidate` cache
-  (GDELT rate-limits to ~1 req/5s). `SKIP_NEWS=1` hides the section entirely.
+- **Nyheter** come only from the AI pass (Gemini + Google Search, stored in `company_news`).
+  The live GDELT fallback on the company page was removed: under GDELT's ~1 req/5s limit it
+  held page renders for up to 10 s.
 - Both are best-effort like every other provider: a failed/rate-limited news fetch or missing
   roller data degrades to an empty section, never an error.
 

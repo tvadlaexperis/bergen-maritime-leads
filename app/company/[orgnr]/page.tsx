@@ -23,7 +23,6 @@ import {
   linkedinPeopleUrl,
   linkedinRoleSearchUrl,
 } from '@/lib/brreg';
-import { getCompanyNews } from '@/lib/news';
 import { fmtPct, fmtInt, dateLabel } from '@/app/format';
 import { bandFor } from '@/app/components/ScoreBadge';
 import type { LeadAnalysis, ScoreVerdict, SignalLevel } from '@/lib/orchestrator/providers/ai';
@@ -153,8 +152,9 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
     jobAds: jobContacts,
   });
 
-  // Stored news from the AI pass's web search; companies it hasn't searched
-  // yet fall back to a live GDELT lookup (often empty — see lib/companyNews.ts).
+  // Stored news from the AI pass's web search only. (A live GDELT lookup
+  // used to fill in for companies not yet searched — it held the page for
+  // up to 10 s under GDELT's ~1 req/5s limit, so it's gone.)
   const news: {
     title: string;
     url: string;
@@ -182,14 +182,7 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
           isSignal: n.is_signal === 1,
           question: n.question,
         }))
-      : (await getCompanyNews(co.name)).map((n) => ({
-          title: n.title,
-          url: n.url,
-          source: n.domain,
-          date: n.seenAt,
-          summary: null,
-          category: null,
-        }));
+      : [];
   const websiteContacts = allContacts.filter((c) => c.source !== 'brreg');
   const boardContacts = allContacts.filter((c) => c.source === 'brreg');
   const liName = linkedinCompanyName(co.name);
@@ -652,7 +645,7 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
             <div className="box-pad">
               {news.length === 0 ? (
                 <p className="muted" style={{ fontSize: '0.85rem' }}>
-                  {co.news_checked_at != null ? 'Ingen nyheter funnet siste 12 måneder.' : 'Ingen nyhetstreff siste tiden.'}
+                  {co.news_checked_at != null ? 'Ingen nyheter funnet siste 12 måneder.' : 'Nyheter hentes ved neste AI-kjøring.'}
                 </p>
               ) : (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12 }}>
