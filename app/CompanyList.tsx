@@ -270,11 +270,19 @@ export default function CompanyList({
       if (bransje !== 'ALL' && r.nace1_text !== bransje) return false;
       if (orgForm !== 'ALL' && r.org_form !== orgForm) return false;
       if (kommuneFilter !== 'ALL' && r.kommune !== kommuneFilter) return false;
-      const employees = r.employees ?? 0;
-      if (minSize === 'under5' && employees >= 5) return false;
-      if (minSize === '5-15' && (employees < 5 || employees > 15)) return false;
-      if (minSize === '10' && employees < 10) return false;
-      if (minSize === '50' && employees < 50) return false;
+      // Size is the whole group's when groups are merged (a group row shows
+      // the summed staff — Odfjell Tankers has none itself, 364 in the
+      // group). Unknown staff matches no size filter rather than counting as 0.
+      const employees =
+        mergeGroups && r.group_key && (membersByGroup.get(r.group_key)?.length ?? 0) > 1
+          ? (groupTotals.get(r.group_key)?.employees ?? null)
+          : r.employees;
+      if (minSize !== 'all' && employees == null) return false;
+      const n = employees ?? 0;
+      if (minSize === 'under5' && n >= 5) return false;
+      if (minSize === '5-15' && (n < 5 || n > 15)) return false;
+      if (minSize === '10' && n < 10) return false;
+      if (minSize === '50' && n < 50) return false;
       const growth = r.revenue_growth_pct;
       if (minGrowth === '0' && (growth == null || growth <= 0)) return false;
       if (minGrowth === '10' && (growth == null || growth <= 10)) return false;
@@ -327,7 +335,7 @@ export default function CompanyList({
       out.push(operating(r.group_key) ?? r);
     }
     return out;
-  }, [rows, group, bransje, orgForm, kommuneFilter, minSize, minGrowth, minScore, signalFilter, signalById, search, favorites, lockFavorites, sortKey, sortDir, mergeGroups, membersByGroup]);
+  }, [rows, group, bransje, orgForm, kommuneFilter, minSize, minGrowth, minScore, signalFilter, signalById, search, favorites, lockFavorites, sortKey, sortDir, mergeGroups, membersByGroup, groupTotals]);
 
   return (
     <div className="page-fill" style={{ gap: 16 }}>
