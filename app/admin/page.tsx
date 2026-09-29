@@ -31,21 +31,20 @@ export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 export const metadata: Metadata = { title: 'Admin' };
 
-type View = 'oppdatering' | 'datakvalitet' | 'verktoy' | 'logg' | 'nattlig';
+type View = 'oppdatering' | 'verktoy' | 'logg' | 'nattlig';
 
 // Page-level tabs. Old `?view=skann|dekning` links (bookmarks, notifications)
 // map onto their new homes.
 const VIEWS: { key: View; label: string; href: string }[] = [
   { key: 'oppdatering', label: 'Oppdatering', href: '/admin' },
-  { key: 'datakvalitet', label: 'Datakvalitet', href: '/admin?view=datakvalitet' },
   { key: 'verktoy', label: 'Verktøy', href: '/admin?view=verktoy' },
   { key: 'logg', label: 'Logg', href: '/admin?view=logg' },
   { key: 'nattlig', label: 'Nattlige kjøringer', href: '/admin?view=nattlig' },
 ];
 
 function parseView(raw: string | undefined): View {
-  if (raw === 'logg' || raw === 'verktoy' || raw === 'datakvalitet' || raw === 'nattlig') return raw;
-  if (raw === 'dekning') return 'datakvalitet';
+  if (raw === 'logg' || raw === 'verktoy' || raw === 'nattlig') return raw;
+  // 'datakvalitet' / 'dekning' now live on the Oppdatering tab.
   return 'oppdatering';
 }
 
@@ -72,13 +71,13 @@ export default async function AdminPage({
 
   const view = parseView(searchParams.view);
   const category: CoverageCategory | null =
-    view === 'datakvalitet' && searchParams.kategori && isCoverageCategory(searchParams.kategori) ? searchParams.kategori : null;
+    view === 'oppdatering' && searchParams.kategori && isCoverageCategory(searchParams.kategori) ? searchParams.kategori : null;
   const period = PERIODS.find((p) => p.key === searchParams.periode) ?? PERIODS.find((p) => p.key === 'idag')!;
   const periodRange = period.range();
   const mode: CoverageMode = searchParams.modus && isCoverageMode(searchParams.modus) ? searchParams.modus : 'har';
   const unit: CoverageUnit = searchParams.enhet && isCoverageUnit(searchParams.enhet) ? searchParams.enhet : 'kunde';
   // Keeps the chosen unit when drilling into a category or closing it.
-  const dq = (extra = '') => `/admin?view=datakvalitet${unit === 'selskap' ? '&enhet=selskap' : ''}${extra}`;
+  const dq = (extra = '') => `/admin?${unit === 'selskap' ? 'enhet=selskap' : ''}${extra}`;
 
   const [activeCount, scans, auditRows, coverage, categoryCompanies, aiRemaining, brregStale] = await Promise.all([
     countActiveCompanies(),
@@ -118,7 +117,7 @@ export default async function AdminPage({
       {/* Full width, full height — only one panel shows at a time rather than
           splitting the width permanently, since these are rarely needed
           side by side. */}
-      {view === 'datakvalitet' ? (
+      {view === 'oppdatering' ? (
         <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', gap: 16, overflow: 'hidden' }}>
           {(() => {
             const rows = [
@@ -149,15 +148,15 @@ export default async function AdminPage({
                     </div>
                     <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                       <span className="muted" style={{ fontSize: '0.78rem' }}>Tell per</span>
-                      <Link href="/admin?view=datakvalitet" className={`chip${unit === 'kunde' ? ' active' : ''}`}>
+                      <Link href="/admin" className={`chip${unit === 'kunde' ? ' active' : ''}`}>
                         kunde (konsern samlet)
                       </Link>
-                      <Link href="/admin?view=datakvalitet&enhet=selskap" className={`chip${unit === 'selskap' ? ' active' : ''}`}>
+                      <Link href="/admin?enhet=selskap" className={`chip${unit === 'selskap' ? ' active' : ''}`}>
                         selskap
                       </Link>
                     </div>
                   </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 10 }}>
                     {rows.map((row) => {
                       const pct = coverage.total > 0 ? Math.round((row.value / coverage.total) * 100) : 0;
                       const missing = coverage.total - row.value;
@@ -166,21 +165,16 @@ export default async function AdminPage({
                         <div
                           key={row.key}
                           className="box box-pad"
-                          style={{ gap: 8, borderColor: cardActive ? 'var(--accent-border)' : undefined, background: cardActive ? 'var(--accent-soft)' : undefined }}
+                          style={{ gap: 6, padding: '10px 12px', borderColor: cardActive ? 'var(--accent-border)' : undefined, background: cardActive ? 'var(--accent-soft)' : undefined }}
                         >
-                          <span className="num" style={{ fontSize: '1.7rem', fontWeight: 800, lineHeight: 1, color: pct >= 50 ? 'var(--positive)' : 'var(--text-muted)' }}>
+                          <span className="num" style={{ fontSize: '1.15rem', fontWeight: 800, lineHeight: 1, color: pct >= 50 ? 'var(--positive)' : 'var(--text-muted)' }}>
                             {pct} %
                           </span>
-                          <span style={{ fontSize: '0.82rem', fontWeight: 600 }}>{row.label}</span>
-                          {row.key === 'news' && (
-                            <span className="muted" style={{ fontSize: '0.72rem' }}>
-                              Søkt for {coverage.newsSearched} av {coverage.total} — resten står i AI-køen
-                            </span>
-                          )}
+                          <span style={{ fontSize: '0.74rem', fontWeight: 600, lineHeight: 1.25 }}>{row.label}</span>
                           <div className="meter">
                             <span style={{ width: `${pct}%` }} />
                           </div>
-                          <div style={{ display: 'flex', gap: 12, marginTop: 4 }}>
+                          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', fontSize: '0.72rem' }}>
                             <Link
                               href={cardActive && mode === 'har' ? dq() : dq(`&kategori=${row.key}&modus=har`)}
                               className={`coverage-link${cardActive && mode === 'har' ? ' active' : ''}`}
@@ -223,6 +217,16 @@ export default async function AdminPage({
                       )}
                     </div>
                   </div>
+                )}
+                {!category && (
+                  <ScanPanel
+                    scans={scans}
+                    activeCount={activeCount}
+                    selectedScanId={selectedScanId}
+                    aiRemaining={aiRemaining}
+                    brregStale={brregStale}
+                    aiEnabled={!!process.env.GEMINI_API_KEY}
+                  />
                 )}
               </>
             );
