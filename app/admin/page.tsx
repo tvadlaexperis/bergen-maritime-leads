@@ -143,7 +143,7 @@ export default async function AdminPage({
                 <div style={{ flexShrink: 0 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12, flexWrap: 'wrap', marginBottom: 14 }}>
                     <div>
-                      <p style={{ fontSize: '0.9rem', fontWeight: 700, marginBottom: 4 }}>Hvor mye vet vi</p>
+                      <p style={{ fontSize: '0.9rem', fontWeight: 700, marginBottom: 4 }}>Totalt – hvor mye vet vi</p>
                       <p className="muted" style={{ fontSize: '0.8rem' }}>
                         {unit === 'kunde'
                           ? `Om de ${coverage.total} kundene — et konsern telles én gang og «har» noe hvis ett av selskapene har det.`

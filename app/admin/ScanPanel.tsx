@@ -223,34 +223,49 @@ export default async function ScanPanel({
           return (
             <div className="box-pad" style={{ display: "grid", gap: 14 }}>
               {stats.length > 0 && (
-                <div
-                  style={{
-                    display: "flex",
-                    gap: "6px 18px",
-                    flexWrap: "wrap",
-                    fontSize: "0.82rem",
-                  }}
-                >
-                  {stats
-                    .filter(([, n]) => n != null)
-                    .map(([label, n]) => (
-                      <span key={label}>
-                        <strong
-                          className="num"
+                <div>
+                  <p style={{ fontSize: "0.9rem", fontWeight: 700, marginBottom: 8 }}>
+                    Lagt til i denne kjøringen
+                  </p>
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))",
+                      gap: 10,
+                    }}
+                  >
+                    {stats
+                      .filter(([, n]) => n != null)
+                      .map(([label, n]) => (
+                        <div
+                          key={label}
+                          className="box box-pad"
                           style={{
-                            color:
-                              label === "feil" && n
-                                ? "var(--negative)"
-                                : n
-                                  ? undefined
-                                  : "var(--text-muted)",
+                            gap: 4,
+                            padding: "10px 12px",
+                            borderColor: label === "feil" && n ? "var(--negative)" : undefined,
                           }}
                         >
-                          {n}
-                        </strong>{" "}
-                        <span className="muted">{label}</span>
-                      </span>
-                    ))}
+                          <span
+                            className="num"
+                            style={{
+                              fontSize: "1.15rem",
+                              fontWeight: 800,
+                              lineHeight: 1,
+                              color:
+                                label === "feil" && n
+                                  ? "var(--negative)"
+                                  : n
+                                    ? "var(--positive)"
+                                    : "var(--text-muted)",
+                            }}
+                          >
+                            {n ? (label === "feil" || label === "sjekket i Brreg" ? n : `+${n}`) : 0}
+                          </span>
+                          <span style={{ fontSize: "0.74rem", fontWeight: 600 }}>{label}</span>
+                        </div>
+                      ))}
+                  </div>
                 </div>
               )}
               <ScanDetailsView
