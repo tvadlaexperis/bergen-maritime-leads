@@ -226,7 +226,35 @@ function buildPrompt(input: LeadAnalysisInput): string {
 // The fetch timeout is deliberately generous: the orchestrator's own
 // timeout (clipped to the scan's remaining budget in lib/scan.ts) is what
 // actually bounds a call.
-async function geminiText(apiKey: string, payload: Record<string, unknown>): Promise<string> {
+// Paid key blocked (spend cap / quota)? Then the lead analysis (public
+// register data only, no search) may retry on GEMINI_API_KEY_FREE — a separate AI Studio
+// project without billing. Never used for extractContacts: on the free tier
+// Google may use inputs to improve its models, and website pages contain
+// people's names and e-mails (GDPR). Not for findWebsite/findNews either:
+// the free tier has no google_search quota (HTTP 429). Once the paid key has been rejected,
+// it's skipped for 15 minutes rather than wasting a round trip per call.
+const PAID_BLOCKED_FOR_MS = 15 * 60_000;
+let paidBlockedUntil = 0;
+const isQuotaError = (msg: string) => /429|RESOURCE_EXHAUSTED|quota|spend/i.test(msg);
+
+async function geminiText(
+  apiKey: string,
+  payload: Record<string, unknown>,
+  opts: { allowFreeKey?: boolean } = {},
+): Promise<string> {
+  const freeKey = opts.allowFreeKey ? process.env.GEMINI_API_KEY_FREE : undefined;
+  if (freeKey && Date.now() < paidBlockedUntil) return geminiTextOnce(freeKey, payload);
+  try {
+    return await geminiTextOnce(apiKey, payload);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (!freeKey || !isQuotaError(msg)) throw e;
+    paidBlockedUntil = Date.now() + PAID_BLOCKED_FOR_MS;
+    return geminiTextOnce(freeKey, payload);
+  }
+}
+
+async function geminiTextOnce(apiKey: string, payload: Record<string, unknown>): Promise<string> {
   const res = await safeFetchResult(URL, {
     allowHosts: [HOST],
     method: 'POST',
@@ -270,7 +298,7 @@ async function requestAnalysis(input: LeadAnalysisInput): Promise<LeadAnalysis |
     await geminiText(apiKey, {
       input: [{ type: 'text', text: buildPrompt(input) }],
       response_format: { type: 'text', mime_type: 'application/json', schema: ANALYSIS_SCHEMA },
-    }),
+    }, { allowFreeKey: true }),
   );
   if (!isValidAnalysis(parsed)) throw new Error('Gemini: vurderingen manglet påkrevde felt');
   return parsed;
@@ -299,10 +327,10 @@ async function requestWebsite(input: FindWebsiteInput): Promise<string | null> {
     'Svar KUN med selve URL-en (f.eks. https://firma.no) uten noen annen tekst eller forklaring. ' +
     'Hvis du ikke finner en offisiell nettside med rimelig sikkerhet, svar nøyaktig ordet UKJENT.';
 
-  const text = await geminiText(apiKey, {
-    input: [{ type: 'text', text: prompt }],
-    tools: [{ type: 'google_search' }],
-  });
+  const text = await geminiText(
+    apiKey,
+    { input: [{ type: 'text', text: prompt }], tools: [{ type: 'google_search' }] },
+  );
   if (text.toUpperCase().includes('UKJENT')) return null;
   return cleanWebsite(text);
 }
@@ -367,10 +395,10 @@ async function requestNews(input: FindNewsInput): Promise<FoundNews[]> {
     'digitalisering, lederskifte) — ikke for rutinenyheter.\n' +
     '- Finner du ingen relevante artikler, svar nøyaktig [].';
 
-  const text = await geminiText(apiKey, {
-    input: [{ type: 'text', text: prompt }],
-    tools: [{ type: 'google_search' }],
-  });
+  const text = await geminiText(
+    apiKey,
+    { input: [{ type: 'text', text: prompt }], tools: [{ type: 'google_search' }] },
+  );
   // No list at all (prose, a refusal) is an error worth seeing in the scan
   // log — it used to be indistinguishable from "no news found".
   if (!findJsonArray(text)) {
