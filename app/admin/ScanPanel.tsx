@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getCompanyNames, type Scan } from "@/lib/db";
 import type { ScanDetails } from "@/lib/scan";
 import { KOMMUNER, NACE_CODES } from "@/data/maritime-sectors.mjs";
+import LiveRun from "./LiveRun";
 import ScanHeader from "./ScanHeader";
 import { groupScanErrors } from "@/lib/scanErrors";
 
@@ -222,6 +223,7 @@ export default async function ScanPanel({
           const stats = statsFor(d, errors.length);
           return (
             <div className="box-pad" style={{ display: "grid", gap: 14 }}>
+              {!nightly && <LiveRun />}
               {stats.length > 0 && (
                 <div>
                   <p style={{ fontSize: "0.9rem", fontWeight: 700, marginBottom: 8 }}>

@@ -4,6 +4,7 @@ import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { runScanAction } from './actions';
 import ConfirmDialog from './ConfirmDialog';
+import { publishLiveRun } from './LiveRun';
 
 // «Oppdater fra Brreg»: free. The first run also looks for new companies in
 // the register; then runs back to back (each ≤60s) until every company has
@@ -26,21 +27,31 @@ export default function RunScanButton({
     setRunning(true);
     let checked = 0;
     let added = 0;
+    let financials = 0;
+    const live = (running: boolean, status: string) =>
+      publishLiveRun({
+        title: running ? 'Oppdatering fra Brreg pågår' : 'Oppdatering fra Brreg ferdig',
+        running,
+        status,
+        error: null,
+        steps: [
+          { label: 'Selskaper sjekket', service: 'Brønnøysundregistrene', cost: 'gratis', done: checked },
+          { label: 'Nye selskaper', service: 'Enhetsregisteret', cost: 'gratis', done: added },
+          { label: 'Nye regnskap', service: 'Regnskapsregisteret', cost: 'gratis', done: financials },
+        ],
+      });
     try {
       for (let i = 0; i < 20 && !stopRef.current; i++) {
-        onStatus(`Brreg: ${checked} sjekket, oppdaterer…`);
+        live(true, `kjøring ${i + 1}${i === 0 ? ' · leter også etter nye selskaper' : ''}`);
         const r = await runScanAction(i === 0);
         checked += r.processed;
         added += r.added;
+        financials += r.newFinancials;
         setStale(r.staleRemaining);
         router.refresh();
         if (r.staleRemaining === 0 || r.processed === 0) break;
       }
-      onStatus(
-        `Brreg: ${checked} sjekket${added ? `, ${added} nye selskaper` : ''}${
-          stopRef.current ? ' · stoppet' : ' · ferdig'
-        }.`,
-      );
+      live(false, stopRef.current ? 'stoppet' : 'alle er sjekket');
     } catch {
       onStatus('Brreg-oppdateringen feilet — prøv igjen, eller se loggen under.');
     } finally {

@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { runAiQueueAction } from "./actions";
 import ConfirmDialog from "./ConfirmDialog";
+import { publishLiveRun } from "./LiveRun";
+import { groupScanErrors } from "@/lib/scanErrors";
 
 type Totals = {
   runs: number;
@@ -12,6 +14,8 @@ type Totals = {
   contacts: number;
   websites: number;
   news: number;
+  newsSearched: number;
+  scraped: number;
   errors: number;
 };
 const ZERO: Totals = {
@@ -21,6 +25,8 @@ const ZERO: Totals = {
   contacts: 0,
   websites: 0,
   news: 0,
+  newsSearched: 0,
+  scraped: 0,
   errors: 0,
 };
 
@@ -46,6 +52,7 @@ export default function RunUpdateAllButton({
   const [waitLeft, setWaitLeft] = useState(0);
   const stopRef = useRef(false);
   const [ask, setAsk] = useState(false);
+  const [lastError, setLastError] = useState<string | null>(null);
 
   // Interruptible pause — "Stopp" during a rate-limit wait ends it at once.
   async function pause(seconds: number) {
@@ -79,9 +86,12 @@ export default function RunUpdateAllButton({
           contacts: t.contacts + r.contacts,
           websites: t.websites + r.websites,
           news: t.news + r.newsFound,
+          newsSearched: t.newsSearched + r.newsSearched,
+          scraped: t.scraped + r.scraped,
           errors: t.errors + r.errors,
         };
         setTotals(t);
+        setLastError(r.firstError);
         setRemaining(r.remaining);
         router.refresh();
         if (r.remaining === 0) {
@@ -154,7 +164,31 @@ export default function RunUpdateAllButton({
   } else if (msg) {
     status = msg;
   }
-  useEffect(() => onStatus(status), [status, onStatus]);
+  // The live entry at the top of «Siste kjøringer» (LiveRun) replaces the
+  // old one-line status text.
+  useEffect(() => onStatus(null), [onStatus]);
+  useEffect(() => {
+    if (!running && totals.runs === 0 && !msg) return;
+    // "ai.findNews 123456789: Gemini HTTP 402 …" → the plain-words hint.
+    let error: string | null = null;
+    if (lastError) {
+      const [scope, ...rest] = lastError.split(": ");
+      const g = groupScanErrors([{ scope, message: rest.join(": ") }])[0];
+      error = `Siste feil (${g.step}): ${g.hint ?? g.message}`;
+    }
+    publishLiveRun({
+      title: running ? "AI-vurdering pågår" : "AI-vurdering ferdig",
+      running,
+      status: status?.replace(/^AI-vurdering · /, "") ?? null,
+      error,
+      steps: [
+        { label: "AI-vurderinger", service: "Gemini", cost: "betalt, gratis reserve", done: totals.analyses },
+        { label: "Nyhetssøk", service: "Gemini + Google-søk", cost: "betalt", done: totals.newsSearched },
+        { label: "Nettsider lest for kontakter", service: "nettsiden + Gemini", cost: "betalt", done: totals.scraped },
+        { label: "Nettsider funnet", service: "Gemini + Google-søk", cost: "betalt", done: totals.websites },
+      ],
+    });
+  }, [running, totals, msg, status, lastError]);
 
   return running ? (
     <button

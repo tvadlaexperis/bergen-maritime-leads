@@ -137,7 +137,7 @@ export async function refreshCompanyAction(orgnr: string): Promise<{ ok: boolean
 // the register for new companies (`discover`), the rest refresh stale ones.
 export async function runScanAction(
   discover: boolean,
-): Promise<{ summary: string; processed: number; added: number; staleRemaining: number }> {
+): Promise<{ summary: string; processed: number; added: number; newFinancials: number; staleRemaining: number }> {
   const user = await guard('admin-scan');
   // Brreg only: Gemini costs money, and the AI queue has its own button
   // («Oppdater alt» phase 2) and the nightly cron.
@@ -158,7 +158,7 @@ export async function runScanAction(
   revalidatePath('/');
   revalidatePath('/admin');
   revalidatePath('/dashboard');
-  return { summary, processed: d.brreg.processed, added: d.discovery.added, staleRemaining: await countBrregStale() };
+  return { summary, processed: d.brreg.processed, added: d.discovery.added, newFinancials: d.brreg.newFinancials, staleRemaining: await countBrregStale() };
 }
 
 // One AI-only run (no Brreg pass, whole budget to the AI queue). The
