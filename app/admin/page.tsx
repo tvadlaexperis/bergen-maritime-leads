@@ -19,6 +19,7 @@ import {
 } from '@/lib/db';
 import { dateLabel, osloDayStart } from '@/app/format';
 import ScanPanel from './ScanPanel';
+import RunControls from './RunControls';
 import AddCompanyForm from './AddCompanyForm';
 import GuestLinkPanel from './GuestLinkPanel';
 import BackArrow from '@/app/components/BackArrow';
@@ -36,7 +37,7 @@ type View = 'oppdatering' | 'verktoy' | 'logg' | 'nattlig';
 // Page-level tabs. Old `?view=skann|dekning` links (bookmarks, notifications)
 // map onto their new homes.
 const VIEWS: { key: View; label: string; href: string }[] = [
-  { key: 'oppdatering', label: 'Oppdatering', href: '/admin' },
+  { key: 'oppdatering', label: 'Datakvalitet', href: '/admin' },
   { key: 'verktoy', label: 'Verktøy', href: '/admin?view=verktoy' },
   { key: 'logg', label: 'Logg', href: '/admin?view=logg' },
   { key: 'nattlig', label: 'Nattlige kjøringer', href: '/admin?view=nattlig' },
@@ -88,9 +89,8 @@ export default async function AdminPage({
     countAiPending(),
     countBrregStale(),
   ]);
-  // Latest run open by default, so its details show without a click;
-  // ?scan=0 means the user closed it.
-  const selectedScanId = searchParams.scan === '0' ? null : Number(searchParams.scan) || scans[0]?.id || null;
+  // The run shown; the latest when none is picked.
+  const selectedScanId = Number(searchParams.scan) || scans[0]?.id || null;
 
   return (
     <div className="page-fill" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -135,6 +135,11 @@ export default async function AdminPage({
 
             return (
               <>
+                <RunControls
+                  aiEnabled={!!process.env.GEMINI_API_KEY}
+                  aiRemaining={aiRemaining}
+                  brregStale={brregStale}
+                />
                 <div style={{ flexShrink: 0 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12, flexWrap: 'wrap', marginBottom: 14 }}>
                     <div>
@@ -223,9 +228,6 @@ export default async function AdminPage({
                     scans={scans}
                     activeCount={activeCount}
                     selectedScanId={selectedScanId}
-                    aiRemaining={aiRemaining}
-                    brregStale={brregStale}
-                    aiEnabled={!!process.env.GEMINI_API_KEY}
                   />
                 )}
               </>
@@ -311,9 +313,6 @@ export default async function AdminPage({
           scans={scans}
           activeCount={activeCount}
           selectedScanId={selectedScanId}
-          aiRemaining={aiRemaining}
-          brregStale={brregStale}
-          aiEnabled={!!process.env.GEMINI_API_KEY}
           nightly={view === 'nattlig'}
         />
       )}

@@ -63,9 +63,6 @@ export default function ScanPanel({
   scans,
   activeCount,
   selectedScanId,
-  aiRemaining,
-  aiEnabled,
-  brregStale,
   nightly = false,
 }: {
   /** The «Nattlige kjøringer» tab: cron runs only, no run buttons. */
@@ -73,9 +70,6 @@ export default function ScanPanel({
   scans: Scan[];
   activeCount: number;
   selectedScanId: number | null;
-  aiRemaining: number;
-  aiEnabled: boolean;
-  brregStale: number;
 }) {
   const aiBatch = Number(process.env.SCAN_AI_BATCH) || 12;
   // Warn up top when the most recent run that reached the AI step was
@@ -91,13 +85,9 @@ export default function ScanPanel({
     <div className="box" style={{ flex: 1, minHeight: 0 }}>
       <ScanHeader
         title={nightly ? 'Nattlige kjøringer' : 'Siste kjøringer'}
-        controls={!nightly}
         meta={`nattlig 05:00 UTC · ${(KOMMUNER as { name: string }[]).map((k) => k.name).join(', ')} · ${
           (NACE_CODES as unknown[]).length
         } bransjekoder · ${activeCount} selskaper`}
-        aiEnabled={aiEnabled}
-        aiRemaining={aiRemaining}
-        brregStale={brregStale}
         info={
           <>
             Hver kjøring har to trinn innenfor et tidsbudsjett på ca. 55 sekunder. <strong>1. Brønnøysund</strong>{' '}
@@ -127,135 +117,72 @@ export default function ScanPanel({
         </div>
       )}
       <div className="box-scroll">
-        <table className="table">
-          <thead>
-            <tr>
-              <th>Startet</th>
-              <th>Type</th>
-              <th className="col-right" title="Nye selskaper funnet i Enhetsregisteret">
-                Nye selsk.
-              </th>
-              <th className="col-right" title="Selskaper sjekket mot Brønnøysund">
-                Brreg sjekket
-              </th>
-              <th className="col-right" title="Selskaper med nytt regnskapsår">
-                Nye regnskap
-              </th>
-              <th className="col-right" title="Daglig leder satt/endret, eller styret endret">
-                Ledelse/styre
-              </th>
-              <th className="col-right">AI-vurdert</th>
-              <th className="col-right" title="Nye nyhetsartikler funnet i nettsøk">
-                Nyheter
-              </th>
-              <th className="col-right" title="Nye stillingsannonser (NAV) hos selskapene i lista; IT-stillinger i parentes">
-                Stillinger
-              </th>
-              <th className="col-right">Nettsider</th>
-              <th
-                className="col-right"
-                title="Selskaper der vi hentet kontakter fra nettsiden (antall personer i parentes)"
-              >
-                Kontakter
-              </th>
-              <th className="col-right">Feil</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {scans.map((s) => {
-              const d = parseDetails(s.details);
-              const errors = parseErrors(s.errors);
-              const open = selectedScanId === s.id;
-              // The latest run opens by default; closing it sets scan=0.
-              const base = nightly ? '/admin?view=nattlig&' : '/admin?';
-              const href = `${base}scan=${open ? 0 : s.id}`;
-              const cell = (content: React.ReactNode, right = true) => (
-                <td className={right ? 'col-right num' : undefined}>
-                  <Link href={href} scroll={false} style={{ display: 'block', color: 'inherit' }}>
-                    {content}
-                  </Link>
-                </td>
-              );
-              return [
-                <tr
-                  key={s.id}
-                  style={{
-                    cursor: 'pointer',
-                    background: open ? 'var(--accent-soft)' : undefined,
-                  }}
-                >
-                  {cell(
-                    <span style={{ whiteSpace: 'nowrap' }}>
-                      {open ? '▾' : '▸'} {whenLabel(s.started_at)}
-                    </span>,
-                    false,
-                  )}
-                  {cell(d ? TRIGGER_LABEL[d.trigger] : <span className="muted">eldre</span>, false)}
-                  {cell(<Num n={d ? (d.discovery.ran ? d.discovery.added : null) : null} />)}
-                  {cell(<Num n={d ? d.brreg.processed : null} />)}
-                  {cell(<Num n={d ? d.brreg.newFinancials : s.financials_fetched} />)}
-                  {cell(<Num n={d ? d.brreg.ceoSet + d.brreg.ceoChanged + d.brreg.boardUpdated : null} />)}
-                  {cell(<Num n={d ? (d.ai.enabled ? d.ai.analyses : null) : null} />)}
-                  {cell(<Num n={d && d.ai.enabled ? (d.ai.newsFound ?? null) : null} />)}
-                    {cell(
-                      d?.jobs?.enabled ? (
-                        <>
-                          <Num n={d.jobs.newAds} />
-                          {d.jobs.techAds > 0 && <span className="muted"> ({d.jobs.techAds})</span>}
-                        </>
-                      ) : (
-                        <Num n={null} />
-                      ),
-                    )}
-                  {cell(
-                    <Num n={d ? (d.ai.enabled ? d.ai.websitesFound : 0) + (d.brreg.websiteFromEmail ?? 0) : null} />,
-                  )}
-                  {cell(
-                    d && d.ai.enabled ? (
-                      <>
-                        <Num n={d.ai.contactCompanies} />
-                        {d.ai.contactPeople > 0 && <span className="muted"> ({d.ai.contactPeople})</span>}
-                      </>
-                    ) : (
-                      <Num n={null} />
-                    ),
-                  )}
-                  {cell(
-                    <span
-                      style={{
-                        color: errors.length ? 'var(--negative)' : undefined,
-                      }}
-                    >
-                      <Num n={errors.length} />
-                    </span>,
-                  )}
-                  {cell(<span className="muted">{statusLabel(s, d)}</span>, false)}
-                </tr>,
-                open && (
-                  <tr key={`${s.id}-details`}>
-                    <td
-                      colSpan={13}
-                      style={{
-                        padding: '12px 20px 18px',
-                        background: 'var(--surface-raised)',
-                      }}
-                    >
-                      <ScanDetailsView scan={s} details={d} errors={errors} />
-                    </td>
-                  </tr>
-                ),
-              ];
-            })}
-            {scans.length === 0 && (
-              <tr>
-                <td colSpan={13} className="muted" style={{ textAlign: 'center', padding: 24 }}>
-                  Ingen skann ennå.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+        {(() => {
+          // One run at a time — the latest by default, arrows step back
+          // (older) and forward (newer) through the last runs.
+          const idx = Math.max(0, scans.findIndex((x) => x.id === selectedScanId));
+          const s = scans[idx];
+          if (!s) return <p className="muted box-pad">Ingen kjøringer ennå.</p>;
+          const d = parseDetails(s.details);
+          const errors = parseErrors(s.errors);
+          const base = nightly ? '/admin?view=nattlig&' : '/admin?';
+          const older = scans[idx + 1];
+          const newer = scans[idx - 1];
+          const stats: [string, number | null][] = d
+            ? [
+                ['nye selskaper', d.discovery.ran ? d.discovery.added : null],
+                ['sjekket i Brreg', d.brreg.processed],
+                ['nye regnskap', d.brreg.newFinancials],
+                ['ledelse/styre', d.brreg.ceoSet + d.brreg.ceoChanged + d.brreg.boardUpdated],
+                ['AI-vurdert', d.ai.enabled ? d.ai.analyses : null],
+                ['nyheter', d.ai.enabled ? (d.ai.newsFound ?? null) : null],
+                ['stillinger', d.jobs?.enabled ? d.jobs.newAds : null],
+                ['nettsider', (d.ai.enabled ? d.ai.websitesFound : 0) + (d.brreg.websiteFromEmail ?? 0)],
+                ['kontakter', d.ai.enabled ? d.ai.contactCompanies : null],
+                ['feil', errors.length],
+              ]
+            : [];
+          const arrow = (target: Scan | undefined, label: string, glyph: string) =>
+            target ? (
+              <Link href={`${base}scan=${target.id}`} scroll={false} className="chip" aria-label={label} title={label}>
+                {glyph}
+              </Link>
+            ) : (
+              <span className="chip" aria-disabled="true" style={{ opacity: 0.35 }}>
+                {glyph}
+              </span>
+            );
+          return (
+            <div className="box-pad" style={{ display: 'grid', gap: 14 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                {arrow(older, 'Eldre kjøring', '←')}
+                {arrow(newer, 'Nyere kjøring', '→')}
+                <strong style={{ fontSize: '0.95rem' }}>{whenLabel(s.started_at)}</strong>
+                <span className="muted" style={{ fontSize: '0.8rem' }}>
+                  {d ? TRIGGER_LABEL[d.trigger] : 'eldre'} · {statusLabel(s, d)} · {idx + 1} av {scans.length}
+                </span>
+              </div>
+              {stats.length > 0 && (
+                <div style={{ display: 'flex', gap: '6px 18px', flexWrap: 'wrap', fontSize: '0.82rem' }}>
+                  {stats
+                    .filter(([, n]) => n != null)
+                    .map(([label, n]) => (
+                      <span key={label}>
+                        <strong
+                          className="num"
+                          style={{ color: label === 'feil' && n ? 'var(--negative)' : n ? undefined : 'var(--text-muted)' }}
+                        >
+                          {n}
+                        </strong>{' '}
+                        <span className="muted">{label}</span>
+                      </span>
+                    ))}
+                </div>
+              )}
+              <ScanDetailsView scan={s} details={d} errors={errors} />
+            </div>
+          );
+        })()}
       </div>
     </div>
   );
