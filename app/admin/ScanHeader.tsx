@@ -13,7 +13,12 @@ export default function ScanHeader({
   aiRemaining,
   brregStale,
   info,
+  title = 'Kjøringer',
+  controls = true,
 }: {
+  title?: string;
+  /** The run buttons — off on the nightly tab, which is read-only. */
+  controls?: boolean;
   meta: string;
   aiEnabled: boolean;
   aiRemaining: number;
@@ -29,7 +34,7 @@ export default function ScanHeader({
     <>
       <div className="box-header" style={{ alignItems: 'center', flexWrap: 'wrap', gap: 12, flexShrink: 0 }}>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap', minWidth: 0 }}>
-          <span className="box-title">Kjøringer</span>
+          <span className="box-title">{title}</span>
           <span className="info-tip" tabIndex={0} aria-label="Om skanningen">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
               <circle cx="12" cy="12" r="10" />
@@ -42,11 +47,13 @@ export default function ScanHeader({
           </span>
           <span className="muted" style={{ fontSize: '0.75rem' }}>{meta}</span>
         </div>
+        {controls && (
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
           {/* Split by cost: Brreg is free and primary, AI costs Gemini money. */}
           <RunScanButton initialStale={brregStale} onStatus={setScanStatus} />
           <RunUpdateAllButton initialRemaining={aiRemaining} aiEnabled={aiEnabled} onStatus={setAiStatus} />
         </div>
+        )}
       </div>
       {lines.length > 0 && (
         <div

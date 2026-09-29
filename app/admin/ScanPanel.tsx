@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import type { Freshness, Scan } from '@/lib/db';
+import type { Scan } from '@/lib/db';
 import type { ScanDetails } from '@/lib/scan';
 import { KOMMUNER, NACE_CODES } from '@/data/maritime-sectors.mjs';
 import ScanHeader from './ScanHeader';
@@ -66,7 +66,10 @@ export default function ScanPanel({
   aiRemaining,
   aiEnabled,
   brregStale,
+  nightly = false,
 }: {
+  /** The «Nattlige kjøringer» tab: cron runs only, no run buttons. */
+  nightly?: boolean;
   scans: Scan[];
   activeCount: number;
   selectedScanId: number | null;
@@ -87,6 +90,8 @@ export default function ScanPanel({
   return (
     <div className="box" style={{ flex: 1, minHeight: 0 }}>
       <ScanHeader
+        title={nightly ? 'Nattlige kjøringer' : 'Siste kjøringer'}
+        controls={!nightly}
         meta={`nattlig 05:00 UTC · ${(KOMMUNER as { name: string }[]).map((k) => k.name).join(', ')} · ${
           (NACE_CODES as unknown[]).length
         } bransjekoder · ${activeCount} selskaper`}
@@ -162,7 +167,9 @@ export default function ScanPanel({
               const d = parseDetails(s.details);
               const errors = parseErrors(s.errors);
               const open = selectedScanId === s.id;
-              const href = open ? '/admin' : `/admin?scan=${s.id}`;
+              // The latest run opens by default; closing it sets scan=0.
+              const base = nightly ? '/admin?view=nattlig&' : '/admin?';
+              const href = `${base}scan=${open ? 0 : s.id}`;
               const cell = (content: React.ReactNode, right = true) => (
                 <td className={right ? 'col-right num' : undefined}>
                   <Link href={href} scroll={false} style={{ display: 'block', color: 'inherit' }}>

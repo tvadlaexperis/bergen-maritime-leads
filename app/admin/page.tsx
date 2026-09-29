@@ -14,7 +14,6 @@ import {
   type CoverageMode,
   listScans,
   listAudit,
-  getFreshness,
   countAiPending,
   countBrregStale,
 } from '@/lib/db';
@@ -22,7 +21,6 @@ import { dateLabel, osloDayStart } from '@/app/format';
 import ScanPanel from './ScanPanel';
 import AddCompanyForm from './AddCompanyForm';
 import GuestLinkPanel from './GuestLinkPanel';
-import FreshnessTile from './FreshnessTile';
 import BackArrow from '@/app/components/BackArrow';
 
 export const dynamic = 'force-dynamic';
@@ -33,7 +31,7 @@ export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 export const metadata: Metadata = { title: 'Admin' };
 
-type View = 'oppdatering' | 'datakvalitet' | 'verktoy' | 'logg';
+type View = 'oppdatering' | 'datakvalitet' | 'verktoy' | 'logg' | 'nattlig';
 
 // Page-level tabs. Old `?view=skann|dekning` links (bookmarks, notifications)
 // map onto their new homes.
@@ -42,10 +40,11 @@ const VIEWS: { key: View; label: string; href: string }[] = [
   { key: 'datakvalitet', label: 'Datakvalitet', href: '/admin?view=datakvalitet' },
   { key: 'verktoy', label: 'Verktøy', href: '/admin?view=verktoy' },
   { key: 'logg', label: 'Logg', href: '/admin?view=logg' },
+  { key: 'nattlig', label: 'Nattlige kjøringer', href: '/admin?view=nattlig' },
 ];
 
 function parseView(raw: string | undefined): View {
-  if (raw === 'logg' || raw === 'verktoy' || raw === 'datakvalitet') return raw;
+  if (raw === 'logg' || raw === 'verktoy' || raw === 'datakvalitet' || raw === 'nattlig') return raw;
   if (raw === 'dekning') return 'datakvalitet';
   return 'oppdatering';
 }
@@ -74,7 +73,6 @@ export default async function AdminPage({
   const view = parseView(searchParams.view);
   const category: CoverageCategory | null =
     view === 'datakvalitet' && searchParams.kategori && isCoverageCategory(searchParams.kategori) ? searchParams.kategori : null;
-  const selectedScanId = Number(searchParams.scan) || null;
   const period = PERIODS.find((p) => p.key === searchParams.periode) ?? PERIODS.find((p) => p.key === 'idag')!;
   const periodRange = period.range();
   const mode: CoverageMode = searchParams.modus && isCoverageMode(searchParams.modus) ? searchParams.modus : 'har';
@@ -82,16 +80,18 @@ export default async function AdminPage({
   // Keeps the chosen unit when drilling into a category or closing it.
   const dq = (extra = '') => `/admin?view=datakvalitet${unit === 'selskap' ? '&enhet=selskap' : ''}${extra}`;
 
-  const [activeCount, scans, auditRows, coverage, categoryCompanies, freshness, aiRemaining, brregStale] = await Promise.all([
+  const [activeCount, scans, auditRows, coverage, categoryCompanies, aiRemaining, brregStale] = await Promise.all([
     countActiveCompanies(),
-    listScans(15),
+    listScans(15, view === 'nattlig' ? 'nattlig' : 'manuell'),
     listAudit(periodRange ? 1000 : 200, periodRange ?? undefined),
     getDataCoverage(unit),
     category ? listCompaniesForCoverage(category, mode, unit) : Promise.resolve(null),
-    getFreshness(),
     countAiPending(),
     countBrregStale(),
   ]);
+  // Latest run open by default, so its details show without a click;
+  // ?scan=0 means the user closed it.
+  const selectedScanId = searchParams.scan === '0' ? null : Number(searchParams.scan) || scans[0]?.id || null;
 
   return (
     <div className="page-fill" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -136,25 +136,6 @@ export default async function AdminPage({
 
             return (
               <>
-                <div className="box box-pad" style={{ flexShrink: 0, gap: 14 }}>
-                  <span className="box-title">
-                    Hvor oppdatert er dataene{' '}
-                    <span className="muted" style={{ fontSize: '0.74rem', fontWeight: 400 }}>
-                      · per selskap, siden innhentingen skjer selskap for selskap
-                    </span>
-                  </span>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 18 }}>
-                    <FreshnessTile label="Brreg sjekket" value={freshness.brregWeek} total={freshness.total} hint="siste 7 dager" />
-                    <FreshnessTile label="Brreg sjekket" value={freshness.brregMonth} total={freshness.total} hint="siste 30 dager" />
-                    <FreshnessTile label="AI-vurdert" value={freshness.aiMonth} total={freshness.total} hint="siste 30 dager" />
-                    <FreshnessTile
-                      label="Aldri AI-vurdert"
-                      value={freshness.aiNever}
-                      total={freshness.total}
-                      hint="står i AI-køen, høyest score først"
-                    />
-                  </div>
-                </div>
                 <div style={{ flexShrink: 0 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12, flexWrap: 'wrap', marginBottom: 14 }}>
                     <div>
@@ -329,6 +310,7 @@ export default async function AdminPage({
           aiRemaining={aiRemaining}
           brregStale={brregStale}
           aiEnabled={!!process.env.GEMINI_API_KEY}
+          nightly={view === 'nattlig'}
         />
       )}
     </div>

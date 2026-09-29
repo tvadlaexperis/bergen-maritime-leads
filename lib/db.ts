@@ -1585,44 +1585,6 @@ export async function countAiPending(): Promise<number> {
   return Number((res.rows[0] as unknown as { n: number }).n);
 }
 
-export interface Freshness {
-  total: number;
-  brregWeek: number;
-  brregMonth: number;
-  brregNever: number;
-  aiMonth: number;
-  aiNever: number;
-}
-
-// How current the data is, for the admin Skann panel — the "Datadekning"
-// view answers *whether* we have something, this answers *how old* it is.
-export async function getFreshness(): Promise<Freshness> {
-  const c = await db();
-  const now = Date.now();
-  const week = now - 7 * 86_400_000;
-  const month = now - 30 * 86_400_000;
-  const res = await c.execute({
-    sql: `SELECT
-            COUNT(*) AS total,
-            COUNT(CASE WHEN last_refreshed_at >= ? THEN 1 END) AS brreg_week,
-            COUNT(CASE WHEN last_refreshed_at >= ? THEN 1 END) AS brreg_month,
-            COUNT(CASE WHEN last_refreshed_at IS NULL THEN 1 END) AS brreg_never,
-            COUNT(CASE WHEN ai_analysis_at >= ? THEN 1 END) AS ai_month,
-            COUNT(CASE WHEN ai_analysis_at IS NULL THEN 1 END) AS ai_never
-          FROM companies WHERE status = 'active'`,
-    args: [week, month, month],
-  });
-  const r = res.rows[0] as unknown as Record<string, number>;
-  return {
-    total: Number(r.total),
-    brregWeek: Number(r.brreg_week),
-    brregMonth: Number(r.brreg_month),
-    brregNever: Number(r.brreg_never),
-    aiMonth: Number(r.ai_month),
-    aiNever: Number(r.ai_never),
-  };
-}
-
 // --- Scans ---
 
 export async function startScan(): Promise<number> {
@@ -1656,9 +1618,13 @@ export async function finishScan(
   });
 }
 
-export async function listScans(limit = 20): Promise<Scan[]> {
+// `kind` splits the admin views: the nightly cron runs vs. everything
+// started by hand (buttons, AI queue, and old rows without details).
+export async function listScans(limit = 20, kind?: 'nattlig' | 'manuell'): Promise<Scan[]> {
   const c = await db();
-  const res = await c.execute({ sql: 'SELECT * FROM scans ORDER BY started_at DESC LIMIT ?', args: [limit] });
+  const isCron = `json_extract(details, '$.trigger') = 'cron'`;
+  const where = kind === 'nattlig' ? `WHERE ${isCron}` : kind === 'manuell' ? `WHERE NOT COALESCE(${isCron}, 0)` : '';
+  const res = await c.execute({ sql: `SELECT * FROM scans ${where} ORDER BY started_at DESC LIMIT ?`, args: [limit] });
   return res.rows as unknown as Scan[];
 }
 
