@@ -46,6 +46,12 @@ export function cleanErrorMessage(raw: string): string {
 }
 
 function hintFor(message: string, step: string): string | null {
+  if (/HTTP 402/.test(message) || /credits are depleted|prepayment/i.test(message)) {
+    return 'Den betalte Gemini-kvoten (utgiftsgrensen i Google AI Studio) er brukt opp. Nullstilles den 1. i måneden — eller øk grensen i AI Studio → Spend. Ingenting er ødelagt; selskapene prøves igjen senere.';
+  }
+  if (/429/.test(message) && /per day|free tier/i.test(message)) {
+    return 'Gratisnøkkelen har brukt opp dagens kvote (20 kall per døgn). Prøves igjen i morgen — eller når den betalte kvoten er tilbake.';
+  }
   if (/429/.test(message) && /quota|billing|kvote/i.test(message)) {
     return 'Gemini-kvoten er brukt opp. Slå på fakturering for prosjektet til GEMINI_API_KEY i Google AI Studio (aistudio.google.com → API keys → Set up billing).';
   }

@@ -6,8 +6,11 @@ export default function ScanHeader({
   meta,
   info,
   title = 'Kjøringer',
+  nav,
 }: {
   title?: string;
+  /** Run navigation (← → and which run is shown), next to the title. */
+  nav?: ReactNode;
   meta: string;
   /** How a scan works — shown in a hover/focus popover behind the (i) icon. */
   info: ReactNode;
@@ -26,6 +29,7 @@ export default function ScanHeader({
               {info}
             </span>
           </span>
+          {nav}
           <span className="muted" style={{ fontSize: '0.75rem' }}>{meta}</span>
         </div>
       </div>

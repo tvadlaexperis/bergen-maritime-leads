@@ -1587,6 +1587,17 @@ export async function countAiPending(): Promise<number> {
 
 // --- Scans ---
 
+// Names for the orgnrs in a scan's error list (the errors store only orgnr).
+export async function getCompanyNames(orgnrs: string[]): Promise<Record<string, string>> {
+  if (orgnrs.length === 0) return {};
+  const c = await db();
+  const res = await c.execute({
+    sql: `SELECT orgnr, name FROM companies WHERE orgnr IN (${orgnrs.map(() => '?').join(',')})`,
+    args: orgnrs,
+  });
+  return Object.fromEntries((res.rows as unknown as { orgnr: string; name: string }[]).map((r) => [r.orgnr, r.name]));
+}
+
 export async function startScan(): Promise<number> {
   const c = await db();
   const res = await c.execute({ sql: 'INSERT INTO scans (started_at) VALUES (?)', args: [Date.now()] });
