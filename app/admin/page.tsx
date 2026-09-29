@@ -20,8 +20,6 @@ import {
 import { dateLabel, osloDayStart } from '@/app/format';
 import ScanPanel from './ScanPanel';
 import RunControls from './RunControls';
-import AddCompanyForm from './AddCompanyForm';
-import GuestLinkPanel from './GuestLinkPanel';
 import BackArrow from '@/app/components/BackArrow';
 
 export const dynamic = 'force-dynamic';
@@ -32,19 +30,18 @@ export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 export const metadata: Metadata = { title: 'Admin' };
 
-type View = 'oppdatering' | 'verktoy' | 'logg' | 'nattlig';
+type View = 'oppdatering' | 'logg' | 'nattlig';
 
 // Page-level tabs. Old `?view=skann|dekning` links (bookmarks, notifications)
 // map onto their new homes.
 const VIEWS: { key: View; label: string; href: string }[] = [
   { key: 'oppdatering', label: 'Datakvalitet', href: '/admin' },
-  { key: 'verktoy', label: 'Verktøy', href: '/admin?view=verktoy' },
   { key: 'logg', label: 'Logg', href: '/admin?view=logg' },
   { key: 'nattlig', label: 'Nattlige kjøringer', href: '/admin?view=nattlig' },
 ];
 
 function parseView(raw: string | undefined): View {
-  if (raw === 'logg' || raw === 'verktoy' || raw === 'nattlig') return raw;
+  if (raw === 'logg' || raw === 'nattlig') return raw;
   // 'datakvalitet' / 'dekning' now live on the Oppdatering tab.
   return 'oppdatering';
 }
@@ -233,27 +230,6 @@ export default async function AdminPage({
               </>
             );
           })()}
-        </div>
-      ) : view === 'verktoy' ? (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 18, alignItems: 'start' }}>
-          <div className="box">
-            <div className="box-header">
-              <span className="box-title">Legg til selskap manuelt</span>
-              <span className="muted" style={{ fontSize: '0.72rem' }}>for selskaper utenfor skannet</span>
-            </div>
-            <div className="box-pad">
-              <AddCompanyForm />
-            </div>
-          </div>
-          <div className="box">
-            <div className="box-header">
-              <span className="box-title">Gjestelenke</span>
-              <span className="muted" style={{ fontSize: '0.72rem' }}>lesetilgang uten passord</span>
-            </div>
-            <div className="box-pad">
-              <GuestLinkPanel />
-            </div>
-          </div>
         </div>
       ) : view === 'logg' ? (
         <div className="box" style={{ flex: 1, minHeight: 0 }}>

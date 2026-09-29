@@ -3,14 +3,12 @@
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { headers } from 'next/headers';
-import { requireAdmin, createMagicLinkToken, type SessionPayload } from '@/lib/auth';
+import { requireAdmin, type SessionPayload } from '@/lib/auth';
 import { isRateLimited } from '@/lib/rateLimit';
 import { audit } from '@/lib/audit';
-import { parseOrgnr } from '@/lib/validation';
 import { cleanWebsite } from '@/lib/brreg';
 import {
   getCompany,
-  getUserByEmail,
   setCompanyStatus,
   setCompanyNotes,
   setCompanyWebsite,
@@ -20,7 +18,7 @@ import {
   countBrregStale,
   type CompanyStatus,
 } from '@/lib/db';
-import { runScan, refreshCompany, addCompanyByOrgnr } from '@/lib/scan';
+import { runScan, refreshCompany } from '@/lib/scan';
 
 export type ActionState = { error?: string; ok?: string };
 
@@ -31,19 +29,6 @@ async function guard(bucket: string): Promise<SessionPayload> {
     throw new Error('For mange forespørsler — vent litt.');
   }
   return user;
-}
-
-export async function addCompanyAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
-  const user = await guard('admin-add');
-  const parsed = parseOrgnr(String(formData.get('orgnr') ?? ''));
-  if (!parsed.ok) return { error: parsed.error };
-
-  const res = await addCompanyByOrgnr(parsed.orgnr);
-  if (!res.ok) return { error: res.error };
-
-  await audit('company.create', { actor: user.email, target: `company:${parsed.orgnr}`, detail: res.company.name });
-  revalidatePath('/');
-  redirect(`/company/${parsed.orgnr}`);
 }
 
 export async function updateNotesAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
@@ -204,26 +189,4 @@ export async function runAiQueueAction(): Promise<
     firstError: r.errors[0] ? `${r.errors[0].scope}: ${r.errors[0].message}` : null,
     remaining: await countAiPending(),
   };
-}
-
-export async function generateGuestLinkAction(
-  days: number,
-): Promise<{ url?: string; expiresDays?: number; error?: string }> {
-  const admin = await guard('admin-guestlink');
-  const email = process.env.GUEST_EMAIL?.trim().toLowerCase();
-  if (!email) return { error: 'Ingen gjestekonto konfigurert (GUEST_EMAIL).' };
-  const guest = await getUserByEmail(email);
-  if (!guest) return { error: 'Gjestekonto ikke funnet — kjør seed / redeploy.' };
-  if (guest.role === 'admin') return { error: 'Gjestekontoen kan ikke være admin.' };
-
-  const d = [7, 30, 90].includes(days) ? days : 30;
-  const token = await createMagicLinkToken(String(guest.id), guest.email, d);
-
-  const h = headers();
-  const host = h.get('x-forwarded-host') ?? h.get('host') ?? 'localhost:3000';
-  const proto = h.get('x-forwarded-proto') ?? (host.startsWith('localhost') ? 'http' : 'https');
-  const url = `${proto}://${host}/api/auth/link?t=${token}`;
-
-  await audit('guestlink.generate', { actor: admin.email, detail: `${d} dager` });
-  return { url, expiresDays: d };
 }
