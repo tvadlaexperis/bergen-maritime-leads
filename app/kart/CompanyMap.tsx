@@ -119,7 +119,7 @@ export default function CompanyMap({ companies, segments }: { companies: MapComp
       // Frame where the companies actually are: a handful registered in Oslo
       // or Svolvær would otherwise zoom the map out to all of Norway. They
       // stay on the map, just outside the initial view.
-      const core = nearMedian(ordered, 25);
+      const core = nearMedian(ordered, 50);
       if (core.length) {
         map.current!.fitBounds(L.latLngBounds(core.map((c) => [c.lat, c.lon] as [number, number])), {
           padding: [30, 30],

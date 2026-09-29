@@ -275,6 +275,14 @@ const ONCE_MIGRATIONS: { key: string; sql: string }[] = [
     sql: `UPDATE companies SET status = 'hidden'
           WHERE status = 'active' AND kommunenummer IS NOT NULL AND kommunenummer NOT IN ('4601')`,
   },
+  {
+    // The scan area grew from Bergen to the municipalities within about an
+    // hour's drive — companies hidden above for being in one of them come back.
+    key: '2026-09-29-unhide-bergen-region',
+    sql: `UPDATE companies SET status = 'active'
+          WHERE status = 'hidden'
+            AND kommunenummer IN ('4626','4627','4624','4631','4630','4623','4628','4625')`,
+  },
 ];
 
 async function runOnceMigrations(): Promise<void> {

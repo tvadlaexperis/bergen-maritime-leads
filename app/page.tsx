@@ -37,7 +37,7 @@ export default async function HomePage() {
         <>
           <div>
             <h1 style={{ fontSize: '1.4rem', fontWeight: 800, letterSpacing: '-0.02em' }}>
-              Maritim sektor i Bergen
+              Maritim sektor i Bergensregionen
             </h1>
             <p className="muted" style={{ fontSize: '0.8rem', marginTop: 2 }}>
               {subtitle}
@@ -56,7 +56,7 @@ export default async function HomePage() {
       ) : (
         <CompanyList
           rows={active}
-          title="Maritim sektor i Bergen"
+          title="Maritim sektor i Bergensregionen"
           subtitle={subtitle}
         />
       )}

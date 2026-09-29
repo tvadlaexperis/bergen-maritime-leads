@@ -112,7 +112,7 @@ the guest magic-link flow, `scripts/hash-password.mjs`, `scripts/create-user.mjs
   Coordinates from Kartverket's address API (`lib/orchestrator/providers/geo.ts`), looked up in the
   Brreg pass only when the address changes (`geocoded_for`). GDPR: sole proprietorships are never
   placed (`geo_precision = 'skjult'`); "c/o <person>" addresses and PO boxes are placed by postcode
-  only. The initial view frames the Bergen cluster (25 km from the median).
+  only. The initial view frames the Bergen region (50 km from the median).
 - **One-off data fixes** run once per database via `ONCE_MIGRATIONS` in `lib/db.ts` (tracked
   in `app_meta`).
 - **Nyheter** come only from the AI pass (Gemini + Google Search, stored in `company_news`).

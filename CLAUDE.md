@@ -16,7 +16,7 @@ jose+bcrypt auth, CSP middleware, orchestrator pattern, Vercel + Cron). `README.
 - **Data source:** `data.brreg.no` — Enhetsregisteret (company facts, employees) +
   Regnskapsregisteret (annual accounts / revenue). Free, no key, open data. NOT
   scraping proff.no (blocked + ToS) — proff is built on this same registry.
-- **Scan universe:** `data/maritime-sectors.mjs` — municipalities (Bergen 4601) ×
+- **Scan universe:** `data/maritime-sectors.mjs` — municipalities (Bergen + those within ~1 h drive: Øygarden, Askøy, Bjørnafjorden, Alver, Osterøy, Samnanger, Vaksdal, Austevoll) ×
   maritime NACE code prefixes. One edit widens/narrows the whole tool.
 - **Lead score:** `lib/score.ts`, pure + unit-tested. `0.35·size + 0.30·revenue +
   0.20·growth + 0.15·profitability`. Bands high ≥ 66 / mid ≥ 40 / low.

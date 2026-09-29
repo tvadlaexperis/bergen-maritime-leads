@@ -8,8 +8,19 @@
 // truth for the nightly scan and the manual "Run scan" button.
 
 /** @type {{ nr: string, name: string }[]} */
+// Bergen and the municipalities within about an hour's drive (2024 numbers).
+// Left out on purpose: Kvam, Modalen, Masfjorden, Fedje, Voss, Stord and
+// further — more than an hour away.
 export const KOMMUNER = [
   { nr: '4601', name: 'Bergen' },
+  { nr: '4626', name: 'Øygarden' },
+  { nr: '4627', name: 'Askøy' },
+  { nr: '4624', name: 'Bjørnafjorden' },
+  { nr: '4631', name: 'Alver' },
+  { nr: '4630', name: 'Osterøy' },
+  { nr: '4623', name: 'Samnanger' },
+  { nr: '4628', name: 'Vaksdal' },
+  { nr: '4625', name: 'Austevoll' },
 ];
 
 /** @type {{ code: string, label: string, group: string }[]} */

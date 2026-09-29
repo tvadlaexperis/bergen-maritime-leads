@@ -20,7 +20,7 @@ export const metadata: Metadata = {
     default: 'Maritim Bergen',
     template: '%s · Maritim Bergen',
   },
-  description: 'Salgs-leads i maritim sektor i Bergen — nøkkeltall fra Brønnøysundregistrene.',
+  description: 'Salgs-leads i maritim sektor i Bergensregionen — nøkkeltall fra Brønnøysundregistrene.',
   robots: { index: false, follow: false },
 };
 

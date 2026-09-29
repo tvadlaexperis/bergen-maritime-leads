@@ -190,7 +190,22 @@ function toUpsertInput(co: RawCompany, manual = false): UpsertCompanyInput {
 
 async function discover(errors: ScanError[]): Promise<Map<string, RawCompany>> {
   const found = new Map<string, RawCompany>();
-  for (const k of KOMMUNER as { nr: string; name: string }[]) {
+  // Three municipalities at a time — one after another, nine of them would
+  // take most of the 60 s budget.
+  const kommuner = [...(KOMMUNER as { nr: string; name: string }[])];
+  const worker = async () => {
+    for (let k = kommuner.shift(); k; k = kommuner.shift()) await discoverKommune(k, found, errors);
+  };
+  await Promise.all([worker(), worker(), worker()]);
+  return found;
+}
+
+async function discoverKommune(
+  k: { nr: string; name: string },
+  found: Map<string, RawCompany>,
+  errors: ScanError[],
+): Promise<void> {
+  {
     for (const nace of NACE_CODES as { code: string; label: string; group: string }[]) {
       const res = await orchestrator.callTool<RawCompany[]>(
         'brreg.searchEnheter',
@@ -211,7 +226,6 @@ async function discover(errors: ScanError[]): Promise<Map<string, RawCompany>> {
       await sleep(150);
     }
   }
-  return found;
 }
 
 // Reads only the level, tolerating malformed/absent JSON — mirrors
