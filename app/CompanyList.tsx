@@ -8,7 +8,7 @@ import { fmtNok, fmtPct, fmtInt, dateLabel, agoLabel } from './format';
 import ScoreBadge from './components/ScoreBadge';
 import SignalBadge, { parseBuyingSignalLevel } from './components/SignalBadge';
 
-type SizeFilter = 'all' | 'under5' | '5-15' | '10' | '50';
+type SizeFilter = 'all' | 'under5' | '5-15' | '15-50' | '50';
 type ScoreFilter = 'all' | '40' | '66';
 type GrowthFilter = 'all' | '0' | '10' | '25';
 type SignalFilter = 'all' | 'high';
@@ -281,7 +281,7 @@ export default function CompanyList({
       const n = employees ?? 0;
       if (minSize === 'under5' && n >= 5) return false;
       if (minSize === '5-15' && (n < 5 || n > 15)) return false;
-      if (minSize === '10' && n < 10) return false;
+      if (minSize === '15-50' && (n <= 15 || n > 50)) return false; // 15 itself is in 5–15
       if (minSize === '50' && n < 50) return false;
       const growth = r.revenue_growth_pct;
       if (minGrowth === '0' && (growth == null || growth <= 0)) return false;
@@ -505,8 +505,8 @@ export default function CompanyList({
             <button className={`chip${minSize === '5-15' ? ' active' : ''}`} onClick={() => setMinSize('5-15')}>
               5–15 ansatte
             </button>
-            <button className={`chip${minSize === '10' ? ' active' : ''}`} onClick={() => setMinSize('10')}>
-              10+ ansatte
+            <button className={`chip${minSize === '15-50' ? ' active' : ''}`} onClick={() => setMinSize('15-50')}>
+              15–50 ansatte
             </button>
             <button className={`chip${minSize === '50' ? ' active' : ''}`} onClick={() => setMinSize('50')}>
               50+ ansatte
