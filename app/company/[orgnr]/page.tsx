@@ -920,8 +920,8 @@ function EntryTab({ analysis, liCompany }: { analysis: LeadAnalysis; liCompany: 
           // Analyses made before this field existed don't have it; they're
           // queued for a new run (ONCE_MIGRATIONS in lib/db.ts).
           <p className="muted" style={{ fontSize: '0.84rem', marginTop: 6 }}>
-            Ikke med i denne AI-vurderingen ennå — kommer ved neste kjøring («Oppdater alt» i Admin, eller «Oppdater info» →
-            oppdater fra registrene).
+            Vurderingen er fra før dette feltet fantes. Selskapet står i AI-køen og får det når «AI-vurdering» kjøres
+            neste gang (Admin → Datakvalitet).
           </p>
         )}
       </div>
