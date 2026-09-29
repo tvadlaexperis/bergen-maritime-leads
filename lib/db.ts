@@ -267,6 +267,14 @@ const ONCE_MIGRATIONS: { key: string; sql: string }[] = [
           WHERE website IS NOT NULL
             AND NOT EXISTS (SELECT 1 FROM company_contacts cc WHERE cc.company_id = companies.id AND cc.source = 'nettside')`,
   },
+  {
+    // Companies whose business address has moved out of the scan area
+    // (Bergen) since discovery added them — hidden, not deleted. From here
+    // on lib/scan.ts does the same after every Brreg pass.
+    key: '2026-09-29-hide-outside-scope',
+    sql: `UPDATE companies SET status = 'hidden'
+          WHERE status = 'active' AND kommunenummer IS NOT NULL AND kommunenummer NOT IN ('4601')`,
+  },
 ];
 
 async function runOnceMigrations(): Promise<void> {
@@ -1586,6 +1594,20 @@ export async function countAiPending(): Promise<number> {
 }
 
 // --- Scans ---
+
+// Hides active companies registered outside the scan area (a move out of
+// Bergen after discovery). Status 'hidden', so nothing is deleted.
+export async function hideOutsideScope(kommunenummer: string[]): Promise<number> {
+  if (kommunenummer.length === 0) return 0;
+  const c = await db();
+  const res = await c.execute({
+    sql: `UPDATE companies SET status = 'hidden'
+          WHERE status = 'active' AND kommunenummer IS NOT NULL
+            AND kommunenummer NOT IN (${kommunenummer.map(() => '?').join(',')})`,
+    args: kommunenummer,
+  });
+  return res.rowsAffected;
+}
 
 // Names for the orgnrs in a scan's error list (the errors store only orgnr).
 export async function getCompanyNames(orgnrs: string[]): Promise<Record<string, string>> {

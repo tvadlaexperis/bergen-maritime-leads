@@ -47,6 +47,7 @@ import {
   type Company,
   type CompanyWithScore,
   type UpsertCompanyInput,
+  hideOutsideScope,
 } from './db';
 import { KOMMUNER, NACE_CODES, matchNace } from '../data/maritime-sectors.mjs';
 
@@ -802,6 +803,12 @@ export async function runScan(opts: RunScanOptions = {}): Promise<ScanResult> {
     }),
   );
   if (details.brreg.processed < batch.length) details.stoppedEarly = true;
+  // A company that moved its address out of the scan area stops showing up.
+  if (details.brreg.processed > 0) {
+    await hideOutsideScope((KOMMUNER as { nr: string }[]).map((k) => k.nr)).catch((e) =>
+      errors.push({ scope: 'scope', message: e instanceof Error ? e.message : String(e) }),
+    );
+  }
 
   // Pass 1b — NAV job ads, a short slot of its own (the feed is read forward
   // from a cursor, so a short slot every run keeps up). Not on AI-only runs.

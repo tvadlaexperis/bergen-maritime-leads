@@ -26,10 +26,6 @@ export default async function MapPage() {
       groupSize: r.group_key ? (groupSize.get(r.group_key) ?? 1) : 1,
     }));
   const hidden = rows.filter((r) => r.geo_precision === 'skjult').length;
-  // Discovery only adds companies; some have since moved their registered
-  // address out of the scan area (data/maritime-sectors.mjs).
-  const scopeKommuner = new Set(['BERGEN']);
-  const movedAway = rows.filter((r) => r.kommune && !scopeKommuner.has(r.kommune.toUpperCase())).length;
   const pending = rows.filter((r) => r.lat == null && r.geo_precision !== 'skjult').length;
   const segments = [...new Set(placed.map((c) => c.segment).filter((s): s is string => !!s))].sort();
 
@@ -41,7 +37,6 @@ export default async function MapPage() {
           {placed.length} av {rows.length} selskaper plassert etter forretningsadressen (Kartverket)
           {pending > 0 && ` · ${pending} venter på neste skann`}
           {hidden > 0 && ` · ${hidden} enkeltpersonforetak vises ikke (adressen er ofte eierens bolig)`}
-          {movedAway > 0 && ` · ${movedAway} har nå forretningsadresse utenfor Bergen (utenfor startutsnittet)`}
         </p>
       </div>
       <CompanyMap companies={placed} segments={segments} />
