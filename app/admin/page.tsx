@@ -31,18 +31,20 @@ export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 export const metadata: Metadata = { title: 'Admin' };
 
-type View = 'oppdatering' | 'logg' | 'nattlig';
+type View = 'oppdatering' | 'logg' | 'nattlig' | 'gjest';
 
 // Page-level tabs. Old `?view=skann|dekning` links (bookmarks, notifications)
 // map onto their new homes.
 const VIEWS: { key: View; label: string; href: string }[] = [
   { key: 'oppdatering', label: 'Datakvalitet', href: '/admin' },
-  { key: 'logg', label: 'Logg', href: '/admin?view=logg' },
   { key: 'nattlig', label: 'Nattlige kjøringer', href: '/admin?view=nattlig' },
+  { key: 'gjest', label: 'Gjestelenke', href: '/admin?view=gjest' },
+  // Audit log (logins, manual actions) — rarely needed, so last.
+  { key: 'logg', label: 'Logg', href: '/admin?view=logg' },
 ];
 
 function parseView(raw: string | undefined): View {
-  if (raw === 'logg' || raw === 'nattlig') return raw;
+  if (raw === 'logg' || raw === 'nattlig' || raw === 'gjest') return raw;
   // 'datakvalitet' / 'dekning' now live on the Oppdatering tab.
   return 'oppdatering';
 }
@@ -232,8 +234,20 @@ export default async function AdminPage({
             );
           })()}
         </div>
+      ) : view === 'gjest' ? (
+        <div style={{ maxWidth: 640 }}>
+        {/* Login link for the guest account — a normal user, not admin. */}
+        <div className="box" >
+          <div className="box-header">
+            <span className="box-title">Gjestelenke</span>
+            <span className="muted" style={{ fontSize: '0.72rem' }}>innlogging uten passord · vanlig bruker, ikke admin</span>
+          </div>
+          <div className="box-pad">
+            <GuestLinkPanel />
+          </div>
+        </div>
+        </div>
       ) : view === 'logg' ? (
-        <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', gap: 16 }}>
         <div className="box" style={{ flex: 1, minHeight: 0 }}>
           <div className="box-header">
             <span className="box-title">Logg</span>
@@ -285,17 +299,6 @@ export default async function AdminPage({
               </tbody>
             </table>
           </div>
-        </div>
-        {/* Login link for the guest account — a normal user, not admin. */}
-        <div className="box" style={{ flexShrink: 0 }}>
-          <div className="box-header">
-            <span className="box-title">Gjestelenke</span>
-            <span className="muted" style={{ fontSize: '0.72rem' }}>innlogging uten passord · vanlig bruker, ikke admin</span>
-          </div>
-          <div className="box-pad">
-            <GuestLinkPanel />
-          </div>
-        </div>
         </div>
       ) : (
         <ScanPanel
