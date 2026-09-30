@@ -20,6 +20,7 @@ import {
 import { dateLabel, osloDayStart } from '@/app/format';
 import ScanPanel from './ScanPanel';
 import RunControls from './RunControls';
+import GuestLinkPanel from './GuestLinkPanel';
 import BackArrow from '@/app/components/BackArrow';
 
 export const dynamic = 'force-dynamic';
@@ -232,6 +233,7 @@ export default async function AdminPage({
           })()}
         </div>
       ) : view === 'logg' ? (
+        <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', gap: 16 }}>
         <div className="box" style={{ flex: 1, minHeight: 0 }}>
           <div className="box-header">
             <span className="box-title">Logg</span>
@@ -283,6 +285,17 @@ export default async function AdminPage({
               </tbody>
             </table>
           </div>
+        </div>
+        {/* Login link for the guest account — a normal user, not admin. */}
+        <div className="box" style={{ flexShrink: 0 }}>
+          <div className="box-header">
+            <span className="box-title">Gjestelenke</span>
+            <span className="muted" style={{ fontSize: '0.72rem' }}>innlogging uten passord · vanlig bruker, ikke admin</span>
+          </div>
+          <div className="box-pad">
+            <GuestLinkPanel />
+          </div>
+        </div>
         </div>
       ) : (
         <ScanPanel
