@@ -38,6 +38,9 @@ export const NACE_CODES = [
   { code: '03.11', label: 'Hav- og kystfiske', group: 'Sjømat' },
   { code: '03.21', label: 'Hav- og kystbasert akvakultur', group: 'Sjømat' },
   { code: '09.10', label: 'Tjenester tilknyttet olje- og gassutvinning (offshore)', group: 'Offshore' },
+  // Pumps and compressors: in the Bergen region this is subsea and marine
+  // pump makers (OneSubsea Processing, Framo) — a handful, all maritime.
+  { code: '28.13', label: 'Pumper og kompressorer (subsea/marint)', group: 'Offshore' },
 ];
 
 /** Does any of a company's NACE codes fall under our maritime list? */
