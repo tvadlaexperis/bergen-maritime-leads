@@ -849,6 +849,41 @@ function EntryTab({ analysis, liCompany }: { analysis: LeadAnalysis; liCompany: 
         <p style={{ margin: '4px 0 0', color: 'var(--text-secondary)', fontSize: '0.86rem' }}>{contact.reason}</p>
       </div>
 
+      {/* Segment-level context — general knowledge, labelled as such so it
+          isn't mistaken for something known about this company. */}
+      <div>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
+          {label('Utfordringer i bransjen')}
+          <span className="muted" style={{ fontSize: '0.72rem' }}>
+            generell bransjekunnskap — ikke bekreftet for selskapet
+          </span>
+        </div>
+        {analysis.industryChallenges && analysis.industryChallenges.length > 0 ? (
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+              gap: 10,
+              marginTop: 8,
+            }}
+          >
+            {analysis.industryChallenges.map((c, i) => (
+              <div key={i} className="challenge-card">
+                <strong style={{ fontSize: '0.86rem' }}>{c.challenge}</strong>
+                <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', lineHeight: 1.45 }}>{c.relevance}</span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          // Analyses made before this field existed don't have it; they're
+          // queued for a new run (ONCE_MIGRATIONS in lib/db.ts).
+          <p className="muted" style={{ fontSize: '0.84rem', marginTop: 6 }}>
+            Vurderingen er fra før dette feltet fantes. Selskapet står i AI-køen og får det når «AI-vurdering» kjøres
+            neste gang (Admin → Datakvalitet).
+          </p>
+        )}
+      </div>
+
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 18 }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div>
@@ -891,40 +926,6 @@ function EntryTab({ analysis, liCompany }: { analysis: LeadAnalysis; liCompany: 
         </div>
       </div>
 
-      {/* Segment-level context — general knowledge, labelled as such so it
-          isn't mistaken for something known about this company. */}
-      <div>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
-          {label('Utfordringer i bransjen')}
-          <span className="muted" style={{ fontSize: '0.72rem' }}>
-            generell bransjekunnskap — ikke bekreftet for selskapet
-          </span>
-        </div>
-        {analysis.industryChallenges && analysis.industryChallenges.length > 0 ? (
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
-              gap: 10,
-              marginTop: 8,
-            }}
-          >
-            {analysis.industryChallenges.map((c, i) => (
-              <div key={i} className="challenge-card">
-                <strong style={{ fontSize: '0.86rem' }}>{c.challenge}</strong>
-                <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', lineHeight: 1.45 }}>{c.relevance}</span>
-              </div>
-            ))}
-          </div>
-        ) : (
-          // Analyses made before this field existed don't have it; they're
-          // queued for a new run (ONCE_MIGRATIONS in lib/db.ts).
-          <p className="muted" style={{ fontSize: '0.84rem', marginTop: 6 }}>
-            Vurderingen er fra før dette feltet fantes. Selskapet står i AI-køen og får det når «AI-vurdering» kjøres
-            neste gang (Admin → Datakvalitet).
-          </p>
-        )}
-      </div>
     </div>
   );
 }

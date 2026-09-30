@@ -100,10 +100,8 @@ const ANALYSIS_SCHEMA = {
       properties: { name: { type: ['string', 'null'] }, reason: { type: 'string' } },
       required: ['name', 'reason'],
     },
-    pitch: { type: 'string' },
-    icebreaker: { type: ['string', 'null'] },
-    questions: { type: 'array', items: { type: 'string' } },
-    avoidClaiming: { type: 'array', items: { type: 'string' } },
+    // Before pitch: the model writes fields in schema order, and the pitch
+    // should build on the challenges.
     industryChallenges: {
       type: 'array',
       items: {
@@ -112,6 +110,10 @@ const ANALYSIS_SCHEMA = {
         required: ['challenge', 'relevance'],
       },
     },
+    pitch: { type: 'string' },
+    icebreaker: { type: ['string', 'null'] },
+    questions: { type: 'array', items: { type: 'string' } },
+    avoidClaiming: { type: 'array', items: { type: 'string' } },
     customerCategory: { type: 'string', enum: [...CUSTOMER_CATEGORIES] },
     categoryReason: { type: 'string' },
   },
@@ -120,11 +122,11 @@ const ANALYSIS_SCHEMA = {
     'scoreFactors',
     'buyingSignal',
     'recommendedContact',
+    'industryChallenges',
     'pitch',
     'icebreaker',
     'questions',
     'avoidClaiming',
-    'industryChallenges',
     'customerCategory',
     'categoryReason',
   ],
@@ -206,6 +208,9 @@ function buildPrompt(input: LeadAnalysisInput): string {
     'Dette er generell bransjekunnskap — skriv det som bransjeutfordringer, ALDRI som påstander om at akkurat dette ' +
     'selskapet har problemet. "relevance" er én setning om hvorfor utfordringen kan åpne for en samtale om IT-/' +
     'teknologikonsulenter eller bemanning.\n' +
+    '- "pitch" skal bygge på den mest relevante av "industryChallenges" som inngang — formulert som et spørsmål ' +
+    'eller en hypotese («Mange i bransjen bruker mye tid på … — hvordan løser dere det?»), ALDRI som en påstand om ' +
+    'at selskapet har problemet. 1-2 av "questions" kan også ta utgangspunkt i utfordringene.\n' +
     '- "customerCategory" klassifiserer selskapet som kunde for Experis: "svært aktuell", "aktuell", "mulig" (krever ' +
     'mer undersøkelse), "lite aktuell", "ikke aktuell" eller "konkurrent". Bruk "konkurrent" når selskapet selv ' +
     'primært selger IT-konsulenter, bemanning eller rekruttering — da er det et mulig konkurrent/leverandør, ikke en ' +
