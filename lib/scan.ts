@@ -1,6 +1,6 @@
 import { orchestrator } from './orchestrator/boot';
 import type { LeadScoreResult } from './orchestrator/providers/score';
-import type { LeadAnalysis, WebsiteInsights } from './orchestrator/providers/ai';
+import { aiConfigured, type LeadAnalysis, type WebsiteInsights } from './orchestrator/providers/ai';
 import { websiteFromEmail, type Company as RawCompany, type KonsernInfo, type Roller } from './brreg';
 import { safeFetchText } from './http/safeFetch';
 import { siteMentionsCompany } from './website';
@@ -777,7 +777,7 @@ export async function runScan(opts: RunScanOptions = {}): Promise<ScanResult> {
     if (!entry) logs.set(co.orgnr, (entry = { name: co.name, log: new CompanyLog() }));
     return entry.log;
   };
-  const aiEnabled = !!process.env.GEMINI_API_KEY && !opts.noAi;
+  const aiEnabled = aiConfigured() && !opts.noAi;
   details.ai.enabled = aiEnabled;
 
   if (!opts.skipDiscovery) {

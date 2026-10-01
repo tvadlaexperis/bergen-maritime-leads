@@ -4,6 +4,7 @@ import { cleanWebsite } from '../../brreg';
 import { stripHtml, contactPageCandidates, deeperContactPages } from '../../website';
 import { parseNewsAnswer, findJsonArray, NEWS_CATEGORIES, type FoundNews } from '../../companyNews';
 import { linkedinCompanyName } from '../../brreg';
+import { claudeText } from './claude';
 
 // Gemini Flash builds the structured "Om selskapet" analysis (customer-fit
 // score factors, buying signals, recommended entry point). Free-tier
@@ -291,28 +292,53 @@ async function geminiTextOnce(apiKey: string, payload: Record<string, unknown>):
   return text;
 }
 
+// --- Backend choice --------------------------------------------------------
+// Claude when ANTHROPIC_API_KEY is set (AI_BACKEND=gemini forces Gemini),
+// otherwise Gemini. Every request below goes through aiText, so the four
+// tools work the same on either.
+const useClaude = () => !!process.env.ANTHROPIC_API_KEY && process.env.AI_BACKEND !== 'gemini';
+export const aiConfigured = () => !!(process.env.ANTHROPIC_API_KEY || process.env.GEMINI_API_KEY);
+/** Human label for the admin UI, e.g. "Claude (claude-haiku-4-5-…)". */
+export const aiServiceLabel = () => (useClaude() ? 'Claude Haiku' : 'Gemini');
+
+async function aiText(task: {
+  prompt: string;
+  schema?: object; // structured JSON answer
+  search?: boolean; // web search
+  freePrompt?: string; // Gemini only: variant allowed on GEMINI_API_KEY_FREE
+}): Promise<string> {
+  if (useClaude()) return claudeText(task.prompt, { schema: task.schema, search: task.search });
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) throw new Error('AI er ikke konfigurert');
+  const payload = (prompt: string) => ({
+    input: [{ type: 'text', text: prompt }],
+    ...(task.schema ? { response_format: { type: 'text', mime_type: 'application/json', schema: task.schema } } : {}),
+    ...(task.search ? { tools: [{ type: 'google_search' }] } : {}),
+  });
+  return geminiText(apiKey, payload(task.prompt), task.freePrompt ? { freePayload: payload(task.freePrompt) } : {});
+}
+
 function parseJsonOutput(text: string): unknown {
   try {
     return JSON.parse(text);
   } catch {
-    throw new Error('Gemini: modellsvaret var ikke gyldig JSON');
+    throw new Error('AI: modellsvaret var ikke gyldig JSON');
   }
 }
 
 async function requestAnalysis(input: LeadAnalysisInput): Promise<LeadAnalysis | null> {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) return null;
+  if (!aiConfigured()) return null;
 
-  const request = (i: LeadAnalysisInput) => ({
-    input: [{ type: 'text', text: buildPrompt(i) }],
-    response_format: { type: 'text', mime_type: 'application/json', schema: ANALYSIS_SCHEMA },
-  });
-  // Free tier: same analysis, but no people's names in the prompt (GDPR —
-  // Google may use free-tier inputs). Company facts and news only.
+  // Gemini's free tier: same analysis, but no people's names in the prompt
+  // (GDPR — Google may use free-tier inputs). Company facts and news only.
   const parsed = parseJsonOutput(
-    await geminiText(apiKey, request(input), { freePayload: request({ ...input, contacts: [] }) }),
+    await aiText({
+      prompt: buildPrompt(input),
+      schema: ANALYSIS_SCHEMA,
+      freePrompt: buildPrompt({ ...input, contacts: [] }),
+    }),
   );
-  if (!isValidAnalysis(parsed)) throw new Error('Gemini: vurderingen manglet påkrevde felt');
+  if (!isValidAnalysis(parsed)) throw new Error('AI: vurderingen manglet påkrevde felt');
   return parsed;
 }
 
@@ -328,8 +354,7 @@ export interface FindWebsiteInput {
 // call above), so callers must only invoke this once per company ever
 // (lib/scan.ts checks website_search_attempted_at before calling it).
 async function requestWebsite(input: FindWebsiteInput): Promise<string | null> {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) return null;
+  if (!aiConfigured()) return null;
 
   const prompt =
     `Finn den offisielle nettsiden til det norske selskapet "${input.name}" (org.nr ${input.orgnr})` +
@@ -339,10 +364,7 @@ async function requestWebsite(input: FindWebsiteInput): Promise<string | null> {
     'Svar KUN med selve URL-en (f.eks. https://firma.no) uten noen annen tekst eller forklaring. ' +
     'Hvis du ikke finner en offisiell nettside med rimelig sikkerhet, svar nøyaktig ordet UKJENT.';
 
-  const text = await geminiText(
-    apiKey,
-    { input: [{ type: 'text', text: prompt }], tools: [{ type: 'google_search' }] },
-  );
+  const text = await aiText({ prompt, search: true });
   if (text.toUpperCase().includes('UKJENT')) return null;
   return cleanWebsite(text);
 }
@@ -375,8 +397,7 @@ async function verifyNewsLink(item: FoundNews): Promise<FoundNews | null> {
 }
 
 async function requestNews(input: FindNewsInput): Promise<FoundNews[]> {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) return [];
+  if (!aiConfigured()) return [];
 
   let domain: string | null = null;
   try {
@@ -407,10 +428,7 @@ async function requestNews(input: FindNewsInput): Promise<FoundNews[]> {
     'digitalisering, lederskifte) — ikke for rutinenyheter.\n' +
     '- Finner du ingen relevante artikler, svar nøyaktig [].';
 
-  const text = await geminiText(
-    apiKey,
-    { input: [{ type: 'text', text: prompt }], tools: [{ type: 'google_search' }] },
-  );
+  const text = await aiText({ prompt, search: true });
   // No list at all (prose, a refusal) is an error worth seeing in the scan
   // log — it used to be indistinguishable from "no news found".
   if (!findJsonArray(text)) {
@@ -538,8 +556,7 @@ async function fetchPageText(url: string): Promise<string | null> {
 // department pages). Reading just one subpage missed most team pages.
 // Each fetch is capped at 6s and runs inside the scan's shared budget.
 async function requestContacts(name: string, website: string): Promise<WebsiteInsights> {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) return EMPTY_INSIGHTS;
+  if (!aiConfigured()) return EMPTY_INSIGHTS;
 
   const homepageHtml = await fetchPageText(website);
   if (!homepageHtml) return EMPTY_INSIGHTS;
@@ -581,13 +598,9 @@ async function requestContacts(name: string, website: string): Promise<WebsiteIn
     'programvare/digitale tjenester. "evidence" er et ordrett sitat (null ved "ukjent").\n\n' +
     combinedText;
 
-  const parsed = parseJsonOutput(
-    await geminiText(apiKey, {
-      input: [{ type: 'text', text: prompt }],
-      response_format: { type: 'text', mime_type: 'application/json', schema: CONTACTS_SCHEMA },
-    }),
-  );
-  if (!isValidContacts(parsed)) throw new Error('Gemini: kontaktlisten hadde feil format');
+  // No freePrompt: page text has people's names, never sent to Gemini's free tier.
+  const parsed = parseJsonOutput(await aiText({ prompt, schema: CONTACTS_SCHEMA }));
+  if (!isValidContacts(parsed)) throw new Error('AI: kontaktlisten hadde feil format');
   return verifyWebsiteInsights(parsed, combinedText, pages.map((p) => p.url));
 }
 
@@ -624,7 +637,7 @@ export function verifyWebsiteInsights(parsed: { contacts: ExtractedContact[] }, 
 export const aiProvider: Provider = {
   id: 'ai',
   tools: ['analyze', 'findWebsite', 'findNews', 'extractContacts'],
-  isEnabled: () => !!process.env.GEMINI_API_KEY,
+  isEnabled: aiConfigured,
   async call(tool, args) {
     if (tool === 'analyze') return requestAnalysis(args as unknown as LeadAnalysisInput);
     if (tool === 'findWebsite') return requestWebsite(args as unknown as FindWebsiteInput);

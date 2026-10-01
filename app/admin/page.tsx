@@ -20,6 +20,7 @@ import {
 import { dateLabel, osloDayStart } from '@/app/format';
 import ScanPanel from './ScanPanel';
 import RunControls from './RunControls';
+import { aiConfigured, aiServiceLabel } from '@/lib/orchestrator/providers/ai';
 import GuestLinkPanel from './GuestLinkPanel';
 import BackArrow from '@/app/components/BackArrow';
 
@@ -136,7 +137,8 @@ export default async function AdminPage({
             return (
               <>
                 <RunControls
-                  aiEnabled={!!process.env.GEMINI_API_KEY}
+                  aiEnabled={aiConfigured()}
+                  aiService={aiServiceLabel()}
                   aiRemaining={aiRemaining}
                   brregStale={brregStale}
                 />

@@ -41,13 +41,21 @@ export function cleanErrorMessage(raw: string): string {
   return msg
     .replace(/timeout after \d+ms/i, 'tidsavbrudd')
     .replace(/tidsavbrudd etter \d+ s/i, 'tidsavbrudd')
-    .replace(/^Gemini\s+/, '')
+    .replace(/^(Gemini|Claude)\s+/, '')
     .trim();
 }
 
 function hintFor(message: string, step: string): string | null {
+  // Claude (Anthropic) — prepaid credit, and web search is an org setting.
+  if (/credit balance is too low/i.test(message)) {
+    return 'Claude-kreditten er brukt opp. Fyll på i console.anthropic.com → Billing. Ingenting er ødelagt; selskapene prøves igjen senere.';
+  }
+  if (/web search/i.test(message) && /not enabled|disabled|permission/i.test(message)) {
+    return 'Websøk er ikke slått på for Claude. Slå det på i console.anthropic.com → Settings → Privacy/Features (Web search).';
+  }
+  if (/HTTP 529|overloaded/i.test(message)) return 'Claude er overbelastet akkurat nå — prøves igjen ved neste kjøring.';
   if (/HTTP 402/.test(message) || /credits are depleted|prepayment/i.test(message)) {
-    return 'Den betalte Gemini-kvoten (utgiftsgrensen i Google AI Studio) er brukt opp. Nullstilles den 1. i måneden — eller øk grensen i AI Studio → Spend. Ingenting er ødelagt; selskapene prøves igjen senere.';
+    return 'Den forhåndsbetalte Gemini-kreditten er tom. Fyll på i Google AI Studio → Billing (den nullstilles ikke av seg selv). Ingenting er ødelagt; selskapene prøves igjen senere.';
   }
   if (/429/.test(message) && /per day|free tier/i.test(message)) {
     return 'Gratisnøkkelen har brukt opp dagens kvote (20 kall per døgn). Prøves igjen i morgen — eller når den betalte kvoten er tilbake.';
@@ -58,7 +66,7 @@ function hintFor(message: string, step: string): string | null {
   if (/429/.test(message)) return 'For mange kall per minutt — «Kjør AI-køen» venter og prøver igjen automatisk.';
   if (/tidsavbrudd/i.test(message)) {
     return ['Nettside', 'Kontakter', 'AI', 'Nyhet'].some((p) => step.startsWith(p))
-      ? 'Gemini svarte ikke innen tidsgrensen for kjøringen — selskapet prøves igjen senere.'
+      ? 'AI-modellen svarte ikke innen tidsgrensen for kjøringen — selskapet prøves igjen senere.'
       : 'Brønnøysund svarte ikke i tide — prøves igjen ved neste kjøring.';
   }
   if (/HTTP 5\d\d/.test(message)) return 'Feil hos tjenesten selv — prøves igjen ved neste kjøring.';

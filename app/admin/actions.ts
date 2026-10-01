@@ -20,6 +20,7 @@ import {
   type CompanyStatus,
 } from '@/lib/db';
 import { runScan, refreshCompany } from '@/lib/scan';
+import { aiConfigured } from '@/lib/orchestrator/providers/ai';
 
 export type ActionState = { error?: string; ok?: string };
 
@@ -170,7 +171,7 @@ export async function runAiQueueAction(): Promise<
     }
 > {
   const user = await guard('admin-ai-queue');
-  if (!process.env.GEMINI_API_KEY) return { error: 'AI er ikke konfigurert (GEMINI_API_KEY mangler).' };
+  if (!aiConfigured()) return { error: 'AI er ikke konfigurert (ANTHROPIC_API_KEY eller GEMINI_API_KEY mangler).' };
   const r = await runScan({ aiOnly: true, skipDiscovery: true, trigger: 'ai' });
   const d = r.details.ai;
   await audit('scan.ai', {
@@ -188,7 +189,7 @@ export async function runAiQueueAction(): Promise<
     newsSearched: d.newsSearched ?? 0,
     newsFound: d.newsFound ?? 0,
     errors: r.errors.length,
-    quotaGone: r.errors.some((e) => /HTTP 402|credits are depleted|per day|free tier/i.test(e.message)),
+    quotaGone: r.errors.some((e) => /HTTP 402|credits are depleted|credit balance is too low|per day|free tier/i.test(e.message)),
     rateLimited: r.errors.some((e) => /HTTP 4(29|02)|RESOURCE_EXHAUSTED|quota|credits/i.test(e.message)),
     firstError: r.errors[0] ? `${r.errors[0].scope}: ${r.errors[0].message}` : null,
     remaining: await countAiPending(),

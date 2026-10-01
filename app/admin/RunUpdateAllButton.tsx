@@ -37,10 +37,13 @@ const ZERO: Totals = {
 export default function RunUpdateAllButton({
   initialRemaining,
   aiEnabled,
+  aiService,
   onStatus,
 }: {
   initialRemaining: number;
   aiEnabled: boolean;
+  /** Which model runs the queue, e.g. "Claude Haiku" or "Gemini". */
+  aiService: string;
   onStatus: (msg: string | null) => void;
 }) {
   const router = useRouter();
@@ -107,7 +110,7 @@ export default function RunUpdateAllButton({
         // at once — waiting a minute and retrying only piles up errors.
         if (r.quotaGone && !didWork) {
           setMsg(
-            "Stoppet: Gemini-kvoten er brukt opp — den betalte til den nullstilles den 1. i måneden (eller grensen økes i AI Studio), gratisnøkkelen til i morgen. Ingenting er ødelagt; køen fortsetter neste gang.",
+            `Stoppet: ${aiService}-kvoten eller -kreditten er brukt opp. Ingenting er ødelagt; køen fortsetter når det er fylt på. ${r.firstError ?? ""}`,
           );
           break;
         }
@@ -115,11 +118,11 @@ export default function RunUpdateAllButton({
           rateLimitWaits++;
           if (rateLimitWaits > 5) {
             setMsg(
-              `Stoppet: Gemini avviser fortsatt (kvote brukt opp?). ${r.firstError ?? ""}`,
+              `Stoppet: ${aiService} avviser fortsatt (kvote brukt opp?). ${r.firstError ?? ""}`,
             );
             break;
           }
-          setMsg("Gemini-kvoten er nådd — venter før neste kjøring.");
+          setMsg(`${aiService} sier «for mange kall» — venter før neste kjøring.`);
           await pause(60);
           continue;
         }
@@ -190,13 +193,13 @@ export default function RunUpdateAllButton({
       status: status?.replace(/^AI-vurdering · /, "") ?? null,
       error,
       steps: [
-        { label: "AI-vurderinger", service: "Gemini", cost: "betalt, gratis reserve", done: totals.analyses },
-        { label: "Nyhetssøk", service: "Gemini + Google-søk", cost: "betalt", done: totals.newsSearched },
-        { label: "Nettsider lest for kontakter", service: "nettsiden + Gemini", cost: "betalt", done: totals.scraped },
-        { label: "Nettsider funnet", service: "Gemini + Google-søk", cost: "betalt", done: totals.websites },
+        { label: "AI-vurderinger", service: aiService, cost: "betalt", done: totals.analyses },
+        { label: "Nyhetssøk", service: `${aiService} + websøk`, cost: "betalt", done: totals.newsSearched },
+        { label: "Nettsider lest for kontakter", service: `nettsiden + ${aiService}`, cost: "betalt", done: totals.scraped },
+        { label: "Nettsider funnet", service: `${aiService} + websøk`, cost: "betalt", done: totals.websites },
       ],
     });
-  }, [running, totals, msg, status, lastError]);
+  }, [running, totals, msg, status, lastError, aiService]);
 
   return running ? (
     <button
@@ -226,7 +229,7 @@ export default function RunUpdateAllButton({
           for {remaining} selskaper i køen, de med høyest score først.
         </p>
         <p>
-          Bruker Gemini og <strong>koster penger</strong>, og teller mot utgiftsgrensen i Google AI Studio.
+          Bruker {aiService} og <strong>koster penger</strong>.
         </p>
         <p className="muted">
           Kjører så lenge siden er åpen, og kan stoppes underveis.

@@ -206,7 +206,7 @@ export default async function ScanPanel({
             }}
           >
             <strong style={{ color: "var(--negative)" }}>
-              AI-trinnet stoppes av Gemini-kvoten.
+              AI-trinnet stoppes av kvoten hos AI-leverandøren.
             </strong>{" "}
             {quotaHint}
           </div>
@@ -351,7 +351,7 @@ function ScanDetailsView({
           </>
         ) : (
           <span className="muted">
-            AI-trinnet er av (GEMINI_API_KEY mangler).
+            AI-trinnet er av for denne kjøringen.
           </span>
         )}{" "}
         {d.jobs?.enabled && (

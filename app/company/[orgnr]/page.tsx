@@ -748,7 +748,7 @@ function AiConfidenceBadge({ confidence, generatedAt }: { confidence: 'høy' | '
     <span
       className="muted"
       style={{ fontSize: '0.68rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', verticalAlign: 'middle' }}
-      title={generatedAt ? `AI-tolkning (Gemini) — sist generert ${dateLabel(generatedAt)}` : 'AI-tolkning (Gemini)'}
+      title={generatedAt ? `AI-tolkning — sist generert ${dateLabel(generatedAt)}` : 'AI-tolkning'}
     >
       AI · sikkerhet {confidence}
     </span>

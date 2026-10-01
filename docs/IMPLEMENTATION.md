@@ -133,7 +133,11 @@ the guest magic-link flow, `scripts/hash-password.mjs`, `scripts/create-user.mjs
    and the AI pass gets the whole budget. 6 companies in parallel, until 30 s into the
    run (50 s if AI is off): regnskap + roller + konsern in parallel, then `score.compute`.
    Measured locally: all 615 companies in 26 s.
-3. **AI pass** (Gemini, slow) — its own queue (`listCompaniesForAi`: never-attempted
+3. **AI pass** (Claude Haiku 4.5 when `ANTHROPIC_API_KEY` is set, else Gemini; slow) —
+   `lib/orchestrator/providers/ai.ts#aiText` routes all four tools; Claude lives in
+   `providers/claude.ts` (structured answers via a forced tool, web search via its
+   `web_search` tool). Switched to Claude 2026-10-01 after Gemini's prepaid credit ran out.
+   Its own queue (`listCompaniesForAi`: never-attempted
    first, highest lead score first, then oldest `ai_attempted_at`), up to `SCAN_AI_BATCH`
    (default 12) companies in waves of 6. Admin «Oppdater alt» (`RunUpdateAllButton`) is the catch-up
    routine as one click: normal runs (`runScanAction`) until `countBrregStale()` is 0, then
