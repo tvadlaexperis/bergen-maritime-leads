@@ -296,10 +296,10 @@ async function geminiTextOnce(apiKey: string, payload: Record<string, unknown>):
 // Claude when ANTHROPIC_API_KEY is set (AI_BACKEND=gemini forces Gemini),
 // otherwise Gemini. Every request below goes through aiText, so the four
 // tools work the same on either.
-const useClaude = () => !!process.env.ANTHROPIC_API_KEY && process.env.AI_BACKEND !== 'gemini';
+const claudeSelected = () => !!process.env.ANTHROPIC_API_KEY && process.env.AI_BACKEND !== 'gemini';
 export const aiConfigured = () => !!(process.env.ANTHROPIC_API_KEY || process.env.GEMINI_API_KEY);
 /** Human label for the admin UI, e.g. "Claude (claude-haiku-4-5-…)". */
-export const aiServiceLabel = () => (useClaude() ? 'Claude Haiku' : 'Gemini');
+export const aiServiceLabel = () => (claudeSelected() ? 'Claude Haiku' : 'Gemini');
 
 async function aiText(task: {
   prompt: string;
@@ -307,7 +307,7 @@ async function aiText(task: {
   search?: boolean; // web search
   freePrompt?: string; // Gemini only: variant allowed on GEMINI_API_KEY_FREE
 }): Promise<string> {
-  if (useClaude()) return claudeText(task.prompt, { schema: task.schema, search: task.search });
+  if (claudeSelected()) return claudeText(task.prompt, { schema: task.schema, search: task.search });
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error('AI er ikke konfigurert');
   const payload = (prompt: string) => ({
