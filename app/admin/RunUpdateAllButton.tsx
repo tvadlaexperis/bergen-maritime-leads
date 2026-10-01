@@ -7,6 +7,9 @@ import ConfirmDialog from "./ConfirmDialog";
 import { publishLiveRun } from "./LiveRun";
 import { groupScanErrors } from "@/lib/scanErrors";
 
+/** Window event the confirm card (NextAiRun) fires to start the AI run. */
+export const START_AI_EVENT = "admin-start-ai";
+
 type Totals = {
   runs: number;
   processed: number;
@@ -55,6 +58,13 @@ export default function RunUpdateAllButton({
   const [waitLeft, setWaitLeft] = useState(0);
   const stopRef = useRef(false);
   const [ask, setAsk] = useState(false);
+  // The confirm card in «Siste kjøringer» (NextAiRun) starts the same run.
+  const runRef = useRef<() => void>(() => {});
+  useEffect(() => {
+    const on = () => runRef.current();
+    window.addEventListener(START_AI_EVENT, on);
+    return () => window.removeEventListener(START_AI_EVENT, on);
+  }, []);
   const [lastError, setLastError] = useState<string | null>(null);
 
   // Interruptible pause — "Stopp" during a rate-limit wait ends it at once.
@@ -147,6 +157,10 @@ export default function RunUpdateAllButton({
       router.refresh();
     }
   }
+
+  runRef.current = () => {
+    if (!running && aiEnabled) run();
+  };
 
   // Status is reported up (see ScanHeader) rather than rendered here, so
   // this can sit in the header next to the other scan buttons.

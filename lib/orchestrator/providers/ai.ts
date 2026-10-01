@@ -11,9 +11,9 @@ import { claudeText, claudeModel } from './claude';
 // friendly and fast enough for a batch scan run. docs/04-data-sources.md.
 const HOST = 'generativelanguage.googleapis.com';
 const GEMINI_MODEL = 'gemini-3.6-flash';
-// Flash-Lite for the work that needs no web search (lead analysis, reading
-// contacts off a page): ~1/7 the token price. Searches stay on Flash, where
-// Google's free search quota applies. GEMINI_LITE_MODEL overrides.
+// Flash-Lite, the cheapest model (~1/7 Flash's token price), for all four
+// tasks; Flash is only the fallback when Lite refuses search grounding.
+// GEMINI_LITE_MODEL overrides.
 const geminiLiteModel = () => process.env.GEMINI_LITE_MODEL?.trim() || 'gemini-3.5-flash-lite';
 const URL = `https://${HOST}/v1beta/interactions`;
 
@@ -332,11 +332,11 @@ export function aiSetup(): AiStepSetup[] {
   return [
     { step: 'AI-vurdering', api, model: geminiLiteModel(), cost: `betalt per token${reserve}` },
     { step: 'Kontakter fra nettside', api: `nettsiden + ${api}`, model: geminiLiteModel(), cost: 'betalt per token' },
-    { step: 'Nyhetssøk (score 40+)', api: `${api} + Google-søk`, model: GEMINI_MODEL, cost: 'token + søk (5 000 gratis/mnd)' },
+    { step: 'Nyhetssøk (score 40+)', api: `${api} + Google-søk`, model: geminiLiteModel(), cost: 'token + søk (5 000 gratis/mnd)' },
     {
       step: 'Nettsidesøk (score 40+, ukjent nettside)',
       api: `${api} + Google-søk`,
-      model: GEMINI_MODEL,
+      model: geminiLiteModel(),
       cost: 'token + søk (5 000 gratis/mnd)',
     },
   ];
@@ -351,14 +351,21 @@ async function aiText(task: {
   if (claudeSelected()) return claudeText(task.prompt, { schema: task.schema, search: task.search });
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error('AI er ikke konfigurert');
-  const payload = (prompt: string) => ({
-    // Overrides geminiTextOnce's default model for the non-search tasks.
-    ...(task.search ? {} : { model: geminiLiteModel() }),
+  // Everything on Flash-Lite, the cheapest model — searches included. Should
+  // Google refuse search grounding on Lite (HTTP 400), that search retries
+  // once on Flash.
+  const payload = (prompt: string, model = geminiLiteModel()) => ({
+    model,
     input: [{ type: 'text', text: prompt }],
     ...(task.schema ? { response_format: { type: 'text', mime_type: 'application/json', schema: task.schema } } : {}),
     ...(task.search ? { tools: [{ type: 'google_search' }] } : {}),
   });
-  return geminiText(apiKey, payload(task.prompt), task.freePrompt ? { freePayload: payload(task.freePrompt) } : {});
+  try {
+    return await geminiText(apiKey, payload(task.prompt), task.freePrompt ? { freePayload: payload(task.freePrompt) } : {});
+  } catch (e) {
+    if (!task.search || !/HTTP 400/.test(e instanceof Error ? e.message : '')) throw e;
+    return geminiText(apiKey, payload(task.prompt, GEMINI_MODEL));
+  }
 }
 
 function parseJsonOutput(text: string): unknown {

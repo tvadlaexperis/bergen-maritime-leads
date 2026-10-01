@@ -1,5 +1,7 @@
 import Link from "next/link";
-import { getCompanyNames, type Scan } from "@/lib/db";
+import { getCompanyNames, countAiPending, type Scan } from "@/lib/db";
+import { aiConfigured, aiSetup } from "@/lib/orchestrator/providers/ai";
+import NextAiRun from "./NextAiRun";
 import type { ScanDetails } from "@/lib/scan";
 import { KOMMUNER, NACE_CODES } from "@/data/maritime-sectors.mjs";
 import LiveRun from "./LiveRun";
@@ -146,6 +148,7 @@ export default async function ScanPanel({
       </span>
     </span>
   ) : null;
+  const nextAi = !nightly && aiConfigured() ? { setup: aiSetup(), remaining: await countAiPending() } : null;
   const names = shown
     ? await getCompanyNames([
         ...new Set(
@@ -224,6 +227,7 @@ export default async function ScanPanel({
           return (
             <div className="box-pad" style={{ display: "grid", gap: 14 }}>
               {!nightly && <LiveRun />}
+              {nextAi && <NextAiRun setup={nextAi.setup} remaining={nextAi.remaining} />}
               {d?.ai.setup && d.ai.setup.length > 0 && (
                 <div>
                   <p style={{ fontSize: "0.9rem", fontWeight: 700, marginBottom: 8 }}>
