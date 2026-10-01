@@ -11,6 +11,10 @@ import { claudeText } from './claude';
 // friendly and fast enough for a batch scan run. docs/04-data-sources.md.
 const HOST = 'generativelanguage.googleapis.com';
 const GEMINI_MODEL = 'gemini-3.6-flash';
+// Flash-Lite for the work that needs no web search (lead analysis, reading
+// contacts off a page): ~1/7 the token price. Searches stay on Flash, where
+// Google's free search quota applies. GEMINI_LITE_MODEL overrides.
+const geminiLiteModel = () => process.env.GEMINI_LITE_MODEL?.trim() || 'gemini-3.5-flash-lite';
 const URL = `https://${HOST}/v1beta/interactions`;
 
 export interface LeadAnalysisInput {
@@ -311,6 +315,8 @@ async function aiText(task: {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error('AI er ikke konfigurert');
   const payload = (prompt: string) => ({
+    // Overrides geminiTextOnce's default model for the non-search tasks.
+    ...(task.search ? {} : { model: geminiLiteModel() }),
     input: [{ type: 'text', text: prompt }],
     ...(task.schema ? { response_format: { type: 'text', mime_type: 'application/json', schema: task.schema } } : {}),
     ...(task.search ? { tools: [{ type: 'google_search' }] } : {}),
