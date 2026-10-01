@@ -1561,8 +1561,13 @@ const NEEDS_CONTACT_SCRAPE = `(co.website IS NOT NULL AND co.contacts_scraped_at
 // News is re-searched every NEWS_REFRESH_DAYS (Google Search-grounded, billed
 // per search — 5,000/month free across Gemini 3.x).
 export const NEWS_REFRESH_DAYS = 30;
-const NEWS_DUE = `(co.news_checked_at IS NULL
-  OR co.news_checked_at < CAST(strftime('%s', 'now') AS INTEGER) * 1000 - ${NEWS_REFRESH_DAYS} * 86400000)`;
+// Paid web searches (news, finding a website) only for companies with at
+// least this lead score — a search costs ~10× the analysis itself, and small
+// low-score companies rarely have news. lib/scan.ts applies the same limit.
+export const SEARCH_MIN_SCORE = 40;
+const LATEST_SCORE = `(SELECT lead_score FROM company_scores WHERE company_id = co.id ORDER BY computed_at DESC, id DESC LIMIT 1)`;
+const NEWS_DUE = `(COALESCE(${LATEST_SCORE}, 0) >= ${SEARCH_MIN_SCORE} AND (co.news_checked_at IS NULL
+  OR co.news_checked_at < CAST(strftime('%s', 'now') AS INTEGER) * 1000 - ${NEWS_REFRESH_DAYS} * 86400000))`;
 const AI_PENDING = `(co.ai_analysis_at IS NULL OR ${NEEDS_CONTACT_SCRAPE} OR ${NEWS_DUE})`;
 
 // The AI pass (ai.analyze / findWebsite / extractContacts) is the slow,

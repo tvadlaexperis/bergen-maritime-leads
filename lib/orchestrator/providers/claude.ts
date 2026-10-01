@@ -41,7 +41,9 @@ export async function claudeText(
     body.tools = [{ name: 'svar', description: 'Gi svaret i dette formatet.', input_schema: opts.schema }];
     body.tool_choice = { type: 'tool', name: 'svar' };
   } else if (opts.search) {
-    body.tools = [{ type: 'web_search_20250305', name: 'web_search', max_uses: 5 }];
+    // Each search is billed, and its results come back as input tokens
+    // (often 10-20k) — two searches is plenty for "find the website" / news.
+    body.tools = [{ type: 'web_search_20250305', name: 'web_search', max_uses: 2 }];
   }
 
   const res = await safeFetchResult(URL, {

@@ -48,6 +48,7 @@ import {
   type CompanyWithScore,
   type UpsertCompanyInput,
   hideOutsideScope,
+  SEARCH_MIN_SCORE,
 } from './db';
 import { KOMMUNER, NACE_CODES, matchNace } from '../data/maritime-sectors.mjs';
 
@@ -456,10 +457,13 @@ async function aiPass(
   // News first, so a fresh analysis gets to use it (buying signals). Found
   // articles are merged into company_news; an analysis done only because of
   // new news would be wasteful, so news alone never forces one.
+  // Paid web searches (news, website lookup) only from SEARCH_MIN_SCORE up —
+  // the admin refresh button (`force`) always searches.
+  const searchWorthIt = force || (company.lead_score ?? 0) >= SEARCH_MIN_SCORE;
   const newsDue =
     force ||
-    company.news_checked_at == null ||
-    Date.now() - company.news_checked_at > NEWS_REFRESH_DAYS * 86_400_000;
+    (searchWorthIt &&
+      (company.news_checked_at == null || Date.now() - company.news_checked_at > NEWS_REFRESH_DAYS * 86_400_000));
   const newsJob = async () => {
     if (!newsDue) return;
     const found = await orchestrator.callTool<FoundNews[]>(
@@ -558,7 +562,7 @@ async function aiPass(
     // Paid Google Search-grounded lookup, so this must run at most once per
     // company ever — never on a later refresh, even if it found nothing.
     let website = company.website;
-    if (!website && !company.website_search_attempted_at) {
+    if (!website && !company.website_search_attempted_at && searchWorthIt) {
       const found = await orchestrator.callTool<string | null>(
         'ai.findWebsite',
         { name: company.name, orgnr: company.orgnr, poststed: company.poststed },

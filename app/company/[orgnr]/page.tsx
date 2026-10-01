@@ -10,6 +10,7 @@ import {
   listWebsiteContacts,
   listCompanyNews,
   listJobAds,
+  SEARCH_MIN_SCORE,
 } from '@/lib/db';
 import { NEWS_CATEGORY_LABEL, type NewsCategory } from '@/lib/companyNews';
 import { describeGroupBasis, type GroupBasis } from '@/lib/groups';
@@ -645,7 +646,9 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
             <div className="box-pad">
               {news.length === 0 ? (
                 <p className="muted" style={{ fontSize: '0.85rem' }}>
-                  {co.news_checked_at != null ? 'Ingen nyheter funnet siste 12 måneder.' : 'Nyheter hentes ved neste AI-kjøring.'}
+                  {co.news_checked_at != null ? 'Ingen nyheter funnet siste 12 måneder.' : (co.lead_score ?? 0) >= SEARCH_MIN_SCORE
+                      ? 'Nyheter hentes ved neste AI-kjøring.'
+                      : `Nyheter søkes bare for selskaper med lead-score ${SEARCH_MIN_SCORE}+ (websøk koster).`}
                 </p>
               ) : (
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12 }}>
