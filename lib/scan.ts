@@ -1,6 +1,12 @@
 import { orchestrator } from './orchestrator/boot';
 import type { LeadScoreResult } from './orchestrator/providers/score';
-import { aiConfigured, type LeadAnalysis, type WebsiteInsights } from './orchestrator/providers/ai';
+import {
+  aiConfigured,
+  aiSetup,
+  type AiStepSetup,
+  type LeadAnalysis,
+  type WebsiteInsights,
+} from './orchestrator/providers/ai';
 import { websiteFromEmail, type Company as RawCompany, type KonsernInfo, type Roller } from './brreg';
 import { safeFetchText } from './http/safeFetch';
 import { siteMentionsCompany } from './website';
@@ -81,6 +87,8 @@ export interface ScanDetails {
   };
   ai: {
     enabled: boolean;
+    /** Which API and model each AI step used (aiSetup) — absent on older runs. */
+    setup?: AiStepSetup[];
     processed: number;
     analyses: number;
     websitesFound: number;
@@ -783,6 +791,7 @@ export async function runScan(opts: RunScanOptions = {}): Promise<ScanResult> {
   };
   const aiEnabled = aiConfigured() && !opts.noAi;
   details.ai.enabled = aiEnabled;
+  if (aiEnabled) details.ai.setup = aiSetup();
 
   if (!opts.skipDiscovery) {
     details.discovery.ran = true;

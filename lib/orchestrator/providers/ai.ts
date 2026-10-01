@@ -4,7 +4,7 @@ import { cleanWebsite } from '../../brreg';
 import { stripHtml, contactPageCandidates, deeperContactPages } from '../../website';
 import { parseNewsAnswer, findJsonArray, NEWS_CATEGORIES, type FoundNews } from '../../companyNews';
 import { linkedinCompanyName } from '../../brreg';
-import { claudeText } from './claude';
+import { claudeText, claudeModel } from './claude';
 
 // Gemini Flash builds the structured "Om selskapet" analysis (customer-fit
 // score factors, buying signals, recommended entry point). Free-tier
@@ -302,8 +302,45 @@ async function geminiTextOnce(apiKey: string, payload: Record<string, unknown>):
 // tools work the same on either.
 const claudeSelected = () => !!process.env.ANTHROPIC_API_KEY && process.env.AI_BACKEND !== 'gemini';
 export const aiConfigured = () => !!(process.env.ANTHROPIC_API_KEY || process.env.GEMINI_API_KEY);
-/** Human label for the admin UI, e.g. "Claude (claude-haiku-4-5-…)". */
+/** Human label for the admin UI, e.g. "Claude Haiku" or "Gemini". */
 export const aiServiceLabel = () => (claudeSelected() ? 'Claude Haiku' : 'Gemini');
+
+export interface AiStepSetup {
+  step: string; // "AI-vurdering"
+  api: string; // "Gemini Interactions API (Google)"
+  model: string; // "gemini-3.5-flash-lite"
+  cost: string; // plain words
+}
+
+/**
+ * What an AI run will call, step by step — stored on each scan so the admin
+ * can see afterwards which API and model were tried. Mirrors aiText's routing.
+ */
+export function aiSetup(): AiStepSetup[] {
+  if (claudeSelected()) {
+    const model = claudeModel();
+    const api = 'Anthropic Messages API';
+    return [
+      { step: 'AI-vurdering', api, model, cost: 'betalt per token' },
+      { step: 'Kontakter fra nettside', api: `nettsiden + ${api}`, model, cost: 'betalt per token' },
+      { step: 'Nyhetssøk (score 40+)', api: `${api} + websøk`, model, cost: 'betalt per søk + token' },
+      { step: 'Nettsidesøk (score 40+, ukjent nettside)', api: `${api} + websøk`, model, cost: 'betalt per søk + token' },
+    ];
+  }
+  const api = 'Gemini API (Google)';
+  const reserve = process.env.GEMINI_API_KEY_FREE ? ' · gratisnøkkel som reserve' : '';
+  return [
+    { step: 'AI-vurdering', api, model: geminiLiteModel(), cost: `betalt per token${reserve}` },
+    { step: 'Kontakter fra nettside', api: `nettsiden + ${api}`, model: geminiLiteModel(), cost: 'betalt per token' },
+    { step: 'Nyhetssøk (score 40+)', api: `${api} + Google-søk`, model: GEMINI_MODEL, cost: 'token + søk (5 000 gratis/mnd)' },
+    {
+      step: 'Nettsidesøk (score 40+, ukjent nettside)',
+      api: `${api} + Google-søk`,
+      model: GEMINI_MODEL,
+      cost: 'token + søk (5 000 gratis/mnd)',
+    },
+  ];
+}
 
 async function aiText(task: {
   prompt: string;

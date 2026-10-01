@@ -224,6 +224,33 @@ export default async function ScanPanel({
           return (
             <div className="box-pad" style={{ display: "grid", gap: 14 }}>
               {!nightly && <LiveRun />}
+              {d?.ai.setup && d.ai.setup.length > 0 && (
+                <div>
+                  <p style={{ fontSize: "0.9rem", fontWeight: 700, marginBottom: 8 }}>
+                    Hva AI-trinnet prøvde
+                  </p>
+                  <table className="table" style={{ fontSize: "0.8rem" }}>
+                    <thead>
+                      <tr>
+                        <th>Steg</th>
+                        <th>API</th>
+                        <th>Modell</th>
+                        <th>Kostnad</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {d.ai.setup.map((x) => (
+                        <tr key={x.step}>
+                          <td>{x.step}</td>
+                          <td className="muted">{x.api}</td>
+                          <td className="num">{x.model}</td>
+                          <td className="muted">{x.cost}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
               {stats.length > 0 && (
                 <div>
                   <p style={{ fontSize: "0.9rem", fontWeight: 700, marginBottom: 8 }}>
