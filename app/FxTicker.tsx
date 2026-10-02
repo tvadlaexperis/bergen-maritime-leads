@@ -9,7 +9,9 @@ export default async function FxTicker() {
   return (
     <div className="fx-ticker" aria-label="NOK exchange rates">
       {rates.map((r) => {
-        const dir = r.changePct == null ? undefined : r.changePct >= 0 ? 'up' : 'down';
+        // Seen from NOK: green ('up') when NOK strengthened — the currency
+        // costs fewer kroner than at the previous close. Same in minaksjeportal.
+        const dir = r.changePct == null ? undefined : r.changePct <= 0 ? 'up' : 'down';
         return (
           <span key={r.code} className="fx-item">
             <span className="fx-code">{r.code}</span>

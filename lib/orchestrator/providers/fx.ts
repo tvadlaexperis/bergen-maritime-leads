@@ -1,10 +1,11 @@
 import type { Provider } from '../types';
 import { safeFetchText } from '../../http/safeFetch';
 
-// NOK exchange rates for the header ticker. Frankfurter (ECB data, free, no key).
-// docs/04-data-sources.md.
-const HOST = 'api.frankfurter.dev';
-const BASE = `https://${HOST}/v1`;
+// NOK exchange rates for the header ticker: live market prices from Yahoo
+// Finance (free, no key) — the same source as ../../Other Projects/
+// minaksjeportal, so both apps show the same numbers. Refreshed every 5 min.
+const HOST = 'query1.finance.yahoo.com';
+const chartUrl = (code: string) => `https://${HOST}/v8/finance/chart/${code}NOK=X?range=1d&interval=1d`;
 
 // USD/EUR shown as NOK per 1 unit; SEK/DKK as NOK per 100 (Norges Bank style).
 const PER100 = new Set(['SEK', 'DKK']);
@@ -14,38 +15,35 @@ export type FxCode = (typeof FX_CODES)[number];
 export interface FxRate {
   code: FxCode;
   value: number; // NOK per unit (×100 for SEK/DKK)
-  changePct: number | null; // vs. the previous ECB business day
+  /** Change vs. the previous close, in % of NOK per unit. Negative = NOK stronger. */
+  changePct: number | null;
 }
 
-type FrankfurterResp = { date: string; rates: Record<string, number> };
+type ChartResp = { chart?: { result?: { meta?: { regularMarketPrice?: number; chartPreviousClose?: number } }[] } };
 
-// base=NOK → rates[code] is "code per 1 NOK"; invert for "NOK per code".
-function nokPer(resp: FrankfurterResp, code: string): number | null {
-  const r = resp.rates?.[code];
-  return typeof r === 'number' && r > 0 ? 1 / r : null;
+/** One currency from Yahoo's chart response (price = NOK per 1 unit). */
+export function buildRate(code: FxCode, json: unknown): FxRate | null {
+  const meta = (json as ChartResp)?.chart?.result?.[0]?.meta;
+  const price = meta?.regularMarketPrice;
+  if (typeof price !== 'number' || !(price > 0)) return null;
+  const prev = meta?.chartPreviousClose;
+  return {
+    code,
+    value: price * (PER100.has(code) ? 100 : 1),
+    changePct: typeof prev === 'number' && prev > 0 ? ((price - prev) / prev) * 100 : null,
+  };
 }
 
-export function buildRates(today: FrankfurterResp, prev: FrankfurterResp | null): FxRate[] {
-  const out: FxRate[] = [];
-  for (const code of FX_CODES) {
-    const now = nokPer(today, code);
-    if (now == null) continue;
-    const mult = PER100.has(code) ? 100 : 1;
-    const before = prev ? nokPer(prev, code) : null;
-    out.push({
-      code,
-      value: now * mult,
-      changePct: before ? ((now - before) / before) * 100 : null,
-    });
-  }
-  return out;
-}
-
-async function get(url: string): Promise<FrankfurterResp | null> {
-  const body = await safeFetchText(url, { allowHosts: [HOST], timeoutMs: 8_000, revalidate: 3600 });
+async function fetchRate(code: FxCode): Promise<FxRate | null> {
+  const body = await safeFetchText(chartUrl(code), {
+    allowHosts: [HOST],
+    timeoutMs: 8_000,
+    revalidate: 300,
+    headers: { 'User-Agent': 'Mozilla/5.0' },
+  });
   if (!body) return null;
   try {
-    return JSON.parse(body) as FrankfurterResp;
+    return buildRate(code, JSON.parse(body));
   } catch {
     return null;
   }
@@ -57,13 +55,7 @@ export const fxProvider: Provider = {
   isEnabled: () => process.env.SKIP_FX !== '1',
   async call(tool) {
     if (tool !== 'rates') throw new Error(`fx: unknown tool ${tool}`);
-    const symbols = FX_CODES.join(',');
-    const today = await get(`${BASE}/latest?base=NOK&symbols=${symbols}`);
-    if (!today) return [];
-    // previous ECB business day
-    const prevDate = new Date(today.date + 'T00:00:00Z');
-    prevDate.setUTCDate(prevDate.getUTCDate() - (prevDate.getUTCDay() === 1 ? 3 : 1));
-    const prev = await get(`${BASE}/${prevDate.toISOString().slice(0, 10)}?base=NOK&symbols=${symbols}`);
-    return buildRates(today, prev);
+    const rates = await Promise.all(FX_CODES.map(fetchRate));
+    return rates.filter((r): r is FxRate => r != null);
   },
 };

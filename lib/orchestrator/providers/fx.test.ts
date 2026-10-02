@@ -1,40 +1,29 @@
 import { describe, it, expect } from 'vitest';
-import { buildRates } from './fx';
+import { buildRate } from './fx';
 
-// base=NOK → rates[code] is "units of code per 1 NOK"
-const today = { date: '2026-09-03', rates: { USD: 0.1073, EUR: 0.0921, SEK: 1.028, DKK: 0.6875 } };
-const prev = { date: '2026-09-02', rates: { USD: 0.1075, EUR: 0.0921, SEK: 1.02, DKK: 0.687 } };
+// Yahoo chart response: meta.regularMarketPrice = NOK per 1 unit right now,
+// chartPreviousClose = NOK per 1 unit at the previous close.
+const chart = (price: number, prev?: number) => ({
+  chart: { result: [{ meta: { regularMarketPrice: price, chartPreviousClose: prev } }] },
+});
 
-describe('buildRates', () => {
-  const rates = buildRates(today, prev);
-
-  it('returns all four currencies', () => {
-    expect(rates.map((r) => r.code)).toEqual(['USD', 'EUR', 'SEK', 'DKK']);
+describe('buildRate', () => {
+  it('gives NOK per unit, ×100 for SEK/DKK', () => {
+    expect(buildRate('USD', chart(9.6257))!.value).toBeCloseTo(9.6257, 4);
+    expect(buildRate('SEK', chart(0.9598))!.value).toBeCloseTo(95.98, 2);
   });
 
-  it('inverts to NOK per unit, ×100 for SEK/DKK', () => {
-    const usd = rates.find((r) => r.code === 'USD')!;
-    expect(usd.value).toBeCloseTo(1 / 0.1073, 2); // ≈ 9.3
-    const sek = rates.find((r) => r.code === 'SEK')!;
-    expect(sek.value).toBeCloseTo((1 / 1.028) * 100, 1); // ≈ 97
-    const dkk = rates.find((r) => r.code === 'DKK')!;
-    expect(dkk.value).toBeCloseTo((1 / 0.6875) * 100, 1); // ≈ 145
+  it('change is negative when NOK strengthened (fewer NOK per unit)', () => {
+    expect(buildRate('USD', chart(9.5, 9.6))!.changePct).toBeLessThan(0);
+    expect(buildRate('EUR', chart(10.9, 10.8))!.changePct).toBeGreaterThan(0);
   });
 
-  it('computes the day-over-day change', () => {
-    const usd = rates.find((r) => r.code === 'USD')!;
-    // USD strengthened vs NOK (0.1075 -> 0.1073 code-per-NOK means more NOK per USD)
-    expect(usd.changePct).toBeGreaterThan(0);
-    const eur = rates.find((r) => r.code === 'EUR')!;
-    expect(eur.changePct).toBeCloseTo(0, 3); // unchanged
+  it('leaves changePct null without a previous close', () => {
+    expect(buildRate('USD', chart(9.6))!.changePct).toBeNull();
   });
 
-  it('leaves changePct null when there is no previous day', () => {
-    for (const r of buildRates(today, null)) expect(r.changePct).toBeNull();
-  });
-
-  it('skips a currency the API did not return', () => {
-    const partial = buildRates({ date: 'x', rates: { USD: 0.107 } }, null);
-    expect(partial.map((r) => r.code)).toEqual(['USD']);
+  it('returns null for a missing or broken response', () => {
+    expect(buildRate('USD', {})).toBeNull();
+    expect(buildRate('USD', chart(0))).toBeNull();
   });
 });
