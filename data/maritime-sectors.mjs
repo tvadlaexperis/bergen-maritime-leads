@@ -37,6 +37,9 @@ export const NACE_CODES = [
   { code: '77.34', label: 'Utleie og leasing av sjøtransportmateriell', group: 'Havn & tjenester' },
   { code: '03.11', label: 'Hav- og kystfiske', group: 'Sjømat' },
   { code: '03.21', label: 'Hav- og kystbasert akvakultur', group: 'Sjømat' },
+  // Seafood trading/export (Lerøy Seafood, Seaborn, Norges Sildesalgslag,
+  // Grieg Seafood Sales) — ~70 companies in the region.
+  { code: '46.32', label: 'Engroshandel med fisk og sjømat', group: 'Sjømat' },
   { code: '09.10', label: 'Tjenester tilknyttet olje- og gassutvinning (offshore)', group: 'Offshore' },
   // Pumps and compressors: in the Bergen region this is subsea and marine
   // pump makers (OneSubsea Processing, Framo) — a handful, all maritime.
