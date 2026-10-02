@@ -1415,6 +1415,10 @@ a {
 .map-popup a {
   font-weight: 700;
 }
+.map-popup-btn {
+  margin-top: 8px;
+  align-self: flex-start;
+}
 .leaflet-container {
   font-family: inherit;
   background: var(--bg-2);

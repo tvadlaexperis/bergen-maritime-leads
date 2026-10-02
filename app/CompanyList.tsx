@@ -7,6 +7,7 @@ import { describeGroupBasis, type GroupBasis } from '@/lib/groups';
 import { fmtNok, fmtPct, fmtInt, dateLabel, agoLabel } from './format';
 import ScoreBadge from './components/ScoreBadge';
 import SignalBadge, { parseBuyingSignalLevel } from './components/SignalBadge';
+import { readWorklist, toggleWorklist, WORKLIST_EVENT } from '@/lib/worklist';
 
 type SizeFilter = 'all' | 'under5' | '5-15' | '15-50' | '50';
 type ScoreFilter = 'all' | '40' | '66';
@@ -17,7 +18,6 @@ type SortKey = 'name' | 'group' | 'employees' | 'revenue' | 'growth' | 'result' 
 type SortDir = 'asc' | 'desc';
 
 const STORAGE_KEY = 'bml.companyList.filters.v1';
-const FAVORITES_KEY = 'bml.companyList.favorites.v1';
 
 interface StoredFilters {
   group: string;
@@ -89,7 +89,7 @@ export default function CompanyList({
   rows: CompanyWithScore[];
   title: string;
   subtitle: ReactNode;
-  /** Forces the list to show favorites only and hides the toggle — used by the /favoritter page. */
+  /** Forces the list to show favorites only and hides the toggle — used by the /arbeidsliste page. */
   lockFavorites?: boolean;
 }) {
   const [group, setGroup] = useState<string>(DEFAULT_FILTERS.group);
@@ -108,7 +108,6 @@ export default function CompanyList({
   const [sortDir, setSortDir] = useState<SortDir>('desc');
 
   const loadedFromStorage = useRef(false);
-  const loadedFavorites = useRef(false);
 
   useEffect(() => {
     try {
@@ -132,13 +131,14 @@ export default function CompanyList({
     }
     loadedFromStorage.current = true;
 
-    try {
-      const rawFav = window.localStorage.getItem(FAVORITES_KEY);
-      if (rawFav) setFavorites(new Set(JSON.parse(rawFav) as string[]));
-    } catch {
-      // ignore
-    }
-    loadedFavorites.current = true;
+    setFavorites(readWorklist());
+  }, []);
+
+  // The map popup can change the work list too (lib/worklist.ts).
+  useEffect(() => {
+    const on = () => setFavorites(readWorklist());
+    window.addEventListener(WORKLIST_EVENT, on);
+    return () => window.removeEventListener(WORKLIST_EVENT, on);
   }, []);
 
   useEffect(() => {
@@ -163,22 +163,8 @@ export default function CompanyList({
     }
   }, [group, bransje, orgForm, kommuneFilter, minSize, minGrowth, minScore, signalFilter, mergeGroups, filterTab, search]);
 
-  useEffect(() => {
-    if (!loadedFavorites.current) return;
-    try {
-      window.localStorage.setItem(FAVORITES_KEY, JSON.stringify([...favorites]));
-    } catch {
-      // ignore write failures
-    }
-  }, [favorites]);
-
   function toggleFavorite(orgnr: string) {
-    setFavorites((prev) => {
-      const next = new Set(prev);
-      if (next.has(orgnr)) next.delete(orgnr);
-      else next.add(orgnr);
-      return next;
-    });
+    toggleWorklist(orgnr); // saves and fires WORKLIST_EVENT → setFavorites above
   }
 
   const activeFilterCount = [
@@ -575,7 +561,7 @@ export default function CompanyList({
             <thead>
               <tr>
                 <th style={{ width: 34 }}>#</th>
-                <th style={{ width: 28 }} aria-label="Favoritt" />
+                <th style={{ width: 28 }} aria-label="Arbeidsliste" />
                 {COLUMNS.map((col) => {
                   const activeCol = col.key === sortKey;
                   return (
@@ -613,7 +599,8 @@ export default function CompanyList({
                       type="button"
                       className={`fav-star${favorites.has(r.orgnr) ? ' active' : ''}`}
                       onClick={() => toggleFavorite(r.orgnr)}
-                      aria-label={favorites.has(r.orgnr) ? 'Fjern fra favoritter' : 'Legg til favoritter'}
+                      aria-label={favorites.has(r.orgnr) ? 'Fjern fra arbeidslisten' : 'Legg til i arbeidslisten'}
+                      title={favorites.has(r.orgnr) ? 'Fjern fra arbeidslisten' : 'Legg til i arbeidslisten'}
                       aria-pressed={favorites.has(r.orgnr)}
                     >
                       {favorites.has(r.orgnr) ? '★' : '☆'}
@@ -691,7 +678,7 @@ export default function CompanyList({
                 <tr>
                   <td colSpan={12} className="muted" style={{ textAlign: 'center', padding: 28 }}>
                     {lockFavorites && favorites.size === 0
-                      ? 'Ingen favoritter ennå. Klikk ☆ ved et selskap for å legge det til.'
+                      ? 'Arbeidslisten er tom. Klikk ☆ ved et selskap i listen, eller «Legg til i arbeidslisten» på kartet.'
                       : 'Ingen selskaper matcher filtrene.'}
                   </td>
                 </tr>

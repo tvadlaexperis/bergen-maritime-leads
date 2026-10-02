@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Map as LeafletMap, LayerGroup } from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import { readWorklist, toggleWorklist } from '@/lib/worklist';
 
 export interface MapCompany {
   orgnr: string;
@@ -113,7 +114,24 @@ export default function CompanyMap({ companies, segments }: { companies: MapComp
           .filter(Boolean)
           .join(' · ');
         box.appendChild(meta);
+        // Add to / remove from the work list (lib/worklist.ts, same list as
+        // the ☆ in the company list).
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'btn btn-ghost btn-sm map-popup-btn';
+        const label = () => {
+          const on = readWorklist().has(c.orgnr);
+          btn.textContent = on ? '★ På arbeidslisten — fjern' : '☆ Legg til i arbeidslisten';
+          btn.setAttribute('aria-pressed', String(on));
+        };
+        label();
+        btn.addEventListener('click', () => {
+          toggleWorklist(c.orgnr);
+          label();
+        });
+        box.appendChild(btn);
         marker.bindPopup(box);
+        marker.on('popupopen', label); // reflects changes made elsewhere
         marker.addTo(layer.current!);
       }
       // Frame where the companies actually are: a handful registered in Oslo

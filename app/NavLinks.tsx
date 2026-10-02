@@ -7,7 +7,7 @@ const LINKS = [
   { href: '/', label: 'Selskaper' },
   { href: '/dashboard', label: 'Oversikt' },
   { href: '/kart', label: 'Kart' },
-  { href: '/favoritter', label: 'Favoritter' },
+  { href: '/arbeidsliste', label: 'Arbeidsliste' },
 ];
 
 export default function NavLinks() {
