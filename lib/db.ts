@@ -1608,6 +1608,36 @@ export async function countAiPending(): Promise<number> {
 
 // --- Scans ---
 
+export interface AiProgress {
+  analyses: number;
+  newsSearched: number;
+  contactsRead: number;
+  websiteSearched: number;
+}
+
+// What the AI pass has saved since `since` (ms) — polled every few seconds
+// by the admin's «AI-vurdering» run so its boxes move during a run, not just
+// when each ≤60 s server run returns.
+export async function getAiProgressSince(since: number): Promise<AiProgress> {
+  const c = await db();
+  const res = await c.execute({
+    sql: `SELECT
+            COUNT(CASE WHEN ai_analysis_at >= ? THEN 1 END) AS analyses,
+            COUNT(CASE WHEN news_checked_at >= ? THEN 1 END) AS news,
+            COUNT(CASE WHEN contacts_scraped_at >= ? THEN 1 END) AS contacts,
+            COUNT(CASE WHEN website_search_attempted_at >= ? THEN 1 END) AS websites
+          FROM companies`,
+    args: [since, since, since, since],
+  });
+  const r = res.rows[0] as unknown as Record<string, number>;
+  return {
+    analyses: Number(r.analyses),
+    newsSearched: Number(r.news),
+    contactsRead: Number(r.contacts),
+    websiteSearched: Number(r.websites),
+  };
+}
+
 // Hides active companies registered outside the scan area (a move out of
 // Bergen after discovery). Status 'hidden', so nothing is deleted.
 export async function hideOutsideScope(kommunenummer: string[]): Promise<number> {

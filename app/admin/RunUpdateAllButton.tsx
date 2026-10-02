@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { runAiQueueAction } from "./actions";
+import { runAiQueueAction, aiProgressAction } from "./actions";
+import type { AiProgress } from "@/lib/db";
 import ConfirmDialog from "./ConfirmDialog";
 import { publishLiveRun } from "./LiveRun";
 import { groupScanErrors } from "@/lib/scanErrors";
@@ -66,6 +67,19 @@ export default function RunUpdateAllButton({
     return () => window.removeEventListener(START_AI_EVENT, on);
   }, []);
   const [lastError, setLastError] = useState<string | null>(null);
+  // Counts saved since the run started, polled every 4 s — each server run
+  // takes up to a minute, and the boxes should move during it.
+  const startedAtRef = useRef(0);
+  const [live, setLive] = useState<AiProgress | null>(null);
+  useEffect(() => {
+    if (!running) return;
+    const tick = () =>
+      aiProgressAction(startedAtRef.current)
+        .then(setLive)
+        .catch(() => {});
+    const id = setInterval(tick, 4000);
+    return () => clearInterval(id);
+  }, [running]);
 
   // Interruptible pause — "Stopp" during a rate-limit wait ends it at once.
   async function pause(seconds: number) {
@@ -78,6 +92,8 @@ export default function RunUpdateAllButton({
 
   async function run() {
     stopRef.current = false;
+    startedAtRef.current = Date.now();
+    setLive(null);
     setRunning(true);
     setStopping(false);
     setMsg(null);
@@ -207,13 +223,15 @@ export default function RunUpdateAllButton({
       status: status?.replace(/^AI-vurdering · /, "") ?? null,
       error,
       steps: [
-        { label: "AI-vurderinger", service: aiService, cost: "betalt", done: totals.analyses },
-        { label: "Nyhetssøk", service: `${aiService} + websøk`, cost: "betalt", done: totals.newsSearched },
-        { label: "Nettsider lest for kontakter", service: `nettsiden + ${aiService}`, cost: "betalt", done: totals.scraped },
-        { label: "Nettsider funnet", service: `${aiService} + websøk`, cost: "betalt", done: totals.websites },
+        // The larger of the polled count and the finished runs' sums — the
+        // poll is ahead during a run, the sums are exact once it's done.
+        { label: "AI-vurderinger", service: aiService, cost: "betalt", done: Math.max(totals.analyses, live?.analyses ?? 0) },
+        { label: "Nyhetssøk", service: `${aiService} + websøk`, cost: "betalt", done: Math.max(totals.newsSearched, live?.newsSearched ?? 0) },
+        { label: "Nettsider lest for kontakter", service: `nettsiden + ${aiService}`, cost: "betalt", done: Math.max(totals.scraped, live?.contactsRead ?? 0) },
+        { label: "Nettsidesøk utført", service: `${aiService} + websøk`, cost: "betalt", done: Math.max(totals.websites, live?.websiteSearched ?? 0) },
       ],
     });
-  }, [running, totals, msg, status, lastError, aiService]);
+  }, [running, totals, msg, status, lastError, aiService, live]);
 
   return running ? (
     <button

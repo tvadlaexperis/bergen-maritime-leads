@@ -17,6 +17,8 @@ import {
   deleteCompany,
   countAiPending,
   countBrregStale,
+  getAiProgressSince,
+  type AiProgress,
   type CompanyStatus,
 } from '@/lib/db';
 import { runScan, refreshCompany } from '@/lib/scan';
@@ -146,6 +148,13 @@ export async function runScanAction(
   revalidatePath('/admin');
   revalidatePath('/dashboard');
   return { summary, processed: d.brreg.processed, added: d.discovery.added, newFinancials: d.brreg.newFinancials, staleRemaining: await countBrregStale() };
+}
+
+// Live counts for the running «AI-vurdering» (polled every few seconds).
+// Read-only, so admin check only — no rate-limit bucket.
+export async function aiProgressAction(since: number): Promise<AiProgress> {
+  await requireAdmin();
+  return getAiProgressSince(Number(since) || Date.now());
 }
 
 // One AI-only run (no Brreg pass, whole budget to the AI queue). The
