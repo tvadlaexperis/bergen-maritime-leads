@@ -143,7 +143,14 @@ export default async function ScanPanel({
         {whenLabel(shown.started_at)}
       </strong>
       <span className="muted" style={{ fontSize: "0.78rem" }}>
-        {shownDetails ? TRIGGER_LABEL[shownDetails.trigger] : "eldre"} ·{" "}
+        {/* No details yet = still running (or cut off); "eldre" only for
+            finished runs from before detailed logging. */}
+        {shownDetails
+          ? TRIGGER_LABEL[shownDetails.trigger]
+          : shown.finished_at
+            ? "eldre"
+            : "kjøring"}{" "}
+        ·{" "}
         {statusLabel(shown, shownDetails)} · {idx + 1} av {scans.length}
       </span>
     </span>
@@ -326,6 +333,15 @@ function ScanDetailsView({
   errors: { scope: string; message: string }[];
   names: Record<string, string>;
 }) {
+  if (!d && !scan.finished_at) {
+    return (
+      <p className="muted" style={{ fontSize: "0.8rem" }}>
+        {Date.now() - scan.started_at > 2 * 60_000
+          ? "Kjøringen ble avbrutt før den var ferdig (tidsgrensen eller en feil) — ingen detaljer lagret. Neste kjøring tar resten."
+          : "Kjøringen pågår — detaljer og resultater vises her når den er ferdig (inntil ca. ett minutt). Last siden på nytt."}
+      </p>
+    );
+  }
   if (!d) {
     return (
       <p className="muted" style={{ fontSize: "0.8rem" }}>
