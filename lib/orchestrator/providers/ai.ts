@@ -605,27 +605,40 @@ async function fetchPageText(url: string): Promise<string | null> {
 // /kontakt and /om-oss — then up to four pages one level deeper (office /
 // department pages). Reading just one subpage missed most team pages.
 // Each fetch is capped at 6s and runs inside the scan's shared budget.
-async function requestContacts(name: string, website: string): Promise<WebsiteInsights> {
+async function requestContacts(name: string, website: string, contactPage: string | null = null): Promise<WebsiteInsights> {
   if (!aiConfigured()) return EMPTY_INSIGHTS;
 
-  const homepageHtml = await fetchPageText(website);
-  if (!homepageHtml) return EMPTY_INSIGHTS;
-
+  // An admin-set contact page is read first and always kept — the crawler's
+  // own guesses fill in around it.
   const fetchAll = async (urls: string[]) =>
     (await Promise.all(urls.map(async (url) => ({ url, html: await fetchPageText(url) })))).filter(
       (p): p is { url: string; html: string } => !!p.html,
     );
-  const level1 = await fetchAll(contactPageCandidates(homepageHtml, website, 4));
+  const pinned = contactPage ? await fetchAll([contactPage]) : [];
+
+  const homepageHtml = await fetchPageText(website);
+  if (!homepageHtml && pinned.length === 0) return EMPTY_INSIGHTS;
+
+  const level1 = homepageHtml
+    ? (await fetchAll(contactPageCandidates(homepageHtml, website, 4))).filter((p) => p.url !== contactPage)
+    : [];
   // One level further: many sites keep the people on office/department pages
   // under a /contacts hub (wilsonship.no), which the homepage never links to.
-  const visited = new Set([website, ...level1.map((p) => p.url)]);
-  const level2 = await fetchAll(deeperContactPages(level1, visited, 4));
+  const visited = new Set([website, ...(contactPage ? [contactPage] : []), ...level1.map((p) => p.url)]);
+  const level2 = await fetchAll(deeperContactPages([...pinned, ...level1], visited, 4));
 
   // Most specific pages first, so the text cap trims the homepage, not the
-  // page that actually lists the people.
-  const pages = [...level2, ...level1, { url: website, html: homepageHtml }];
+  // page that actually lists the people. The pinned page leads.
+  const pages = [
+    ...pinned,
+    ...level2,
+    ...level1,
+    ...(homepageHtml ? [{ url: website, html: homepageHtml }] : []),
+  ];
   const combinedText = pages
-    .map((p) => `--- ${p.url} ---\n${stripHtml(p.html).slice(0, 9_000)}`)
+    // The pinned contact page gets more room: on framo.com/contact the
+    // people start ~7,500 characters in, after a long menu.
+    .map((p) => `--- ${p.url} ---\n${stripHtml(p.html).slice(0, p.url === contactPage ? 20_000 : 9_000)}`)
     .join('\n\n')
     .slice(0, 40_000);
   if (!combinedText.trim()) return EMPTY_INSIGHTS;
@@ -693,8 +706,8 @@ export const aiProvider: Provider = {
     if (tool === 'findWebsite') return requestWebsite(args as unknown as FindWebsiteInput);
     if (tool === 'findNews') return requestNews(args as unknown as FindNewsInput);
     if (tool === 'extractContacts') {
-      const { name, website } = args as { name: string; website: string };
-      return requestContacts(name, website);
+      const { name, website, contactPage } = args as { name: string; website: string; contactPage?: string | null };
+      return requestContacts(name, website, contactPage ?? null);
     }
     throw new Error(`ai: unknown tool ${tool}`);
   },

@@ -705,6 +705,7 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
             name={base.name}
             status={base.status}
             website={base.website}
+            contactPage={base.contact_page_url}
             notes={base.notes ?? ''}
           />
         </AdminPanelModal>

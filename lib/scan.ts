@@ -587,6 +587,16 @@ async function aiPass(
         log.change(`Nettside funnet: ${found.data}`, true);
       }
     }
+    // An admin-set contact page (framo.com/contact) is enough on its own —
+    // its site's front page stands in for the unknown website.
+    const contactPage = company.contact_page_url;
+    if (!website && contactPage) {
+      try {
+        website = new URL(contactPage).origin;
+      } catch {
+        // malformed URL — validated on save, so only a hand-edited row
+      }
+    }
     if (!website) return;
 
     // Free-form Gemini read of the company's own about/contact/team pages —
@@ -594,7 +604,7 @@ async function aiPass(
     const prior = await listWebsiteContacts(company.id, 'nettside');
     const insights = await orchestrator.callTool<WebsiteInsights>(
       'ai.extractContacts',
-      { name: company.name, website },
+      { name: company.name, website, contactPage },
       budget(40_000),
     );
     if (!insights.ok) {

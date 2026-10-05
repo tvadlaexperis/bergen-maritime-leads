@@ -9,6 +9,7 @@ import {
   setStatusAction,
   deleteCompanyAction,
   updateWebsiteAction,
+  updateContactPageAction,
   updateNotesAction,
   type ActionState,
 } from '@/app/admin/actions';
@@ -33,11 +34,13 @@ export default function AdminControls(props: {
   name: string;
   status: CompanyStatus;
   website: string | null;
+  contactPage: string | null;
   notes: string;
 }) {
   const router = useRouter();
   const [busy, startTransition] = useTransition();
   const [websiteState, websiteAction] = useFormState(updateWebsiteAction, initial);
+  const [contactPageState, contactPageAction] = useFormState(updateContactPageAction, initial);
   const [notesState, notesAction] = useFormState(updateNotesAction, initial);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
@@ -86,6 +89,23 @@ export default function AdminControls(props: {
           <button type="submit" className="btn btn-primary btn-sm" disabled={busy}>Lagre nettsted</button>
           {websiteState.error && <p className="form-error" style={{ margin: 0 }}>{websiteState.error}</p>}
           {websiteState.ok && <p className="form-ok" style={{ margin: 0 }}>{websiteState.ok}</p>}
+        </form>
+
+        <form action={contactPageAction} style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+          <input type="hidden" name="id" value={props.id} />
+          <label className="field" style={{ flex: 1, minWidth: 200 }}>
+            Kontaktside{' '}
+            <span className="muted">(siden med ansatte/kontaktpersoner — leses først ved neste AI-kjøring)</span>
+            <input
+              type="text"
+              name="contactPage"
+              placeholder="https://firma.no/kontakt"
+              defaultValue={props.contactPage ?? ''}
+            />
+          </label>
+          <button type="submit" className="btn btn-primary btn-sm" disabled={busy}>Lagre kontaktside</button>
+          {contactPageState.error && <p className="form-error" style={{ margin: 0 }}>{contactPageState.error}</p>}
+          {contactPageState.ok && <p className="form-ok" style={{ margin: 0 }}>{contactPageState.ok}</p>}
         </form>
 
         <form action={notesAction} style={{ display: 'grid', gap: 8 }}>

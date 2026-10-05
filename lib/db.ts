@@ -69,6 +69,7 @@ export interface Company {
   website_search_attempted_at: number | null;
   ai_attempted_at: number | null;
   contacts_scraped_at: number | null;
+  contact_page_url: string | null; // admin-set page with the people (read first by ai.extractContacts)
   news_checked_at: number | null;
   konsern_root_orgnr: string | null; // registered group's top parent (Brreg konsernstruktur)
   konsern_root_name: string | null;
@@ -220,6 +221,7 @@ const CONTACT_COLUMNS = [
   'email TEXT',
   'ai_attempted_at INTEGER',
   'contacts_scraped_at INTEGER',
+  'contact_page_url TEXT',
   'news_checked_at INTEGER',
   'konsern_root_orgnr TEXT',
   'konsern_root_name TEXT',
@@ -1120,6 +1122,17 @@ export async function setCompanyWebsite(id: number, website: string | null): Pro
   await c.execute({ sql: 'UPDATE companies SET website = ?, updated_at = ? WHERE id = ?', args: [website, Date.now(), id] });
 }
 
+// The company's own page that lists its people, set by an admin when the
+// crawler doesn't find it (framo.com/contact). Saving it queues the company
+// for a new contact read on the next AI run.
+export async function setCompanyContactPage(id: number, url: string | null): Promise<void> {
+  const c = await db();
+  await c.execute({
+    sql: 'UPDATE companies SET contact_page_url = ?, contacts_scraped_at = NULL, updated_at = ? WHERE id = ?',
+    args: [url, Date.now(), id],
+  });
+}
+
 // Auto-filled from Brønnøysund's roller API during enrichment (lib/scan.ts) —
 // the one contact field that comes from an official source rather than admin entry.
 // `ceoChanged` stamps `ceo_changed_at` so the UI can flag a leadership change as a
@@ -1556,8 +1569,10 @@ export async function countBrregStale(staleDays = 3): Promise<number> {
 
 // A website we've never successfully read for contacts (and that has none
 // stored — rows from before contacts_scraped_at existed count as read).
-const NEEDS_CONTACT_SCRAPE = `(co.website IS NOT NULL AND co.contacts_scraped_at IS NULL
-  AND NOT EXISTS (SELECT 1 FROM company_contacts cc WHERE cc.company_id = co.id AND cc.source = 'nettside'))`;
+// A contact page set by an admin always counts (it's set to be read).
+const NEEDS_CONTACT_SCRAPE = `((co.website IS NOT NULL OR co.contact_page_url IS NOT NULL) AND co.contacts_scraped_at IS NULL
+  AND (co.contact_page_url IS NOT NULL
+    OR NOT EXISTS (SELECT 1 FROM company_contacts cc WHERE cc.company_id = co.id AND cc.source = 'nettside')))`;
 // News is re-searched every NEWS_REFRESH_DAYS (Google Search-grounded, billed
 // per search — 5,000/month free across Gemini 3.x).
 export const NEWS_REFRESH_DAYS = 30;

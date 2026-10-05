@@ -13,6 +13,7 @@ import {
   setCompanyStatus,
   setCompanyNotes,
   setCompanyWebsite,
+  setCompanyContactPage,
   setCompanyContacts,
   deleteCompany,
   countAiPending,
@@ -44,6 +45,29 @@ export async function updateNotesAction(_prev: ActionState, formData: FormData):
   await audit('company.notes', { actor: user.email, target: `company:${id}` });
   revalidatePath('/company');
   return { ok: 'Notater lagret.' };
+}
+
+// The page on the company's own site that lists its people. Read first on
+// the next AI run (the company is queued for it). The fetch itself goes
+// through safeFetch's SSRF guard, so only the URL shape is checked here.
+export async function updateContactPageAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const user = await guard('admin-contactpage');
+  const id = Number(formData.get('id'));
+  if (!id || !(await getCompany(id))) return { error: 'Ukjent selskap.' };
+  let raw = String(formData.get('contactPage') ?? '').trim();
+  if (raw && !/^https?:\/\//i.test(raw)) raw = `https://${raw}`;
+  if (raw) {
+    try {
+      const u = new URL(raw);
+      if (!/^https?:$/.test(u.protocol) || !u.hostname.includes('.') || raw.length > 500) throw new Error();
+    } catch {
+      return { error: 'Ser ikke ut som en gyldig nettadresse.' };
+    }
+  }
+  await setCompanyContactPage(id, raw || null);
+  await audit('company.contactpage', { actor: user.email, target: `company:${id}` });
+  revalidatePath('/company');
+  return { ok: raw ? 'Kontaktside lagret — leses ved neste AI-kjøring.' : 'Kontaktside fjernet.' };
 }
 
 // Manual override for when Brønnøysund has no `hjemmeside` registered —
