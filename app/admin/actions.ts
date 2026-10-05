@@ -14,6 +14,7 @@ import {
   setCompanyNotes,
   setCompanyWebsite,
   setCompanyContactPage,
+  setCompanyMeeting,
   setCompanyContacts,
   deleteCompany,
   countAiPending,
@@ -45,6 +46,20 @@ export async function updateNotesAction(_prev: ActionState, formData: FormData):
   await audit('company.notes', { actor: user.email, target: `company:${id}` });
   revalidatePath('/company');
   return { ok: 'Notater lagret.' };
+}
+
+// «Bedriftsmøte»: date + notes before and after the meeting.
+export async function updateMeetingAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const user = await guard('admin-meeting');
+  const id = Number(formData.get('id'));
+  if (!id || !(await getCompany(id))) return { error: 'Ukjent selskap.' };
+  const text = (k: string) => String(formData.get(k) ?? '').trim().slice(0, 8000) || null;
+  const date = String(formData.get('date') ?? '').trim();
+  if (date && !/^\d{4}-\d{2}-\d{2}$/.test(date)) return { error: 'Ugyldig dato.' };
+  await setCompanyMeeting(id, { date: date || null, prep: text('prep'), notes: text('notes') });
+  await audit('company.meeting', { actor: user.email, target: `company:${id}` });
+  revalidatePath('/company');
+  return { ok: 'Møtenotater lagret.' };
 }
 
 // The page on the company's own site that lists its people. Read first on

@@ -70,6 +70,9 @@ export interface Company {
   ai_attempted_at: number | null;
   contacts_scraped_at: number | null;
   contact_page_url: string | null; // admin-set page with the people (read first by ai.extractContacts)
+  meeting_date: string | null; // «Bedriftsmøte» tab: YYYY-MM-DD
+  meeting_prep: string | null; // notes before the meeting
+  meeting_notes: string | null; // summary after the meeting
   news_checked_at: number | null;
   konsern_root_orgnr: string | null; // registered group's top parent (Brreg konsernstruktur)
   konsern_root_name: string | null;
@@ -222,6 +225,9 @@ const CONTACT_COLUMNS = [
   'ai_attempted_at INTEGER',
   'contacts_scraped_at INTEGER',
   'contact_page_url TEXT',
+  'meeting_date TEXT',
+  'meeting_prep TEXT',
+  'meeting_notes TEXT',
   'news_checked_at INTEGER',
   'konsern_root_orgnr TEXT',
   'konsern_root_name TEXT',
@@ -1120,6 +1126,19 @@ export async function setCompanyNotes(id: number, notes: string | null): Promise
 export async function setCompanyWebsite(id: number, website: string | null): Promise<void> {
   const c = await db();
   await c.execute({ sql: 'UPDATE companies SET website = ?, updated_at = ? WHERE id = ?', args: [website, Date.now(), id] });
+}
+
+// «Bedriftsmøte» tab on the company page: date, preparation notes and the
+// summary afterwards. One meeting per company for now.
+export async function setCompanyMeeting(
+  id: number,
+  m: { date: string | null; prep: string | null; notes: string | null },
+): Promise<void> {
+  const c = await db();
+  await c.execute({
+    sql: 'UPDATE companies SET meeting_date = ?, meeting_prep = ?, meeting_notes = ?, updated_at = ? WHERE id = ?',
+    args: [m.date, m.prep, m.notes, Date.now(), id],
+  });
 }
 
 // The company's own page that lists its people, set by an admin when the

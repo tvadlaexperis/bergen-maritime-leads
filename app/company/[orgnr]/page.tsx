@@ -29,6 +29,7 @@ import { bandFor } from '@/app/components/ScoreBadge';
 import type { LeadAnalysis, ScoreVerdict, SignalLevel } from '@/lib/orchestrator/providers/ai';
 import BackArrow from '@/app/components/BackArrow';
 import AdminControls from './AdminControls';
+import MeetingTab from './MeetingTab';
 import { AdminPanelProvider, AdminPanelToggle, AdminPanelModal } from './AdminPanel';
 import AutoRefreshTrigger from './AutoRefreshTrigger';
 import ContactsEditForm from './ContactsEditForm';
@@ -362,6 +363,19 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
                     <p className="muted" style={{ fontSize: '0.86rem' }}>
                       Ingen AI-vurdering ennå. {isAdmin ? 'Bruk «Oppdater fra registrene» under.' : 'Neste skann beregner en.'}
                     </p>
+                  ),
+                },
+                {
+                  key: 'meeting',
+                  label: 'Bedriftsmøte',
+                  content: (
+                    <MeetingTab
+                      id={co.id}
+                      date={co.meeting_date}
+                      prep={co.meeting_prep}
+                      notes={co.meeting_notes}
+                      canEdit={isAdmin}
+                    />
                   ),
                 },
               ]}
