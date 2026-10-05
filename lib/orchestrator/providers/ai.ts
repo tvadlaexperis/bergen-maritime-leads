@@ -223,9 +223,16 @@ function buildPrompt(input: LeadAnalysisInput): string {
     'bransjeutfordringer, ALDRI som påstander om at akkurat dette selskapet har problemet. "relevance" er én setning ' +
     'om hvordan IT-/teknologikonsulenter eller bemanning konkret kan hjelpe med utfordringen (bruk vinklingen i ' +
     'listen som utgangspunkt).\n' +
-    '- "pitch" skal bygge på den mest relevante av "industryChallenges" som inngang — formulert som et spørsmål ' +
-    'eller en hypotese («Mange i bransjen bruker mye tid på … — hvordan løser dere det?»), ALDRI som en påstand om ' +
-    'at selskapet har problemet. 1-2 av "questions" kan også ta utgangspunkt i utfordringene.\n' +
+    '- "pitch" skal kobles til akkurat dette selskapet: nevn minst ett konkret faktum fra listen over (f.eks. antall ' +
+    'ansatte, omsetningsvekst eller -fall, en nyhetssak, en stillingsannonse, en teknologi fra nettsiden) og knytt det ' +
+    'til den mest relevante av "industryChallenges". Formuler det som et spørsmål eller en hypotese, ALDRI som en ' +
+    'påstand om at selskapet har problemet. Eksempel: «Med 120 ansatte og 30 % vekst i fjor blir rapporteringen ' +
+    'til EU ETS fort en jobb for flere — hvem tar den hos dere?»\n' +
+    '- "questions": minst to av spørsmålene skal vise til noe konkret om selskapet eller den spesifikke ' +
+    'bransjeutfordringen (ikke generelt om "IT" eller "digitalisering"). Høyst ett spørsmål om innleie/konsulenter.\n' +
+    '- FORBUDTE standardfraser (de går igjen på alle selskaper og sier ingenting): «Mange innen …», «kapasitets- og ' +
+    'kompetanseutfordringer», «økte digitaliseringsbehov», «spisskompetanse på teknologi», «Bruker dere eksterne ' +
+    'konsulenter i dag», «hvordan løser dere dette internt». Skriv heller noe som bare passer dette selskapet.\n' +
     '- "customerCategory" klassifiserer selskapet som kunde for Experis: "svært aktuell", "aktuell", "mulig" (krever ' +
     'mer undersøkelse), "lite aktuell", "ikke aktuell" eller "konkurrent". Bruk "konkurrent" når selskapet selv ' +
     'primært selger IT-konsulenter, bemanning eller rekruttering — da er det et mulig konkurrent/leverandør, ikke en ' +
