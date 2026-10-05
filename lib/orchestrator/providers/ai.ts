@@ -32,6 +32,8 @@ export interface LeadAnalysisInput {
   technologies?: string[]; // named on the company's own website (documented)
   itEnvironment?: string | null; // 'ja' | 'nei' | 'ukjent', from the website
   digitalProducts?: string | null;
+  /** Known challenges for the company's segment (lib/industryChallenges.ts). */
+  industryKnown?: { challenge: string; angle: string }[];
 }
 
 export type ScoreVerdict = 'positiv' | 'negativ' | 'nøytral' | 'ukjent';
@@ -187,6 +189,11 @@ function buildPrompt(input: LeadAnalysisInput): string {
       ? `Teknologi/systemer nevnt på egen nettside: ${input.technologies.join(', ')}`
       : 'Teknologi: ingen nevnt på nettsiden (eller ikke lest ennå).',
     `Eget IT-miljø ifølge nettsiden: ${input.itEnvironment ?? 'ukjent'}. Egne digitale produkter: ${input.digitalProducts ?? 'ukjent'}.`,
+    input.industryKnown?.length
+      ? `Kjente utfordringer i bransjen (generell kunnskap — velg de mest relevante for "industryChallenges"):\n${input.industryKnown
+          .map((c) => `  - ${c.challenge} (IT/bemanning: ${c.angle})`)
+          .join('\n')}`
+      : null,
   ]
     .filter(Boolean)
     .join('\n');
@@ -207,12 +214,15 @@ function buildPrompt(input: LeadAnalysisInput): string {
     'name til null og forklar i reason hvem man bør prøve å identifisere (f.eks. daglig leder eller IT-ansvarlig).\n' +
     '- "avoidClaiming" skal liste 2-4 konkrete ting selgeren IKKE bør påstå som fakta uten å få det bekreftet av kunden ' +
     '(f.eks. antatt teknologibruk, antatte behov).\n' +
-    '- "industryChallenges" er et UNNTAK fra regelen om bare å bruke faktaene over: list 2-4 kjente utfordringer som ' +
-    'selskapets maritime segment/bransje generelt står overfor i dag (f.eks. regulering som EU ETS, FuelEU Maritime og ' +
-    'IMOs klimakrav, utslippsrapportering, cybersikkerhet, mangel på fagfolk, digitalisering av drift og flåtestyring). ' +
-    'Dette er generell bransjekunnskap — skriv det som bransjeutfordringer, ALDRI som påstander om at akkurat dette ' +
-    'selskapet har problemet. "relevance" er én setning om hvorfor utfordringen kan åpne for en samtale om IT-/' +
-    'teknologikonsulenter eller bemanning.\n' +
+    '- "industryChallenges" er et UNNTAK fra regelen om bare å bruke faktaene over: list 2-4 utfordringer som ' +
+    'akkurat dette selskapets bransje står overfor i dag. Står det "Kjente utfordringer i bransjen" under, VELG de ' +
+    '2-4 som passer best for dette selskapet (ut fra segment, størrelse, regnskap og nyheter) og skriv dem konkret ' +
+    'for denne bransjen — f.eks. lakselus og fiskehelse for oppdrett, kvoter for fiske, EU ETS for rederier. Ikke ' +
+    'bruk generelle utfordringer som "cybersikkerhet", "mangel på fagfolk" eller "digitalisering" alene; de er bare ' +
+    'med når de står i listen og er knyttet til noe bransjespesifikt. Dette er bransjekunnskap — skriv det som ' +
+    'bransjeutfordringer, ALDRI som påstander om at akkurat dette selskapet har problemet. "relevance" er én setning ' +
+    'om hvordan IT-/teknologikonsulenter eller bemanning konkret kan hjelpe med utfordringen (bruk vinklingen i ' +
+    'listen som utgangspunkt).\n' +
     '- "pitch" skal bygge på den mest relevante av "industryChallenges" som inngang — formulert som et spørsmål ' +
     'eller en hypotese («Mange i bransjen bruker mye tid på … — hvordan løser dere det?»), ALDRI som en påstand om ' +
     'at selskapet har problemet. 1-2 av "questions" kan også ta utgangspunkt i utfordringene.\n' +

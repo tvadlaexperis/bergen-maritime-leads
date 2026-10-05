@@ -1,5 +1,6 @@
 import { orchestrator } from './orchestrator/boot';
 import type { LeadScoreResult } from './orchestrator/providers/score';
+import { industryChallengesFor } from './industryChallenges';
 import {
   aiConfigured,
   aiSetup,
@@ -528,6 +529,7 @@ async function aiPass(
         poststed: company.poststed,
         sector: company.matched_label,
         nace: company.nace1_text,
+        industryKnown: industryChallengesFor(company.matched_code),
         employees: company.employees,
         financials: toCompanyFinancials(history).map((f) => ({
           year: f.year,
