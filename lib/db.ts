@@ -260,6 +260,13 @@ const ONCE_MIGRATIONS: { key: string; sql: string }[] = [
           WHERE ai_analysis IS NOT NULL AND ai_analysis NOT LIKE '%industryChallenges%'`,
   },
   {
+    // Industry challenges gained "details" (shown when a card is clicked).
+    // Re-queue analyses without it; the old one stays visible meanwhile.
+    key: '2026-10-06-challenge-details-requeue',
+    sql: `UPDATE companies SET ai_analysis_at = NULL
+          WHERE ai_analysis LIKE '%industryChallenges%' AND ai_analysis NOT LIKE '%"details"%'`,
+  },
+  {
     // konsern_root_orgnr is new; companies with a registered parent need a
     // Brreg pass to fill it in, so mark them due for the next scan.
     key: '2026-09-28-konsern-root-refresh',

@@ -886,10 +886,21 @@ function EntryTab({ analysis, liCompany }: { analysis: LeadAnalysis; liCompany: 
             }}
           >
             {analysis.industryChallenges.map((c, i) => (
-              <div key={i} className="challenge-card">
-                <strong style={{ fontSize: '0.86rem' }}>{c.challenge}</strong>
-                <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', lineHeight: 1.45 }}>{c.relevance}</span>
-              </div>
+              // Native <details>: click a card to read the longer explanation.
+              <details key={i} className="challenge-card">
+                <summary>
+                  <strong style={{ fontSize: '0.86rem' }}>{c.challenge}</strong>
+                  <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', lineHeight: 1.45 }}>{c.relevance}</span>
+                  <span className="challenge-more">Vis mer</span>
+                </summary>
+                <p style={{ margin: '8px 0 0', fontSize: '0.82rem', lineHeight: 1.5 }}>
+                  {c.details ?? (
+                    <span className="muted">
+                      Utdypingen lages ved neste AI-vurdering av selskapet (Admin → Datakvalitet).
+                    </span>
+                  )}
+                </p>
+              </details>
             ))}
           </div>
         ) : (

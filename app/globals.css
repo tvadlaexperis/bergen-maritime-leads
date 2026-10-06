@@ -1146,7 +1146,19 @@ a {
   border-left: 3px solid var(--signal);
   border-radius: var(--radius-control);
   background: var(--surface-raised);
+  align-self: start;
 }
+.challenge-card summary {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  cursor: pointer;
+  list-style: none;
+}
+.challenge-card summary::-webkit-details-marker { display: none; }
+.challenge-card:hover { border-color: var(--accent); border-left-color: var(--signal); }
+.challenge-more { font-size: 0.74rem; color: var(--accent); margin-top: 2px; }
+.challenge-card[open] .challenge-more { display: none; }
 
 /* «Hvorfor aktuell»: score bars left, AI factors right; one column when narrow. */
 .score-split {

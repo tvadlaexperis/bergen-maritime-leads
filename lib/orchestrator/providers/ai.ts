@@ -54,7 +54,7 @@ export interface LeadAnalysis {
   avoidClaiming: string[];
   /** Segment-level challenges (general industry knowledge, not facts about
    *  this company). Absent on analyses made before it was added. */
-  industryChallenges?: { challenge: string; relevance: string }[];
+  industryChallenges?: { challenge: string; relevance: string; details?: string }[];
   /** Customer relevance class (spec §4) and why. Absent on older analyses. */
   customerCategory?: CustomerCategory;
   categoryReason?: string;
@@ -113,8 +113,8 @@ const ANALYSIS_SCHEMA = {
       type: 'array',
       items: {
         type: 'object',
-        properties: { challenge: { type: 'string' }, relevance: { type: 'string' } },
-        required: ['challenge', 'relevance'],
+        properties: { challenge: { type: 'string' }, relevance: { type: 'string' }, details: { type: 'string' } },
+        required: ['challenge', 'relevance', 'details'],
       },
     },
     pitch: { type: 'string' },
@@ -222,7 +222,10 @@ function buildPrompt(input: LeadAnalysisInput): string {
     'med når de står i listen og er knyttet til noe bransjespesifikt. Dette er bransjekunnskap — skriv det som ' +
     'bransjeutfordringer, ALDRI som påstander om at akkurat dette selskapet har problemet. "relevance" er én setning ' +
     'om hvordan IT-/teknologikonsulenter eller bemanning konkret kan hjelpe med utfordringen (bruk vinklingen i ' +
-    'listen som utgangspunkt).\n' +
+    'listen som utgangspunkt). "details" er en utdyping på 4-6 setninger som vises når selgeren klikker på ' +
+    'utfordringen: hva utfordringen går ut på i praksis, hvorfor den er aktuell nå (regelverk, frister, ' +
+    'markedsutvikling), hvilke konkrete oppgaver eller roller IT-/teknologikonsulenter eller bemanning typisk løser, ' +
+    'og ett godt oppfølgingsspørsmål selgeren kan stille. Fortsatt bransjekunnskap, ikke påstander om selskapet.\n' +
     '- "pitch" skal kobles til akkurat dette selskapet: nevn minst ett konkret faktum fra listen over (f.eks. antall ' +
     'ansatte, omsetningsvekst eller -fall, en nyhetssak, en stillingsannonse, en teknologi fra nettsiden) og knytt det ' +
     'til den mest relevante av "industryChallenges". Formuler det som et spørsmål eller en hypotese, ALDRI som en ' +
