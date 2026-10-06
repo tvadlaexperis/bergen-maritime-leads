@@ -225,41 +225,6 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
               {co.poststed ? ` · ${co.poststed}` : ''}
               {co.matched_group ? ` · ${co.matched_group}` : ''}
             </p>
-            {groupMembers.length > 1 ? (
-              // One customer, several legal entities — show them together,
-              // and say whether the register or our inference joined them.
-              <div className="group-panel">
-                <span className="group-panel-title">
-                  <KonsernIcon /> Konsern · {groupMembers.length} selskaper i oversikten
-                  {groupBasis && (
-                    <span className={`group-panel-basis${groupBasis.documented ? ' documented' : ''}`} title={groupBasis.text}>
-                      {groupBasis.documented ? 'registrert' : groupBasis.partly ? 'delvis registrert' : 'sannsynlig'}
-                    </span>
-                  )}
-                </span>
-                <span style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                  {groupMembers.map((m) =>
-                    m.orgnr === co.orgnr ? (
-                      <span key={m.orgnr} className="group-chip current">
-                        {m.name}
-                      </span>
-                    ) : (
-                      <Link key={m.orgnr} href={`/company/${m.orgnr}`} className="group-chip">
-                        {m.name}
-                      </Link>
-                    ),
-                  )}
-                </span>
-                {groupBasis && <span className="muted" style={{ fontSize: '0.74rem' }}>{groupBasis.text}</span>}
-              </div>
-            ) : (
-              co.parent_orgnr && (
-                <p className="muted" style={{ fontSize: '0.82rem', marginTop: 4 }}>
-                  Del av konsernet{' '}
-                  <span style={{ color: 'var(--text-primary)' }}>{co.konsern_root_name ?? co.parent_name ?? co.parent_orgnr}</span>
-                </p>
-              )
-            )}
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'flex-end' }}>
             <p style={{ fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
@@ -590,6 +555,41 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
             content: (
       <div className="split-scroll">
         <div className="split-scroll-col">
+            {groupMembers.length > 1 ? (
+              // One customer, several legal entities — show them together,
+              // and say whether the register or our inference joined them.
+              <div className="group-panel">
+                <span className="group-panel-title">
+                  <KonsernIcon /> Konsern · {groupMembers.length} selskaper i oversikten
+                  {groupBasis && (
+                    <span className={`group-panel-basis${groupBasis.documented ? ' documented' : ''}`} title={groupBasis.text}>
+                      {groupBasis.documented ? 'registrert' : groupBasis.partly ? 'delvis registrert' : 'sannsynlig'}
+                    </span>
+                  )}
+                </span>
+                <span style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  {groupMembers.map((m) =>
+                    m.orgnr === co.orgnr ? (
+                      <span key={m.orgnr} className="group-chip current">
+                        {m.name}
+                      </span>
+                    ) : (
+                      <Link key={m.orgnr} href={`/company/${m.orgnr}`} className="group-chip">
+                        {m.name}
+                      </Link>
+                    ),
+                  )}
+                </span>
+                {groupBasis && <span className="muted" style={{ fontSize: '0.74rem' }}>{groupBasis.text}</span>}
+              </div>
+            ) : (
+              co.parent_orgnr && (
+                <p className="muted" style={{ fontSize: '0.82rem', marginTop: 4 }}>
+                  Del av konsernet{' '}
+                  <span style={{ color: 'var(--text-primary)' }}>{co.konsern_root_name ?? co.parent_name ?? co.parent_orgnr}</span>
+                </p>
+              )
+            )}
           {/* Teknologi og kunderelevans (spec §3–4). Two kinds of information,
               labelled apart: what the company's own website says (documented,
               each item linked to its page) and the AI's classification. */}

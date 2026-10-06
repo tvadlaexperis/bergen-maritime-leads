@@ -1243,7 +1243,6 @@ a {
   border: 1px solid var(--accent-border);
   border-radius: var(--radius-control);
   background: var(--accent-soft);
-  max-width: 760px;
 }
 .group-panel-title {
   display: inline-flex;
