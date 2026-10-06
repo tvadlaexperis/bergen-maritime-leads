@@ -2,14 +2,25 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { runAiQueueAction, aiProgressAction } from "./actions";
+import { runAiQueueAction, aiProgressAction, aiPendingCountsAction } from "./actions";
 import type { AiProgress } from "@/lib/db";
-import ConfirmDialog from "./ConfirmDialog";
 import { publishLiveRun } from "./LiveRun";
 import { groupScanErrors } from "@/lib/scanErrors";
 
 /** Window event the confirm card (NextAiRun) fires to start the AI run. */
 export const START_AI_EVENT = "admin-start-ai";
+/** How many top leads (konsern counted once) a run covers — same as AI_TOP_CHOICES in lib/db. */
+const TOP_CHOICES = [50, 100, 200, 500];
+const USD_NOK = 10.5; // same rough rate as lib/aiUsage
+
+// "ca. 1,2 mill. tokens · ca. 14 kr" — estimated from list prices.
+function fmtUsage(t: { tokens: number; costUsd: number }): string {
+  const tok = t.tokens >= 1_000_000
+    ? `${(t.tokens / 1_000_000).toFixed(1).replace(".", ",")} mill.`
+    : `${Math.round(t.tokens / 1000)}k`;
+  const nok = t.costUsd * USD_NOK;
+  return `ca. ${tok} tokens · ca. ${nok < 10 ? nok.toFixed(2).replace(".", ",") : Math.round(nok)} kr`;
+}
 
 type Totals = {
   runs: number;
@@ -21,6 +32,8 @@ type Totals = {
   newsSearched: number;
   scraped: number;
   errors: number;
+  tokens: number;
+  costUsd: number;
 };
 const ZERO: Totals = {
   runs: 0,
@@ -32,6 +45,8 @@ const ZERO: Totals = {
   newsSearched: 0,
   scraped: 0,
   errors: 0,
+  tokens: 0,
+  costUsd: 0,
 };
 
 // «AI-vurdering»: runs AI-only scans until the AI queue is empty (analysis,
@@ -59,6 +74,12 @@ export default function RunUpdateAllButton({
   const [waitLeft, setWaitLeft] = useState(0);
   const stopRef = useRef(false);
   const [ask, setAsk] = useState(false);
+  const [topN, setTopN] = useState(50);
+  const topNRef = useRef(50);
+  const [counts, setCounts] = useState<Record<number, number> | null>(null);
+  useEffect(() => {
+    if (ask) aiPendingCountsAction().then(setCounts).catch(() => {});
+  }, [ask]);
   // The confirm card in «Siste kjøringer» (NextAiRun) starts the same run.
   const runRef = useRef<() => void>(() => {});
   useEffect(() => {
@@ -103,7 +124,7 @@ export default function RunUpdateAllButton({
     let rateLimitWaits = 0;
     try {
       while (!stopRef.current) {
-        const r = await runAiQueueAction();
+        const r = await runAiQueueAction(topNRef.current);
         if ("error" in r) {
           setMsg(r.error);
           break;
@@ -118,6 +139,8 @@ export default function RunUpdateAllButton({
           newsSearched: t.newsSearched + r.newsSearched,
           scraped: t.scraped + r.scraped,
           errors: t.errors + r.errors,
+          tokens: t.tokens + r.inputTokens + r.outputTokens,
+          costUsd: t.costUsd + r.costUsd,
         };
         setTotals(t);
         setLastError(r.firstError);
@@ -125,7 +148,7 @@ export default function RunUpdateAllButton({
         router.refresh();
         if (r.remaining === 0) {
           setMsg(
-            "Ferdig — alle selskaper er AI-vurdert og alle kjente nettsider er lest.",
+            `Ferdig — topp ${topNRef.current} er AI-vurdert og alle kjente nettsider er lest.`,
           );
           break;
         }
@@ -184,7 +207,7 @@ export default function RunUpdateAllButton({
   if (running || totals.runs > 0) {
     const aiPart = `AI: ${totals.analyses} vurdert, ${totals.news} nyheter, ${totals.websites} nettsider, kontakter hos ${totals.contacts}${
       totals.errors ? `, ${totals.errors} feil` : ""
-    }, ${remaining} igjen`;
+    }, ${remaining} igjen · ${fmtUsage(totals)}`;
     const now = !running
       ? null
       : waitLeft > 0
@@ -220,7 +243,9 @@ export default function RunUpdateAllButton({
     publishLiveRun({
       title: running ? "AI-vurdering pågår" : "AI-vurdering ferdig",
       running,
-      status: status?.replace(/^AI-vurdering · /, "") ?? null,
+      status: [status?.replace(/^AI-vurdering · /, ""), totals.runs > 0 && !status?.includes("tokens") ? fmtUsage(totals) : null]
+        .filter(Boolean)
+        .join(" · ") || null,
       error,
       steps: [
         // The larger of the polled count and the finished runs' sums — the
@@ -245,36 +270,83 @@ export default function RunUpdateAllButton({
       {stopping ? "Stopper…" : "Stopp AI"}
     </button>
   ) : (
-    <>
-      <ConfirmDialog
-        open={ask}
-        title="AI-vurdering"
-        confirmLabel="Start AI-vurdering"
-        onCancel={() => setAsk(false)}
-        onConfirm={() => {
-          setAsk(false);
-          run();
-        }}
-      >
-        <p>
-          Lager AI-vurdering, henter nyheter og leser kontakter fra nettsiden
-          for {remaining} selskaper i køen, de med høyest score først.
-        </p>
-        <p>
-          Bruker {aiService} og <strong>koster penger</strong>.
-        </p>
-        <p className="muted">
-          Kjører så lenge siden er åpen, og kan stoppes underveis.
-        </p>
-      </ConfirmDialog>
+    <span style={{ position: "relative" }}>
       <button
         className="btn btn-ghost btn-sm"
-        disabled={!aiEnabled || remaining === 0}
-        onClick={() => setAsk(true)}
-        title={aiEnabled ? "Kjører AI-køen til den er tom — koster penger" : "AI er ikke konfigurert"}
+        disabled={!aiEnabled}
+        aria-expanded={ask}
+        onClick={() => setAsk((a) => !a)}
+        title={aiEnabled ? "Vis hva AI-vurderingen gjør — koster penger" : "AI er ikke konfigurert"}
       >
         AI-vurdering ({remaining})
       </button>
-    </>
+      {ask && (
+        <div
+          className="box box-pad"
+          style={{
+            position: "absolute",
+            top: "calc(100% + 6px)",
+            left: 0,
+            zIndex: 50,
+            width: "min(380px, calc(100vw - 32px))",
+            display: "grid",
+            gap: 10,
+            fontSize: "0.85rem",
+            lineHeight: 1.5,
+            textAlign: "left",
+          }}
+        >
+          <p style={{ margin: 0 }}>
+            Lager AI-vurdering, henter nyheter og leser kontakter fra nettsiden
+            for selskapene med høyest lead-score (et konsern teller én gang).
+            Bare de som mangler noe, eller har en vurdering eldre enn 30 dager,
+            blir oppdatert.
+          </p>
+          <div>
+            <div className="muted" style={{ fontSize: "0.78rem", marginBottom: 4 }}>Hvor mange?</div>
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              {TOP_CHOICES.map((n) => (
+                <button
+                  key={n}
+                  type="button"
+                  className={`btn btn-sm ${topN === n ? "btn-primary" : "btn-ghost"}`}
+                  aria-pressed={topN === n}
+                  onClick={() => setTopN(n)}
+                >
+                  Topp {n}
+                  {counts ? ` (${counts[n]})` : ""}
+                </button>
+              ))}
+            </div>
+            <div className="muted" style={{ fontSize: "0.78rem", marginTop: 4 }}>
+              {counts
+                ? `${counts[topN]} selskaper trenger oppdatering · ca. ${Math.max(1, Math.ceil(counts[topN] / 12))} min`
+                : "Teller …"}
+            </div>
+          </div>
+          <p style={{ margin: 0 }}>
+            Bruker {aiService} og <strong>koster penger</strong>. Kjører så lenge
+            siden er åpen, og kan stoppes underveis.
+          </p>
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => setAsk(false)}>
+              Avbryt
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary btn-sm"
+              disabled={counts?.[topN] === 0}
+              onClick={() => {
+                setAsk(false);
+                topNRef.current = topN;
+                run();
+              }}
+            >
+              Bekreft — oppdater topp {topN}
+            </button>
+          </div>
+        </div>
+      )}
+    </span>
   );
 }

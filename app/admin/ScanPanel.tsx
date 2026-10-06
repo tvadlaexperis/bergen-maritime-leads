@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { USD_NOK } from "@/lib/aiUsage";
 import { getCompanyNames, countAiPending, type Scan } from "@/lib/db";
 import { aiConfigured, aiSetup } from "@/lib/orchestrator/providers/ai";
 import NextAiRun from "./NextAiRun";
@@ -394,6 +395,8 @@ function ScanDetailsView({
               `, ${d.ai.sitesScraped} nettsider lest`}
             {d.ai.newsSearched != null &&
               `, nyheter søkt for ${d.ai.newsSearched} (${d.ai.newsFound ?? 0} nye artikler)`}
+            {d.ai.usage &&
+              ` · ca. ${Math.round((d.ai.usage.inputTokens + d.ai.usage.outputTokens) / 1000)}k tokens, ca. ${(d.ai.usage.costUsd * USD_NOK).toFixed(2).replace(".", ",")} kr`}
             .
           </>
         ) : (

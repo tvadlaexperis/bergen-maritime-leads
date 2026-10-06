@@ -1615,6 +1615,16 @@ export const SEARCH_MIN_SCORE = 40;
 const LATEST_SCORE = `(SELECT lead_score FROM company_scores WHERE company_id = co.id ORDER BY computed_at DESC, id DESC LIMIT 1)`;
 const NEWS_DUE = `(COALESCE(${LATEST_SCORE}, 0) >= ${SEARCH_MIN_SCORE} AND (co.news_checked_at IS NULL
   OR co.news_checked_at < CAST(strftime('%s', 'now') AS INTEGER) * 1000 - ${NEWS_REFRESH_DAYS} * 86400000))`;
+// The AI queue only covers the AI_TOP_N best leads, counting a konsern once
+// (its best-scoring member) — keeps the paid AI work on who sales actually calls.
+export const AI_TOP_N = 50;
+export const AI_TOP_CHOICES = [50, 100, 200, 500];
+const aiEligible = (topN: number) => `co.orgnr IN (SELECT orgnr FROM (
+    SELECT c2.orgnr, ROW_NUMBER() OVER (PARTITION BY COALESCE(c2.konsern_root_orgnr, c2.orgnr)
+      ORDER BY COALESCE((SELECT lead_score FROM company_scores WHERE company_id = c2.id ORDER BY computed_at DESC, id DESC LIMIT 1), -1) DESC) AS rn,
+      COALESCE((SELECT lead_score FROM company_scores WHERE company_id = c2.id ORDER BY computed_at DESC, id DESC LIMIT 1), -1) AS s
+    FROM companies c2 WHERE c2.status = 'active'
+  ) WHERE rn = 1 ORDER BY s DESC LIMIT ${Math.max(1, Math.floor(topN))})`;
 const AI_PENDING = `(co.ai_analysis_at IS NULL OR ${NEEDS_CONTACT_SCRAPE} OR ${NEWS_DUE})`;
 
 // The AI pass (ai.analyze / findWebsite / extractContacts) is the slow,
@@ -1629,11 +1639,11 @@ const AI_PENDING = `(co.ai_analysis_at IS NULL OR ${NEEDS_CONTACT_SCRAPE} OR ${N
 // analysis (none, or older than 30 days) go before news/contacts-only work —
 // the analysis is the main value, and the only step that can fall back to
 // the free Gemini key when the paid one is capped.
-export async function listCompaniesForAi(limit: number): Promise<CompanyWithScore[]> {
+export async function listCompaniesForAi(limit: number, topN = AI_TOP_N): Promise<CompanyWithScore[]> {
   const c = await db();
   const res = await c.execute({
     sql: `SELECT co.*, ${SCORE_COLS} FROM companies co ${SCORE_JOIN}
-          WHERE co.status = 'active'
+          WHERE co.status = 'active' AND ${aiEligible(topN)}
           ORDER BY (NOT ${AI_PENDING}),
             (co.ai_analysis_at IS NOT NULL AND co.ai_analysis_at > ${Date.now() - 30 * 86_400_000}),
             COALESCE(co.ai_attempted_at, co.ai_analysis_at, 0) ASC,
@@ -1647,9 +1657,9 @@ export async function listCompaniesForAi(limit: number): Promise<CompanyWithScor
 // What "Kjør AI-køen" counts down: no AI analysis yet, or a website we've
 // never read for contacts. Only a success takes a company off the count,
 // not a failed attempt.
-export async function countAiPending(): Promise<number> {
+export async function countAiPending(topN = AI_TOP_N): Promise<number> {
   const c = await db();
-  const res = await c.execute(`SELECT COUNT(*) AS n FROM companies co WHERE co.status = 'active' AND ${AI_PENDING}`);
+  const res = await c.execute(`SELECT COUNT(*) AS n FROM companies co WHERE co.status = 'active' AND ${aiEligible(topN)} AND ${AI_PENDING}`);
   return Number((res.rows[0] as unknown as { n: number }).n);
 }
 

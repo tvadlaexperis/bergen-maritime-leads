@@ -1,4 +1,5 @@
 import { orchestrator } from './orchestrator/boot';
+import { resetAiUsage, getAiUsage, type AiUsage } from './aiUsage';
 import type { LeadScoreResult } from './orchestrator/providers/score';
 import { industryChallengesFor } from './industryChallenges';
 import {
@@ -98,6 +99,8 @@ export interface ScanDetails {
     sitesScraped?: number; // websites read for contacts (successful Gemini call, found people or not)
     newsSearched?: number; // companies whose news search completed
     newsFound?: number; // articles not stored before
+    /** Approximate tokens + cost for this run (lib/aiUsage) — absent on older runs. */
+    usage?: AiUsage;
   };
   // NAV job ads — optional: absent on scans from before it existed
   jobs?: {
@@ -764,6 +767,8 @@ export interface RunScanOptions {
   aiOnly?: boolean;
   /** Skip the AI pass — Brreg (and NAV) only, costs nothing ("Kjør skann" / "Full oppdatering"). */
   noAi?: boolean;
+  /** AI queue covers this many top leads (konsern counted once). Default AI_TOP_N. */
+  aiTopN?: number;
   /** How many companies the Brreg pass may consider this run (ignored when `full`). */
   limit?: number;
   /** Skip discovery — only refresh known companies. */
@@ -804,6 +809,7 @@ export async function runScan(opts: RunScanOptions = {}): Promise<ScanResult> {
   const aiEnabled = aiConfigured() && !opts.noAi;
   details.ai.enabled = aiEnabled;
   if (aiEnabled) details.ai.setup = aiSetup();
+  resetAiUsage();
 
   if (!opts.skipDiscovery) {
     details.discovery.ran = true;
@@ -869,7 +875,7 @@ export async function runScan(opts: RunScanOptions = {}): Promise<ScanResult> {
   // Pass 2 — AI, in whole waves that each still fit before the hard stop.
   if (aiEnabled) {
     const deadline = started + HARD_STOP_MS;
-    const queue = await listCompaniesForAi(Number(process.env.SCAN_AI_BATCH) || 12);
+    const queue = await listCompaniesForAi(Number(process.env.SCAN_AI_BATCH) || 12, opts.aiTopN);
     let i = 0;
     while (i < queue.length && deadline - Date.now() >= AI_MIN_WINDOW_MS) {
       const wave = queue.slice(i, i + AI_CONCURRENCY);
@@ -902,6 +908,7 @@ export async function runScan(opts: RunScanOptions = {}): Promise<ScanResult> {
     errors.push({ scope: 'konsern', message: e instanceof Error ? e.message : String(e) });
   }
 
+  if (aiEnabled) details.ai.usage = getAiUsage();
   details.changedCount = details.companies.length;
   details.companies.sort((a, b) => a.name.localeCompare(b.name, 'nb'));
   details.companies = details.companies.slice(0, 400);

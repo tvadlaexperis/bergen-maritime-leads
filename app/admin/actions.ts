@@ -18,6 +18,8 @@ import {
   setCompanyContacts,
   deleteCompany,
   countAiPending,
+  AI_TOP_N,
+  AI_TOP_CHOICES,
   countBrregStale,
   getAiProgressSince,
   type AiProgress,
@@ -200,7 +202,7 @@ export async function aiProgressAction(since: number): Promise<AiProgress> {
 // «Kjør AI-køen» button calls this back to back until `remaining` hits 0 —
 // each call is its own ≤60s request, so no single request outlives Vercel's
 // function limit however long the queue is.
-export async function runAiQueueAction(): Promise<
+export async function runAiQueueAction(topN: number = AI_TOP_N): Promise<
   | { error: string }
   | {
       processed: number;
@@ -216,11 +218,15 @@ export async function runAiQueueAction(): Promise<
       quotaGone: boolean;
       firstError: string | null;
       remaining: number;
+      inputTokens: number;
+      outputTokens: number;
+      costUsd: number;
     }
 > {
   const user = await guard('admin-ai-queue');
   if (!aiConfigured()) return { error: 'AI er ikke konfigurert (ANTHROPIC_API_KEY eller GEMINI_API_KEY mangler).' };
-  const r = await runScan({ aiOnly: true, skipDiscovery: true, trigger: 'ai' });
+  const n = AI_TOP_CHOICES.includes(Number(topN)) ? Number(topN) : AI_TOP_N;
+  const r = await runScan({ aiOnly: true, skipDiscovery: true, trigger: 'ai', aiTopN: n });
   const d = r.details.ai;
   await audit('scan.ai', {
     actor: user.email,
@@ -240,8 +246,19 @@ export async function runAiQueueAction(): Promise<
     quotaGone: r.errors.some((e) => /HTTP 402|credits are depleted|credit balance is too low|per day|free tier/i.test(e.message)),
     rateLimited: r.errors.some((e) => /HTTP 4(29|02)|RESOURCE_EXHAUSTED|quota|credits/i.test(e.message)),
     firstError: r.errors[0] ? `${r.errors[0].scope}: ${r.errors[0].message}` : null,
-    remaining: await countAiPending(),
+    remaining: await countAiPending(n),
+    inputTokens: d.usage?.inputTokens ?? 0,
+    outputTokens: d.usage?.outputTokens ?? 0,
+    costUsd: d.usage?.costUsd ?? 0,
   };
+}
+
+// Queue size for each «hvor mange» choice in the AI-vurdering confirm dialog.
+export async function aiPendingCountsAction(): Promise<Record<number, number>> {
+  await requireAdmin();
+  const out: Record<number, number> = {};
+  for (const n of AI_TOP_CHOICES) out[n] = await countAiPending(n);
+  return out;
 }
 
 export async function generateGuestLinkAction(

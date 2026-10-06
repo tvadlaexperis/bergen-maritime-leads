@@ -1,4 +1,5 @@
 import { safeFetchResult } from '../../http/safeFetch';
+import { recordAiUsage } from '../../aiUsage';
 
 // Anthropic Claude as the AI backend (lib/orchestrator/providers/ai.ts picks
 // it when ANTHROPIC_API_KEY is set). Haiku 4.5 by default — the cheapest
@@ -59,12 +60,18 @@ export async function claudeText(
   });
   if (!res.ok) throw new Error(`Claude ${res.reason}`);
 
-  let data: { content?: Block[]; stop_reason?: string };
+  let data: {
+    content?: Block[];
+    stop_reason?: string;
+    usage?: { input_tokens?: number; output_tokens?: number; server_tool_use?: { web_search_requests?: number } };
+  };
   try {
     data = JSON.parse(res.text);
   } catch {
     throw new Error('Claude: svaret var ikke gyldig JSON');
   }
+  const u = data.usage;
+  if (u) recordAiUsage(claudeModel(), u.input_tokens ?? 0, u.output_tokens ?? 0, u.server_tool_use?.web_search_requests ?? 0, true);
   const content = data.content ?? [];
 
   if (opts.schema) {

@@ -1,4 +1,5 @@
 import type { Provider } from '../types';
+import { recordAiUsage } from '../../aiUsage';
 import { safeFetchText, safeFetchResult } from '../../http/safeFetch';
 import { cleanWebsite } from '../../brreg';
 import { stripHtml, contactPageCandidates, deeperContactPages } from '../../website';
@@ -305,11 +306,25 @@ async function geminiTextOnce(apiKey: string, payload: Record<string, unknown>):
   });
   if (!res.ok) throw new Error(`Gemini ${res.reason}`);
 
-  let data: { status?: string; steps?: { type: string; content?: { text?: string }[] }[] };
+  let data: {
+    status?: string;
+    steps?: { type: string; content?: { text?: string }[] }[];
+    usage?: Record<string, number>;
+    usageMetadata?: Record<string, number>;
+  };
   try {
     data = JSON.parse(res.text);
   } catch {
     throw new Error('Gemini: svaret var ikke gyldig JSON');
+  }
+  // Field names differ between Gemini endpoints — take whichever is there.
+  const u = data.usage ?? data.usageMetadata;
+  if (u) {
+    recordAiUsage(
+      String(payload.model ?? GEMINI_MODEL),
+      u.total_input_tokens ?? u.input_tokens ?? u.promptTokenCount ?? 0,
+      (u.total_output_tokens ?? u.output_tokens ?? u.candidatesTokenCount ?? 0) + (u.total_thought_tokens ?? u.thoughtsTokenCount ?? 0),
+    );
   }
   const outputStep = data.steps?.find((step) => step.type === 'model_output');
   const text = outputStep?.content?.map((block) => block.text ?? '').join('').trim();

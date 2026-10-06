@@ -139,7 +139,10 @@ the guest magic-link flow, `scripts/hash-password.mjs`, `scripts/create-user.mjs
    `web_search` tool). Switched to Claude 2026-10-01 after Gemini's prepaid credit ran out.
    Its own queue (`listCompaniesForAi`: never-attempted
    first, highest lead score first, then oldest `ai_attempted_at`), up to `SCAN_AI_BATCH`
-   (default 12) companies in waves of 6. Admin «Oppdater alt» (`RunUpdateAllButton`) is the catch-up
+   (default 12) companies in waves of 6. The queue only covers the top `AI_TOP_N` (50) leads,
+   a konsern counted once (its best member); the admin «AI-vurdering» panel lets you pick
+   50/100/200/500. Token use and an estimated cost per run (`lib/aiUsage.ts`, list prices,
+   ~10,5 NOK/USD) are stored in `details.ai.usage` and shown live and in «Siste kjøringer». Admin «Oppdater alt» (`RunUpdateAllButton`) is the catch-up
    routine as one click: normal runs (`runScanAction`) until `countBrregStale()` is 0, then
    AI-only runs (`runAiQueueAction`) until `countAiPending()` is 0 — back to back from the
    browser while the page is open. Pauses 60 s on Gemini 429s; stops after two runs that did
