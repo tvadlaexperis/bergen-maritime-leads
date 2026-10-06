@@ -311,6 +311,13 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
           <div className="box box-featured">
             <BoxTabs
               title="Tilrådd inngang"
+              intro={
+                analysis?.conclusion && (
+                  <p className="ai-conclusion">
+                    <AiConfidenceBadge confidence={aiConfidence} generatedAt={co.ai_analysis_at} /> {analysis.conclusion}
+                  </p>
+                )
+              }
               tabs={[
                 {
                   key: 'entry',
@@ -404,12 +411,6 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
           </div>
         </div>
         <div className="split-scroll-col">
-          {/* AI summary first in the right column, Kontakter below it. */}
-          {analysis?.conclusion && (
-            <p className="ai-conclusion">
-              <AiConfidenceBadge confidence={aiConfidence} generatedAt={co.ai_analysis_at} /> {analysis.conclusion}
-            </p>
-          )}
           {/* Contacts — one card per person, all sources merged (the same
               person often appears as daglig leder in Brreg AND on the
               website). Cards, not a table: the column is too narrow for

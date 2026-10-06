@@ -11,7 +11,8 @@ export interface BoxTab {
 // A box header with a title and chip tabs, and the selected tab's body below.
 // Every tab's content is rendered server-side and handed in as a slot — this
 // only toggles which one is visible.
-export default function BoxTabs({ title, tabs }: { title: string; tabs: BoxTab[] }) {
+// `intro` (optional) sits under the header, above the tabs' content, on every tab.
+export default function BoxTabs({ title, tabs, intro }: { title: string; tabs: BoxTab[]; intro?: ReactNode }) {
   const [active, setActive] = useState(tabs[0]?.key);
   const current = tabs.find((t) => t.key === active) ?? tabs[0];
 
@@ -34,6 +35,7 @@ export default function BoxTabs({ title, tabs }: { title: string; tabs: BoxTab[]
           ))}
         </div>
       </div>
+      {intro && <div className="box-pad" style={{ paddingBottom: 0 }}>{intro}</div>}
       <div className="box-pad" role="tabpanel">
         {current?.content}
       </div>
