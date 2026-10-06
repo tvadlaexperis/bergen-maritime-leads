@@ -1455,3 +1455,23 @@ a {
 }
 .page-tab:hover { color: var(--accent); }
 .page-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+/* Company page: use more of wide screens, and give Nyheter its own column
+   on the Salg tab when there is room. */
+.app-main-inner:has(.split-scroll) {
+  max-width: 1920px;
+}
+.news-wide {
+  display: none;
+}
+@media (min-width: 1600px) {
+  .split-scroll:has(> .news-wide) {
+    grid-template-columns: 2fr 1fr 1fr;
+  }
+  .news-wide {
+    display: flex;
+  }
+  .news-narrow {
+    display: none;
+  }
+}

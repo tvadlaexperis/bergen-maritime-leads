@@ -206,6 +206,53 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
   const needsAutoRefresh =
     isAdmin && !co.ai_analysis && (!co.last_refreshed_at || Date.now() - co.last_refreshed_at > 60 * 60 * 1000);
 
+  // Rendered twice (narrow: under Kontakter; wide: own column) — CSS shows one.
+  const newsBox = (
+    <div className="box">
+      <div className="box-header">
+        <span className="box-title">Nyheter</span>
+        <span className="muted" style={{ fontSize: '0.72rem' }}>
+          {co.news_checked_at != null ? `nettsøk · sjekket ${dateLabel(co.news_checked_at)}` : 'GDELT'}
+        </span>
+      </div>
+      <div className="box-pad">
+        {news.length === 0 ? (
+          <p className="muted" style={{ fontSize: '0.85rem' }}>
+            {co.news_checked_at != null ? 'Ingen nyheter funnet siste 12 måneder.' : (co.lead_score ?? 0) >= SEARCH_MIN_SCORE
+                ? 'Nyheter hentes ved neste AI-kjøring.'
+                : `Nyheter søkes bare for selskaper med lead-score ${SEARCH_MIN_SCORE}+ (websøk koster).`}
+          </p>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12 }}>
+            {news.map((n) => (
+              <a key={n.url} href={n.url} target="_blank" rel="noopener noreferrer" className="news-card">
+                {n.category && n.category !== 'annet' && (
+                  <span className="news-card-tag">{NEWS_CATEGORY_LABEL[n.category as NewsCategory] ?? n.category}</span>
+                )}
+                <span className="news-card-title">{n.title}</span>
+                {n.summary && <span className="news-card-summary">{n.summary}</span>}
+                {(n.relevance || n.question || n.isSignal) && (
+                  // AI interpretation, kept visibly apart from the article's own facts.
+                  <span className="news-card-ai">
+                    <span className="news-card-ai-label">
+                      AI-vurdering{n.isSignal && <span className="news-card-signal">Mulig kjøpssignal</span>}
+                    </span>
+                    {n.relevance && <span>For Experis: {n.relevance}</span>}
+                    {n.question && <span>Spørsmål: «{n.question}»</span>}
+                  </span>
+                )}
+                <span className="muted" style={{ fontSize: '0.72rem' }}>
+                  {n.source}
+                  {n.date ? ` · ${dateLabel(n.date)}` : ''}
+                </span>
+              </a>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
   return (
     <AdminPanelProvider>
     {/* The page itself doesn't scroll: the header and AI strip stay put and
@@ -503,51 +550,10 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
             )}
           </div>
 
-          {/* News — right column, under Kontakter */}
-          <div className="box">
-            <div className="box-header">
-              <span className="box-title">Nyheter</span>
-              <span className="muted" style={{ fontSize: '0.72rem' }}>
-                {co.news_checked_at != null ? `nettsøk · sjekket ${dateLabel(co.news_checked_at)}` : 'GDELT'}
-              </span>
-            </div>
-            <div className="box-pad">
-              {news.length === 0 ? (
-                <p className="muted" style={{ fontSize: '0.85rem' }}>
-                  {co.news_checked_at != null ? 'Ingen nyheter funnet siste 12 måneder.' : (co.lead_score ?? 0) >= SEARCH_MIN_SCORE
-                      ? 'Nyheter hentes ved neste AI-kjøring.'
-                      : `Nyheter søkes bare for selskaper med lead-score ${SEARCH_MIN_SCORE}+ (websøk koster).`}
-                </p>
-              ) : (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12 }}>
-                  {news.map((n) => (
-                    <a key={n.url} href={n.url} target="_blank" rel="noopener noreferrer" className="news-card">
-                      {n.category && n.category !== 'annet' && (
-                        <span className="news-card-tag">{NEWS_CATEGORY_LABEL[n.category as NewsCategory] ?? n.category}</span>
-                      )}
-                      <span className="news-card-title">{n.title}</span>
-                      {n.summary && <span className="news-card-summary">{n.summary}</span>}
-                      {(n.relevance || n.question || n.isSignal) && (
-                        // AI interpretation, kept visibly apart from the article's own facts.
-                        <span className="news-card-ai">
-                          <span className="news-card-ai-label">
-                            AI-vurdering{n.isSignal && <span className="news-card-signal">Mulig kjøpssignal</span>}
-                          </span>
-                          {n.relevance && <span>For Experis: {n.relevance}</span>}
-                          {n.question && <span>Spørsmål: «{n.question}»</span>}
-                        </span>
-                      )}
-                      <span className="muted" style={{ fontSize: '0.72rem' }}>
-                        {n.source}
-                        {n.date ? ` · ${dateLabel(n.date)}` : ''}
-                      </span>
-                    </a>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
+          {/* News: here on normal screens, own column when wide (CSS). */}
+          <div className="news-narrow">{newsBox}</div>
         </div>
+        <div className="split-scroll-col news-wide">{newsBox}</div>
       </div>
             ),
           },
