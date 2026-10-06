@@ -1435,3 +1435,24 @@ a {
   font-family: inherit;
   background: var(--bg-2);
 }
+
+/* Company page tabs (Salg / Om selskapet / Møter). */
+.page-tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--border);
+}
+.page-tab {
+  padding: 8px 14px;
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  cursor: pointer;
+}
+.page-tab:hover { color: var(--accent); }
+.page-tab.active { color: var(--accent); border-bottom-color: var(--accent); }

@@ -34,6 +34,7 @@ import { AdminPanelProvider, AdminPanelToggle, AdminPanelModal } from './AdminPa
 import AutoRefreshTrigger from './AutoRefreshTrigger';
 import ContactsEditForm from './ContactsEditForm';
 import BoxTabs from './BoxTabs';
+import PageTabs from './PageTabs';
 import FinancialsTabs from './FinancialsTabs';
 import NotesBox from './NotesBox';
 
@@ -333,6 +334,14 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
 
       {/* Two columns all the way down: the sales analysis on the left,
           the facts (people, news, numbers, notes) on the right. */}
+      {/* Page tabs: Salg (who to call and why), Om selskapet (facts),
+          Møter (meeting + notes). Each tab keeps the two scroll columns. */}
+      <PageTabs
+        tabs={[
+          {
+            key: 'sales',
+            label: 'Salg',
+            content: (
       <div className="split-scroll">
         <div className="split-scroll-col">
           {/* Tilrådd inngang — the salesperson's first question ("who do I call,
@@ -363,19 +372,6 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
                     <p className="muted" style={{ fontSize: '0.86rem' }}>
                       Ingen AI-vurdering ennå. {isAdmin ? 'Bruk «Oppdater fra registrene» under.' : 'Neste skann beregner en.'}
                     </p>
-                  ),
-                },
-                {
-                  key: 'meeting',
-                  label: 'Bedriftsmøte',
-                  content: (
-                    <MeetingTab
-                      id={co.id}
-                      date={co.meeting_date}
-                      prep={co.meeting_prep}
-                      notes={co.meeting_notes}
-                      canEdit={isAdmin}
-                    />
                   ),
                 },
               ]}
@@ -446,116 +442,7 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
             )}
             </div>
           </div>
-
-          {/* Teknologi og kunderelevans (spec §3–4). Two kinds of information,
-              labelled apart: what the company's own website says (documented,
-              each item linked to its page) and the AI's classification. */}
-          <div className="box">
-            <div className="box-header">
-              <span className="box-title">Teknologi og kunderelevans</span>
-            </div>
-            <div className="box-pad" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              <div>
-                <span className="muted" style={{ fontSize: '0.72rem', fontWeight: 700 }}>
-                  KUNDERELEVANS <span style={{ fontWeight: 400 }}>· AI-vurdering</span>
-                </span>
-                {analysis?.customerCategory ? (
-                  <p style={{ marginTop: 6, fontSize: '0.88rem', display: 'flex', gap: 10, alignItems: 'baseline', flexWrap: 'wrap' }}>
-                    <span className={`category-pill cat-${analysis.customerCategory.replace(/\s+/g, '-')}`}>
-                      {CATEGORY_LABEL[analysis.customerCategory] ?? analysis.customerCategory}
-                    </span>
-                    <span style={{ color: 'var(--text-secondary)' }}>{analysis.categoryReason}</span>
-                  </p>
-                ) : (
-                  <p className="muted" style={{ marginTop: 6, fontSize: '0.84rem' }}>
-                    Ikke med i denne AI-vurderingen ennå — kommer ved neste kjøring.
-                  </p>
-                )}
-              </div>
-              <div>
-                <span className="muted" style={{ fontSize: '0.72rem', fontWeight: 700 }}>
-                  TEKNOLOGI <span style={{ fontWeight: 400 }}>· dokumentert fra selskapets nettside</span>
-                </span>
-                {!tech ? (
-                  <p className="muted" style={{ marginTop: 6, fontSize: '0.84rem' }}>
-                    {co.website ? 'Nettsiden er ikke lest for teknologi ennå.' : 'Ingen nettside registrert.'}
-                  </p>
-                ) : (
-                  <>
-                    <p style={{ marginTop: 6, fontSize: '0.84rem', display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-                      <span title={tech.itEnvironment?.evidence ?? undefined}>
-                        Eget IT-miljø: <strong>{tech.itEnvironment?.value ?? 'ukjent'}</strong>
-                      </span>
-                      <span title={tech.digitalProducts?.evidence ?? undefined}>
-                        Egne digitale produkter: <strong>{tech.digitalProducts?.value ?? 'ukjent'}</strong>
-                      </span>
-                    </p>
-                    {tech.technologies.length === 0 ? (
-                      <p className="muted" style={{ marginTop: 6, fontSize: '0.84rem' }}>Ingen teknologi eller systemer er nevnt på nettsiden.</p>
-                    ) : (
-                      <span style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8 }}>
-                        {tech.technologies.map((t) => (
-                          <a
-                            key={t.name}
-                            href={t.sourceUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="tech-chip"
-                            title={`«${t.evidence}» — ${t.sourceUrl}`}
-                          >
-                            {t.name} <span className="muted">· {t.category}</span>
-                          </a>
-                        ))}
-                      </span>
-                    )}
-                    <p className="muted" style={{ marginTop: 6, fontSize: '0.72rem' }}>
-                      Lest {dateLabel(tech.checkedAt)}. Hold over en teknologi for sitatet den bygger på.
-                    </p>
-                  </>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Rekruttering — NAV job ads for the group. IT/tech roles are the
-              strongest buying signal in the spec, so they're marked. */}
-          <div className="box">
-            <div className="box-header">
-              <span className="box-title">Rekruttering</span>
-              <span className="muted" style={{ fontSize: '0.72rem' }}>
-                {jobsEnabled
-                  ? `NAV · ${jobAds.length} aktive${jobAds.some((j) => j.is_tech) ? ` · ${jobAds.filter((j) => j.is_tech).length} IT` : ''}`
-                  : 'NAV'}
-              </span>
-            </div>
-            <div className="box-pad" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {!jobsEnabled ? (
-                <p className="muted" style={{ fontSize: '0.84rem' }}>
-                  Stillingsannonser fra NAV er ikke slått på ennå (krever egen NAV-token etter avtale om vilkår).
-                </p>
-              ) : jobAds.length === 0 ? (
-                <p className="muted" style={{ fontSize: '0.84rem' }}>Ingen aktive stillingsannonser hos NAV.</p>
-              ) : (
-                jobAds.map((j) => (
-                  <a key={j.uuid} href={j.source_url} target="_blank" rel="noopener noreferrer" className="job-ad">
-                    <span style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
-                      {j.is_tech === 1 && <span className="news-card-tag">IT</span>}
-                      <strong style={{ fontSize: '0.88rem' }}>{j.title}</strong>
-                    </span>
-                    <span className="muted" style={{ fontSize: '0.76rem' }}>
-                      {[j.occupation, j.location, j.employer_name].filter(Boolean).join(' · ')}
-                    </span>
-                    <span className="muted" style={{ fontSize: '0.74rem' }}>
-                      {j.published ? `Publisert ${dateLabel(j.published)}` : ''}
-                      {j.application_due ? ` · frist ${/^\d{4}-/.test(j.application_due) ? dateLabel(j.application_due) : j.application_due}` : ''}
-                    </span>
-                  </a>
-                ))
-              )}
-            </div>
-          </div>
         </div>
-
         <div className="split-scroll-col">
           {/* Contacts — one card per person, all sources merged (the same
               person often appears as daglig leder in Brreg AND on the
@@ -693,7 +580,125 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
               )}
             </div>
           </div>
+        </div>
+      </div>
+            ),
+          },
+          {
+            key: 'about',
+            label: 'Om selskapet',
+            content: (
+      <div className="split-scroll">
+        <div className="split-scroll-col">
+          {/* Teknologi og kunderelevans (spec §3–4). Two kinds of information,
+              labelled apart: what the company's own website says (documented,
+              each item linked to its page) and the AI's classification. */}
+          <div className="box">
+            <div className="box-header">
+              <span className="box-title">Teknologi og kunderelevans</span>
+            </div>
+            <div className="box-pad" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div>
+                <span className="muted" style={{ fontSize: '0.72rem', fontWeight: 700 }}>
+                  KUNDERELEVANS <span style={{ fontWeight: 400 }}>· AI-vurdering</span>
+                </span>
+                {analysis?.customerCategory ? (
+                  <p style={{ marginTop: 6, fontSize: '0.88rem', display: 'flex', gap: 10, alignItems: 'baseline', flexWrap: 'wrap' }}>
+                    <span className={`category-pill cat-${analysis.customerCategory.replace(/\s+/g, '-')}`}>
+                      {CATEGORY_LABEL[analysis.customerCategory] ?? analysis.customerCategory}
+                    </span>
+                    <span style={{ color: 'var(--text-secondary)' }}>{analysis.categoryReason}</span>
+                  </p>
+                ) : (
+                  <p className="muted" style={{ marginTop: 6, fontSize: '0.84rem' }}>
+                    Ikke med i denne AI-vurderingen ennå — kommer ved neste kjøring.
+                  </p>
+                )}
+              </div>
+              <div>
+                <span className="muted" style={{ fontSize: '0.72rem', fontWeight: 700 }}>
+                  TEKNOLOGI <span style={{ fontWeight: 400 }}>· dokumentert fra selskapets nettside</span>
+                </span>
+                {!tech ? (
+                  <p className="muted" style={{ marginTop: 6, fontSize: '0.84rem' }}>
+                    {co.website ? 'Nettsiden er ikke lest for teknologi ennå.' : 'Ingen nettside registrert.'}
+                  </p>
+                ) : (
+                  <>
+                    <p style={{ marginTop: 6, fontSize: '0.84rem', display: 'flex', gap: 16, flexWrap: 'wrap' }}>
+                      <span title={tech.itEnvironment?.evidence ?? undefined}>
+                        Eget IT-miljø: <strong>{tech.itEnvironment?.value ?? 'ukjent'}</strong>
+                      </span>
+                      <span title={tech.digitalProducts?.evidence ?? undefined}>
+                        Egne digitale produkter: <strong>{tech.digitalProducts?.value ?? 'ukjent'}</strong>
+                      </span>
+                    </p>
+                    {tech.technologies.length === 0 ? (
+                      <p className="muted" style={{ marginTop: 6, fontSize: '0.84rem' }}>Ingen teknologi eller systemer er nevnt på nettsiden.</p>
+                    ) : (
+                      <span style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8 }}>
+                        {tech.technologies.map((t) => (
+                          <a
+                            key={t.name}
+                            href={t.sourceUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="tech-chip"
+                            title={`«${t.evidence}» — ${t.sourceUrl}`}
+                          >
+                            {t.name} <span className="muted">· {t.category}</span>
+                          </a>
+                        ))}
+                      </span>
+                    )}
+                    <p className="muted" style={{ marginTop: 6, fontSize: '0.72rem' }}>
+                      Lest {dateLabel(tech.checkedAt)}. Hold over en teknologi for sitatet den bygger på.
+                    </p>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
 
+          {/* Rekruttering — NAV job ads for the group. IT/tech roles are the
+              strongest buying signal in the spec, so they're marked. */}
+          <div className="box">
+            <div className="box-header">
+              <span className="box-title">Rekruttering</span>
+              <span className="muted" style={{ fontSize: '0.72rem' }}>
+                {jobsEnabled
+                  ? `NAV · ${jobAds.length} aktive${jobAds.some((j) => j.is_tech) ? ` · ${jobAds.filter((j) => j.is_tech).length} IT` : ''}`
+                  : 'NAV'}
+              </span>
+            </div>
+            <div className="box-pad" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {!jobsEnabled ? (
+                <p className="muted" style={{ fontSize: '0.84rem' }}>
+                  Stillingsannonser fra NAV er ikke slått på ennå (krever egen NAV-token etter avtale om vilkår).
+                </p>
+              ) : jobAds.length === 0 ? (
+                <p className="muted" style={{ fontSize: '0.84rem' }}>Ingen aktive stillingsannonser hos NAV.</p>
+              ) : (
+                jobAds.map((j) => (
+                  <a key={j.uuid} href={j.source_url} target="_blank" rel="noopener noreferrer" className="job-ad">
+                    <span style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
+                      {j.is_tech === 1 && <span className="news-card-tag">IT</span>}
+                      <strong style={{ fontSize: '0.88rem' }}>{j.title}</strong>
+                    </span>
+                    <span className="muted" style={{ fontSize: '0.76rem' }}>
+                      {[j.occupation, j.location, j.employer_name].filter(Boolean).join(' · ')}
+                    </span>
+                    <span className="muted" style={{ fontSize: '0.74rem' }}>
+                      {j.published ? `Publisert ${dateLabel(j.published)}` : ''}
+                      {j.application_due ? ` · frist ${/^\d{4}-/.test(j.application_due) ? dateLabel(j.application_due) : j.application_due}` : ''}
+                    </span>
+                  </a>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+        <div className="split-scroll-col">
             <div className="box">
               {/* Omsetning (siste) is left out — it's this year's Driftsinntekter. */}
               <FinancialsTabs
@@ -706,10 +711,39 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
                 ]}
               />
             </div>
-
-            {isAdmin && base && <NotesBox notes={base.notes ?? ''} />}
         </div>
       </div>
+            ),
+          },
+          {
+            key: 'meetings',
+            label: 'Møter',
+            content: (
+      <div className="split-scroll">
+        <div className="split-scroll-col">
+          <div className="box">
+            <div className="box-header">
+              <span className="box-title">Bedriftsmøte</span>
+            </div>
+            <div className="box-pad">
+                    <MeetingTab
+                      id={co.id}
+                      date={co.meeting_date}
+                      prep={co.meeting_prep}
+                      notes={co.meeting_notes}
+                      canEdit={isAdmin}
+                    />
+            </div>
+          </div>
+        </div>
+        <div className="split-scroll-col">
+          {isAdmin && base && <NotesBox notes={base.notes ?? ''} />}
+        </div>
+      </div>
+            ),
+          },
+        ]}
+      />
 
       {isAdmin && base && (
         <AdminPanelModal>
