@@ -19,7 +19,7 @@ import {
   deleteCompany,
   countAiPending,
   AI_TOP_N,
-  AI_TOP_CHOICES,
+  parseTopN,
   countBrregStale,
   getAiProgressSince,
   type AiProgress,
@@ -202,7 +202,7 @@ export async function aiProgressAction(since: number): Promise<AiProgress> {
 // «Kjør AI-køen» button calls this back to back until `remaining` hits 0 —
 // each call is its own ≤60s request, so no single request outlives Vercel's
 // function limit however long the queue is.
-export async function runAiQueueAction(topN: number = AI_TOP_N): Promise<
+export async function runAiQueueAction(topN: number | null = AI_TOP_N): Promise<
   | { error: string }
   | {
       processed: number;
@@ -225,7 +225,7 @@ export async function runAiQueueAction(topN: number = AI_TOP_N): Promise<
 > {
   const user = await guard('admin-ai-queue');
   if (!aiConfigured()) return { error: 'AI er ikke konfigurert (ANTHROPIC_API_KEY eller GEMINI_API_KEY mangler).' };
-  const n = AI_TOP_CHOICES.includes(Number(topN)) ? Number(topN) : AI_TOP_N;
+  const n = parseTopN(topN == null ? 'alle' : String(topN));
   const r = await runScan({ aiOnly: true, skipDiscovery: true, trigger: 'ai', aiTopN: n });
   const d = r.details.ai;
   await audit('scan.ai', {
@@ -253,13 +253,6 @@ export async function runAiQueueAction(topN: number = AI_TOP_N): Promise<
   };
 }
 
-// Queue size for each «hvor mange» choice in the AI-vurdering confirm dialog.
-export async function aiPendingCountsAction(): Promise<Record<number, number>> {
-  await requireAdmin();
-  const out: Record<number, number> = {};
-  for (const n of AI_TOP_CHOICES) out[n] = await countAiPending(n);
-  return out;
-}
 
 export async function generateGuestLinkAction(
   days: number,

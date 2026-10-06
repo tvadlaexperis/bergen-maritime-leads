@@ -16,6 +16,9 @@ import {
   listAudit,
   countAiPending,
   countBrregStale,
+  parseTopN,
+  TOP_CHOICES,
+  AI_TOP_N,
 } from '@/lib/db';
 import { dateLabel, osloDayStart } from '@/app/format';
 import ScanPanel from './ScanPanel';
@@ -66,7 +69,7 @@ const PERIODS = [
 export default async function AdminPage({
   searchParams,
 }: {
-  searchParams: { view?: string; kategori?: string; modus?: string; scan?: string; periode?: string; enhet?: string };
+  searchParams: { view?: string; kategori?: string; modus?: string; scan?: string; periode?: string; enhet?: string; topp?: string };
 }) {
   const user = await getCurrentUser();
   if (!user || user.role !== 'admin') redirect('/login?next=/admin');
@@ -78,16 +81,24 @@ export default async function AdminPage({
   const periodRange = period.range();
   const mode: CoverageMode = searchParams.modus && isCoverageMode(searchParams.modus) ? searchParams.modus : 'har';
   const unit: CoverageUnit = searchParams.enhet && isCoverageUnit(searchParams.enhet) ? searchParams.enhet : 'kunde';
-  // Keeps the chosen unit when drilling into a category or closing it.
-  const dq = (extra = '') => `/admin?${unit === 'selskap' ? 'enhet=selskap' : ''}${extra}`;
+  const topN = parseTopN(searchParams.topp);
+  // Keeps the chosen unit and «Topp N» filter when drilling into a category or closing it.
+  const qs = (u: CoverageUnit, t: typeof topN) =>
+    [u === 'selskap' ? 'enhet=selskap' : '', t === AI_TOP_N ? '' : `topp=${t ?? 'alle'}`].filter(Boolean).join('&');
+  const dq = (extra = '') => `/admin?${qs(unit, topN)}${extra}`;
+  const topLinks = [null, ...TOP_CHOICES].map((t) => ({
+    label: t ? String(t) : 'Alle',
+    href: `/admin?${qs(unit, t)}`,
+    active: t === topN,
+  }));
 
   const [activeCount, scans, auditRows, coverage, categoryCompanies, aiRemaining, brregStale] = await Promise.all([
     countActiveCompanies(),
     listScans(15, view === 'nattlig' ? 'nattlig' : 'manuell'),
     listAudit(periodRange ? 1000 : 200, periodRange ?? undefined),
-    getDataCoverage(unit),
-    category ? listCompaniesForCoverage(category, mode, unit) : Promise.resolve(null),
-    countAiPending(),
+    getDataCoverage(unit, topN),
+    category ? listCompaniesForCoverage(category, mode, unit, topN) : Promise.resolve(null),
+    countAiPending(topN),
     countBrregStale(),
   ]);
   // The run shown; the latest when none is picked.
@@ -141,6 +152,8 @@ export default async function AdminPage({
                   aiService={aiServiceLabel()}
                   aiRemaining={aiRemaining}
                   brregStale={brregStale}
+                  topN={topN}
+                  topLinks={topLinks}
                 />
                 <div style={{ flexShrink: 0 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12, flexWrap: 'wrap', marginBottom: 14 }}>
@@ -148,17 +161,17 @@ export default async function AdminPage({
                       <p style={{ fontSize: '0.9rem', fontWeight: 700, marginBottom: 4 }}>Totalt – hvor mye vet vi</p>
                       <p className="muted" style={{ fontSize: '0.8rem' }}>
                         {unit === 'kunde'
-                          ? `Om de ${coverage.total} kundene — et konsern telles én gang og «har» noe hvis ett av selskapene har det.`
-                          : `Om alle ${coverage.total} selskapene, hvert for seg — også datterselskaper og skallselskaper.`}{' '}
+                          ? `Om de ${coverage.total} kundene${topN ? ` i topp ${topN}` : ''} — et konsern telles én gang og «har» noe hvis ett av selskapene har det.`
+                          : `Om ${topN ? `de ${coverage.total} selskapene i topp ${topN}-kundene` : `alle ${coverage.total} selskapene`}, hvert for seg — også datterselskaper og skallselskaper.`}{' '}
                         Klikk «Har» eller «Mangler» for å se hvem.
                       </p>
                     </div>
                     <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                       <span className="muted" style={{ fontSize: '0.78rem' }}>Tell per</span>
-                      <Link href="/admin" className={`chip${unit === 'kunde' ? ' active' : ''}`}>
+                      <Link href={`/admin?${qs('kunde', topN)}`} className={`chip${unit === 'kunde' ? ' active' : ''}`}>
                         kunde (konsern samlet)
                       </Link>
-                      <Link href="/admin?enhet=selskap" className={`chip${unit === 'selskap' ? ' active' : ''}`}>
+                      <Link href={`/admin?${qs('selskap', topN)}`} className={`chip${unit === 'selskap' ? ' active' : ''}`}>
                         selskap
                       </Link>
                     </div>
@@ -230,6 +243,8 @@ export default async function AdminPage({
                     scans={scans}
                     activeCount={activeCount}
                     selectedScanId={selectedScanId}
+                    aiRemaining={aiRemaining}
+                    topN={topN}
                   />
                 )}
               </>

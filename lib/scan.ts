@@ -41,6 +41,7 @@ import {
   addNotification,
   listCompaniesToRefresh,
   listCompaniesForAi,
+  type TopN,
   getCompanyByOrgnr,
   recomputeGroups,
   listCompanyOrgnrIndex,
@@ -768,7 +769,7 @@ export interface RunScanOptions {
   /** Skip the AI pass — Brreg (and NAV) only, costs nothing ("Kjør skann" / "Full oppdatering"). */
   noAi?: boolean;
   /** AI queue covers this many top leads (konsern counted once). Default AI_TOP_N. */
-  aiTopN?: number;
+  aiTopN?: TopN;
   /** How many companies the Brreg pass may consider this run (ignored when `full`). */
   limit?: number;
   /** Skip discovery — only refresh known companies. */

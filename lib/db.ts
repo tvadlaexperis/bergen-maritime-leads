@@ -761,7 +761,7 @@ const UNIT_EXPR: Record<CoverageUnit, string> = {
 
 // One query, not `listCompaniesWithScore()` + counting in JS — this is a
 // dashboard tile that admin/page.tsx renders on every load.
-export async function getDataCoverage(unit: CoverageUnit = 'kunde'): Promise<DataCoverage> {
+export async function getDataCoverage(unit: CoverageUnit = 'kunde', topN: TopN = null): Promise<DataCoverage> {
   const c = await db();
   const u = UNIT_EXPR[unit];
   const count = (cond: string) => `COUNT(DISTINCT CASE WHEN ${cond} THEN ${u} END)`;
@@ -779,7 +779,7 @@ export async function getDataCoverage(unit: CoverageUnit = 'kunde'): Promise<Dat
       ${count(COVERAGE_WHERE.news)} AS with_news,
       ${count('co.news_checked_at IS NOT NULL')} AS news_searched
     FROM companies co
-    WHERE co.status = 'active'
+    WHERE co.status = 'active' AND ${inTopUnits(topN)}
   `);
   const r = res.rows[0] as unknown as Record<string, number>;
   return {
@@ -805,13 +805,14 @@ export async function listCompaniesForCoverage(
   category: CoverageCategory,
   mode: CoverageMode = 'har',
   unit: CoverageUnit = 'kunde',
+  topN: TopN = null,
 ): Promise<{ orgnr: string; name: string; groupSize: number }[]> {
   const c = await db();
   const res = await c.execute(
     `SELECT ${UNIT_EXPR[unit]} AS unit, co.orgnr, co.name, co.employees, sc.revenue_latest, sc.lead_score,
             CASE WHEN ${COVERAGE_WHERE[category]} THEN 1 ELSE 0 END AS has
      FROM companies co ${SCORE_JOIN}
-     WHERE co.status = 'active'`,
+     WHERE co.status = 'active' AND ${inTopUnits(topN)}`,
   );
   type Row = {
     unit: string;
@@ -1615,16 +1616,29 @@ export const SEARCH_MIN_SCORE = 40;
 const LATEST_SCORE = `(SELECT lead_score FROM company_scores WHERE company_id = co.id ORDER BY computed_at DESC, id DESC LIMIT 1)`;
 const NEWS_DUE = `(COALESCE(${LATEST_SCORE}, 0) >= ${SEARCH_MIN_SCORE} AND (co.news_checked_at IS NULL
   OR co.news_checked_at < CAST(strftime('%s', 'now') AS INTEGER) * 1000 - ${NEWS_REFRESH_DAYS} * 86400000))`;
-// The AI queue only covers the AI_TOP_N best leads, counting a konsern once
-// (its best-scoring member) — keeps the paid AI work on who sales actually calls.
-export const AI_TOP_N = 50;
-export const AI_TOP_CHOICES = [50, 100, 200, 500];
-const aiEligible = (topN: number) => `co.orgnr IN (SELECT orgnr FROM (
-    SELECT c2.orgnr, ROW_NUMBER() OVER (PARTITION BY COALESCE(c2.konsern_root_orgnr, c2.orgnr)
-      ORDER BY COALESCE((SELECT lead_score FROM company_scores WHERE company_id = c2.id ORDER BY computed_at DESC, id DESC LIMIT 1), -1) DESC) AS rn,
+// «Topp N» filter (admin Datakvalitet + AI queue): the N best customers by
+// lead score, a konsern counted once (same unit as the coverage «kunde» view)
+// and ranked by its best-scoring member. null = everyone.
+export const AI_TOP_N = 50; // nightly AI queue
+export const TOP_CHOICES = [50, 100, 200, 500] as const;
+export type TopN = (typeof TOP_CHOICES)[number] | null;
+export function parseTopN(raw: string | undefined): TopN {
+  if (raw === 'alle') return null;
+  const n = Number(raw);
+  return (TOP_CHOICES as readonly number[]).includes(n) ? (n as TopN) : AI_TOP_N;
+}
+const RANKED_UNITS = (topN: number) => `SELECT orgnr, gk FROM (
+    SELECT c2.orgnr, COALESCE(c2.group_key, 'c' || c2.id) AS gk,
+      ROW_NUMBER() OVER (PARTITION BY COALESCE(c2.group_key, 'c' || c2.id)
+        ORDER BY COALESCE((SELECT lead_score FROM company_scores WHERE company_id = c2.id ORDER BY computed_at DESC, id DESC LIMIT 1), -1) DESC, c2.id) AS rn,
       COALESCE((SELECT lead_score FROM company_scores WHERE company_id = c2.id ORDER BY computed_at DESC, id DESC LIMIT 1), -1) AS s
     FROM companies c2 WHERE c2.status = 'active'
-  ) WHERE rn = 1 ORDER BY s DESC LIMIT ${Math.max(1, Math.floor(topN))})`;
+  ) WHERE rn = 1 ORDER BY s DESC LIMIT ${Math.max(1, Math.floor(topN))}`;
+// AI work goes to each top customer's best-scoring company.
+const aiEligible = (topN: TopN) => (topN ? `co.orgnr IN (SELECT orgnr FROM (${RANKED_UNITS(topN)}))` : '1 = 1');
+// Coverage counts every company of a top customer.
+const inTopUnits = (topN: TopN) =>
+  topN ? `COALESCE(co.group_key, 'c' || co.id) IN (SELECT gk FROM (${RANKED_UNITS(topN)}))` : '1 = 1';
 const AI_PENDING = `(co.ai_analysis_at IS NULL OR ${NEEDS_CONTACT_SCRAPE} OR ${NEWS_DUE})`;
 
 // The AI pass (ai.analyze / findWebsite / extractContacts) is the slow,
@@ -1639,7 +1653,7 @@ const AI_PENDING = `(co.ai_analysis_at IS NULL OR ${NEEDS_CONTACT_SCRAPE} OR ${N
 // analysis (none, or older than 30 days) go before news/contacts-only work —
 // the analysis is the main value, and the only step that can fall back to
 // the free Gemini key when the paid one is capped.
-export async function listCompaniesForAi(limit: number, topN = AI_TOP_N): Promise<CompanyWithScore[]> {
+export async function listCompaniesForAi(limit: number, topN: TopN = AI_TOP_N): Promise<CompanyWithScore[]> {
   const c = await db();
   const res = await c.execute({
     sql: `SELECT co.*, ${SCORE_COLS} FROM companies co ${SCORE_JOIN}
@@ -1657,7 +1671,7 @@ export async function listCompaniesForAi(limit: number, topN = AI_TOP_N): Promis
 // What "Kjør AI-køen" counts down: no AI analysis yet, or a website we've
 // never read for contacts. Only a success takes a company off the count,
 // not a failed attempt.
-export async function countAiPending(topN = AI_TOP_N): Promise<number> {
+export async function countAiPending(topN: TopN = AI_TOP_N): Promise<number> {
   const c = await db();
   const res = await c.execute(`SELECT COUNT(*) AS n FROM companies co WHERE co.status = 'active' AND ${aiEligible(topN)} AND ${AI_PENDING}`);
   return Number((res.rows[0] as unknown as { n: number }).n);

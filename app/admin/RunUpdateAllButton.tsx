@@ -2,15 +2,13 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { runAiQueueAction, aiProgressAction, aiPendingCountsAction } from "./actions";
+import { runAiQueueAction, aiProgressAction } from "./actions";
 import type { AiProgress } from "@/lib/db";
 import { publishLiveRun } from "./LiveRun";
 import { groupScanErrors } from "@/lib/scanErrors";
 
 /** Window event the confirm card (NextAiRun) fires to start the AI run. */
 export const START_AI_EVENT = "admin-start-ai";
-/** How many top leads (konsern counted once) a run covers — same as AI_TOP_CHOICES in lib/db. */
-const TOP_CHOICES = [50, 100, 200, 500];
 const USD_NOK = 10.5; // same rough rate as lib/aiUsage
 
 // "ca. 1,2 mill. tokens · ca. 14 kr" — estimated from list prices.
@@ -55,11 +53,14 @@ const ZERO: Totals = {
 // the one in flight always finishes and gets logged.
 export default function RunUpdateAllButton({
   initialRemaining,
+  topN,
   aiEnabled,
   aiService,
   onStatus,
 }: {
   initialRemaining: number;
+  /** The «Topp N» filter on the page — the run only covers these customers; null = all. */
+  topN: number | null;
   aiEnabled: boolean;
   /** Which model runs the queue, e.g. "Claude Haiku" or "Gemini". */
   aiService: string;
@@ -74,12 +75,7 @@ export default function RunUpdateAllButton({
   const [waitLeft, setWaitLeft] = useState(0);
   const stopRef = useRef(false);
   const [ask, setAsk] = useState(false);
-  const [topN, setTopN] = useState(50);
-  const topNRef = useRef(50);
-  const [counts, setCounts] = useState<Record<number, number> | null>(null);
-  useEffect(() => {
-    if (ask) aiPendingCountsAction().then(setCounts).catch(() => {});
-  }, [ask]);
+  const scope = topN ? `topp ${topN}` : "alle";
   // The confirm card in «Siste kjøringer» (NextAiRun) starts the same run.
   const runRef = useRef<() => void>(() => {});
   useEffect(() => {
@@ -124,7 +120,7 @@ export default function RunUpdateAllButton({
     let rateLimitWaits = 0;
     try {
       while (!stopRef.current) {
-        const r = await runAiQueueAction(topNRef.current);
+        const r = await runAiQueueAction(topN);
         if ("error" in r) {
           setMsg(r.error);
           break;
@@ -148,7 +144,7 @@ export default function RunUpdateAllButton({
         router.refresh();
         if (r.remaining === 0) {
           setMsg(
-            `Ferdig — topp ${topNRef.current} er AI-vurdert og alle kjente nettsider er lest.`,
+            `Ferdig — ${scope} er AI-vurdert og alle kjente nettsider er lest.`,
           );
           break;
         }
@@ -286,7 +282,7 @@ export default function RunUpdateAllButton({
           style={{
             position: "absolute",
             top: "calc(100% + 6px)",
-            left: 0,
+            right: 0,
             zIndex: 50,
             width: "min(380px, calc(100vw - 32px))",
             display: "grid",
@@ -298,31 +294,13 @@ export default function RunUpdateAllButton({
         >
           <p style={{ margin: 0 }}>
             Lager AI-vurdering, henter nyheter og leser kontakter fra nettsiden
-            for selskapene med høyest lead-score (et konsern teller én gang).
+            for {topN ? `de ${topN} kundene med høyest lead-score (et konsern teller én gang, det beste selskapet vurderes)` : "alle selskaper, høyest lead-score først"}.
             Bare de som mangler noe, eller har en vurdering eldre enn 30 dager,
             blir oppdatert.
           </p>
-          <div>
-            <div className="muted" style={{ fontSize: "0.78rem", marginBottom: 4 }}>Hvor mange?</div>
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-              {TOP_CHOICES.map((n) => (
-                <button
-                  key={n}
-                  type="button"
-                  className={`btn btn-sm ${topN === n ? "btn-primary" : "btn-ghost"}`}
-                  aria-pressed={topN === n}
-                  onClick={() => setTopN(n)}
-                >
-                  Topp {n}
-                  {counts ? ` (${counts[n]})` : ""}
-                </button>
-              ))}
-            </div>
-            <div className="muted" style={{ fontSize: "0.78rem", marginTop: 4 }}>
-              {counts
-                ? `${counts[topN]} selskaper trenger oppdatering · ca. ${Math.max(1, Math.ceil(counts[topN] / 12))} min`
-                : "Teller …"}
-            </div>
+          <div className="muted" style={{ fontSize: "0.78rem" }}>
+            {topN ? `Topp ${topN} leads` : "Alle selskaper"} (velges i filteret) · {remaining} trenger
+            oppdatering · ca. {Math.max(1, Math.ceil(remaining / 12))} min
           </div>
           <p style={{ margin: 0 }}>
             Bruker {aiService} og <strong>koster penger</strong>. Kjører så lenge
@@ -335,14 +313,13 @@ export default function RunUpdateAllButton({
             <button
               type="button"
               className="btn btn-primary btn-sm"
-              disabled={counts?.[topN] === 0}
+              disabled={remaining === 0}
               onClick={() => {
                 setAsk(false);
-                topNRef.current = topN;
                 run();
               }}
             >
-              Bekreft — oppdater topp {topN}
+              Bekreft — oppdater {scope}
             </button>
           </div>
         </div>

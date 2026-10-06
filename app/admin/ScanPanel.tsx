@@ -96,7 +96,12 @@ export default async function ScanPanel({
   activeCount,
   selectedScanId,
   nightly = false,
+  aiRemaining,
+  topN = null,
 }: {
+  /** The «Topp N» filter's AI queue size (admin page), so the card matches the button. */
+  aiRemaining?: number;
+  topN?: number | null;
   /** The «Nattlige kjøringer» tab: cron runs only, no run buttons. */
   nightly?: boolean;
   scans: Scan[];
@@ -156,7 +161,7 @@ export default async function ScanPanel({
       </span>
     </span>
   ) : null;
-  const nextAi = !nightly && aiConfigured() ? { setup: aiSetup(), remaining: await countAiPending() } : null;
+  const nextAi = !nightly && aiConfigured() ? { setup: aiSetup(), remaining: aiRemaining ?? (await countAiPending()), topN } : null;
   const names = shown
     ? await getCompanyNames([
         ...new Set(
@@ -235,7 +240,7 @@ export default async function ScanPanel({
           return (
             <div className="box-pad" style={{ display: "grid", gap: 14 }}>
               {!nightly && <LiveRun />}
-              {nextAi && <NextAiRun setup={nextAi.setup} remaining={nextAi.remaining} />}
+              {nextAi && <NextAiRun setup={nextAi.setup} remaining={nextAi.remaining} topN={nextAi.topN} />}
               {d?.ai.setup && d.ai.setup.length > 0 && (
                 <div>
                   <p style={{ fontSize: "0.9rem", fontWeight: 700, marginBottom: 8 }}>

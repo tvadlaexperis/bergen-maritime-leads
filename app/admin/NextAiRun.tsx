@@ -7,7 +7,7 @@ import { START_AI_EVENT } from './RunUpdateAllButton';
 // At the top of «Siste kjøringer»: what the next AI run will do — each step,
 // which API and model, and what it costs — with a confirm button that starts
 // it (same run as the «AI-vurdering» button). Hidden while a run is going.
-export default function NextAiRun({ setup, remaining }: { setup: AiStepSetup[]; remaining: number }) {
+export default function NextAiRun({ setup, remaining, topN }: { setup: AiStepSetup[]; remaining: number; topN: number | null }) {
   const [running, setRunning] = useState(false);
   useEffect(() => {
     const on = (e: Event) => setRunning(!!(e as CustomEvent<{ running?: boolean } | null>).detail?.running);
@@ -21,7 +21,7 @@ export default function NextAiRun({ setup, remaining }: { setup: AiStepSetup[]; 
       <div style={{ display: 'flex', gap: 10, alignItems: 'baseline', flexWrap: 'wrap' }}>
         <strong style={{ fontSize: '0.9rem' }}>Neste AI-kjøring — hva som vil skje</strong>
         <span className="muted" style={{ fontSize: '0.8rem' }}>
-          {remaining} selskaper i køen, høyest lead-score først · ca. 12 selskaper per minutt · kjører så lenge siden er
+          {remaining} selskaper i køen ({topN ? `topp ${topN} leads` : 'alle'}), høyest lead-score først · ca. 12 selskaper per minutt · kjører så lenge siden er
           åpen
         </span>
       </div>
