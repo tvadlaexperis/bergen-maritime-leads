@@ -222,7 +222,11 @@ function buildPrompt(input: LeadAnalysisInput): string {
     'med når de står i listen og er knyttet til noe bransjespesifikt. Dette er bransjekunnskap — skriv det som ' +
     'bransjeutfordringer, ALDRI som påstander om at akkurat dette selskapet har problemet. "relevance" er én setning ' +
     'om hvordan IT-/teknologikonsulenter eller bemanning konkret kan hjelpe med utfordringen (bruk vinklingen i ' +
-    'listen som utgangspunkt). "details" er en utdyping på 4-6 setninger som vises når selgeren klikker på ' +
+    'listen som utgangspunkt). Hver "challenge" skal være SPISS: maks ca. 12 ord, og nevne noe konkret og ' +
+    'gjenkjennelig for bransjen — et regelverk, en frist, et tall eller et konkret driftsproblem (f.eks. «EU ETS: ' +
+    'kvoter for 100 % av utslippene fra 2026», «Lakselus — behandlingskostnader og dødelighet»). Unngå vage ' +
+    'formuleringer som «kompleksitet knyttet til», «økte krav til», «mangel på fagfolk», «digitalisering». ' +
+    '"details" er en utdyping på 4-6 setninger som vises når selgeren klikker på ' +
     'utfordringen: hva utfordringen går ut på i praksis, hvorfor den er aktuell nå (regelverk, frister, ' +
     'markedsutvikling), hvilke konkrete oppgaver eller roller IT-/teknologikonsulenter eller bemanning typisk løser, ' +
     'og ett godt oppfølgingsspørsmål selgeren kan stille. Fortsatt bransjekunnskap, ikke påstander om selskapet.\n' +

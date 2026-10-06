@@ -1475,3 +1475,8 @@ a {
     display: none;
   }
 }
+
+.challenge-full {
+  padding-left: 12px;
+  border-left: 3px solid var(--signal);
+}

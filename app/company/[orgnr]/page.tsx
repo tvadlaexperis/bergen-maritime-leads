@@ -37,6 +37,7 @@ import BoxTabs from './BoxTabs';
 import PageTabs from './PageTabs';
 import FinancialsTabs from './FinancialsTabs';
 import NotesBox from './NotesBox';
+import { industryChallengesFor } from '@/lib/industryChallenges';
 
 export const dynamic = 'force-dynamic';
 
@@ -206,6 +207,7 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
   const needsAutoRefresh =
     isAdmin && !co.ai_analysis && (!co.last_refreshed_at || Date.now() - co.last_refreshed_at > 60 * 60 * 1000);
 
+  const segmentChallenges = industryChallengesFor(co.matched_code);
   // Rendered twice (narrow: under Kontakter; wide: own column) — CSS shows one.
   const newsBox = (
     <div className="box">
@@ -721,6 +723,73 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
             </div>
         </div>
       </div>
+            ),
+          },
+          {
+            key: 'challenges',
+            label: 'Utfordringer i bransjen',
+            content: (
+              <div className="split-scroll">
+                <div className="split-scroll-col">
+                  <div className="box">
+                    <div className="box-header">
+                      <span className="box-title">Utvalgt for selskapet</span>
+                      <span className="muted" style={{ fontSize: '0.72rem' }}>
+                        AI · generell bransjekunnskap — ikke bekreftet for selskapet
+                      </span>
+                    </div>
+                    <div className="box-pad" style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+                      {analysis?.industryChallenges && analysis.industryChallenges.length > 0 ? (
+                        analysis.industryChallenges.map((c, i) => (
+                          <div key={i} className="challenge-full">
+                            <strong style={{ fontSize: '0.98rem' }}>{c.challenge}</strong>
+                            <p style={{ margin: '6px 0 0', lineHeight: 1.55 }}>
+                              {c.details ?? (
+                                <span className="muted">
+                                  Utdypingen lages ved neste AI-vurdering av selskapet (Admin → Datakvalitet).
+                                </span>
+                              )}
+                            </p>
+                            <p style={{ margin: '6px 0 0', fontSize: '0.86rem', color: 'var(--text-secondary)' }}>
+                              <span className="muted">Hvordan vi kan hjelpe: </span>
+                              {c.relevance}
+                            </p>
+                          </div>
+                        ))
+                      ) : (
+                        <p className="muted" style={{ fontSize: '0.86rem' }}>
+                          Ingen AI-vurdering av bransjeutfordringer ennå. Kommer ved neste AI-kjøring.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                <div className="split-scroll-col">
+                  <div className="box">
+                    <div className="box-header">
+                      <span className="box-title">Alle kjente utfordringer i segmentet</span>
+                      <span className="muted" style={{ fontSize: '0.72rem' }}>{co.matched_group ?? ''}</span>
+                    </div>
+                    <div className="box-pad" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                      {segmentChallenges.length > 0 ? (
+                        segmentChallenges.map((c, i) => (
+                          <div key={i}>
+                            <strong style={{ fontSize: '0.88rem' }}>{c.challenge}</strong>
+                            <p style={{ margin: '2px 0 0', fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
+                              <span className="muted">Vinkel: </span>
+                              {c.angle}
+                            </p>
+                          </div>
+                        ))
+                      ) : (
+                        <p className="muted" style={{ fontSize: '0.86rem' }}>
+                          Ingen kjent liste for dette segmentet.
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
             ),
           },
           {

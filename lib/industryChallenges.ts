@@ -38,11 +38,12 @@ const SEAFOOD_TRADE: IndustryChallenge[] = [
 ];
 
 const SHIPPING: IndustryChallenge[] = [
-  { challenge: 'EU ETS for skipsfart og FuelEU Maritime — kvoter og krav til drivstoffets utslipp', angle: 'utslippsdata (MRV), kvoteregnskap og rapportering' },
-  { challenge: 'IMOs klimamål og CII-vurdering av hvert skip', angle: 'drifts- og energidata, optimalisering av seilas' },
+  { challenge: 'EU ETS: rederiet må levere kvoter for 70 % av utslippene for 2025 og 100 % fra 2026', angle: 'utslippsdata (MRV), kvoteregnskap og verifisert rapportering per skip' },
+  { challenge: 'FuelEU Maritime (fra 2025): krav om 2 % lavere klimagassintensitet i drivstoffet, 6 % i 2030 — ellers bøter', angle: 'drivstoffdata, pooling-beregninger og compliance-rapportering' },
+  { challenge: 'CII: skip med D-karakter tre år på rad eller E ett år må ha korrigerende tiltaksplan', angle: 'drifts- og energidata, optimalisering av fart og seilas' },
   { challenge: 'Valg av fremtidig drivstoff og flåtefornyelse (LNG, metanol, ammoniakk, batteri)', angle: 'beslutningsstøtte, tekniske prosjekter' },
   { challenge: 'Mangel på sjøfolk og maritime offiserer', angle: 'bemanning, mannskapsplanlegging og sertifikatstyring' },
-  { challenge: 'Cybersikkerhet om bord — nye klassekrav for skip (IACS UR E26/E27)', angle: 'OT-sikkerhet og IT-/OT-kompetanse' },
+  { challenge: 'IACS UR E26/E27: cyberkrav fra klassen for skip kontrahert etter 1. juli 2024', angle: 'OT-sikkerhet, nettverkssegmentering og dokumentasjon mot klassen' },
   { challenge: 'Volatile fraktrater og kostnader', angle: 'kommersielle analyser og flåtestyring' },
 ];
 
