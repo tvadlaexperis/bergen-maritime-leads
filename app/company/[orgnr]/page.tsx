@@ -560,6 +560,33 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
             ),
           },
           {
+            key: 'meetings',
+            label: 'Møter',
+            content: (
+      <div className="split-scroll">
+        <div className="split-scroll-col">
+          <div className="box">
+            <div className="box-header">
+              <span className="box-title">Bedriftsmøte</span>
+            </div>
+            <div className="box-pad">
+                    <MeetingTab
+                      id={co.id}
+                      date={co.meeting_date}
+                      prep={co.meeting_prep}
+                      notes={co.meeting_notes}
+                      canEdit={isAdmin}
+                    />
+            </div>
+          </div>
+        </div>
+        <div className="split-scroll-col">
+          {isAdmin && base && <NotesBox notes={base.notes ?? ''} />}
+        </div>
+      </div>
+            ),
+          },
+          {
             key: 'about',
             label: 'Om selskapet',
             content: (
@@ -790,33 +817,6 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
                   </div>
                 </div>
               </div>
-            ),
-          },
-          {
-            key: 'meetings',
-            label: 'Møter',
-            content: (
-      <div className="split-scroll">
-        <div className="split-scroll-col">
-          <div className="box">
-            <div className="box-header">
-              <span className="box-title">Bedriftsmøte</span>
-            </div>
-            <div className="box-pad">
-                    <MeetingTab
-                      id={co.id}
-                      date={co.meeting_date}
-                      prep={co.meeting_prep}
-                      notes={co.meeting_notes}
-                      canEdit={isAdmin}
-                    />
-            </div>
-          </div>
-        </div>
-        <div className="split-scroll-col">
-          {isAdmin && base && <NotesBox notes={base.notes ?? ''} />}
-        </div>
-      </div>
             ),
           },
         ]}
