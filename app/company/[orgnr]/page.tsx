@@ -35,6 +35,7 @@ import AutoRefreshTrigger from './AutoRefreshTrigger';
 import ContactsEditForm from './ContactsEditForm';
 import BoxTabs from './BoxTabs';
 import PageTabs from './PageTabs';
+import GoToTab from './GoToTab';
 import FinancialsTabs from './FinancialsTabs';
 import NotesBox from './NotesBox';
 import { industryChallengesFor } from '@/lib/industryChallenges';
@@ -785,7 +786,7 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
                     <div className="box-pad" style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
                       {analysis?.industryChallenges && analysis.industryChallenges.length > 0 ? (
                         analysis.industryChallenges.map((c, i) => (
-                          <ChallengeCard key={i} challenge={c.challenge} details={c.details} relevance={c.relevance} />
+                          <ChallengeCard key={i} id={`challenge-${i}`} challenge={c.challenge} details={c.details} relevance={c.relevance} />
                         ))
                       ) : (
                         <p className="muted" style={{ fontSize: '0.86rem' }}>
@@ -1001,21 +1002,12 @@ function EntryTab({ analysis, liCompany }: { analysis: LeadAnalysis; liCompany: 
             }}
           >
             {analysis.industryChallenges.map((c, i) => (
-              // Native <details>: click a card to read the longer explanation.
-              <details key={i} className="challenge-card">
-                <summary>
-                  <strong style={{ fontSize: '0.86rem' }}>{c.challenge}</strong>
-                  <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', lineHeight: 1.45 }}>{c.relevance}</span>
-                  <span className="challenge-more">Vis mer</span>
-                </summary>
-                <p style={{ margin: '8px 0 0', fontSize: '0.82rem', lineHeight: 1.5 }}>
-                  {c.details ?? (
-                    <span className="muted">
-                      Utdypingen lages ved neste AI-vurdering av selskapet (Admin → Datakvalitet).
-                    </span>
-                  )}
-                </p>
-              </details>
+              // Click → the «Utfordringer i bransjen» tab, scrolled to this one.
+              <GoToTab key={i} tab="challenges" anchor={`challenge-${i}`} className="challenge-card">
+                <strong style={{ fontSize: '0.86rem' }}>{c.challenge}</strong>
+                <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', lineHeight: 1.45 }}>{c.relevance}</span>
+                <span className="challenge-more">Les mer i Utfordringer i bransjen →</span>
+              </GoToTab>
             ))}
           </div>
         ) : (
@@ -1217,10 +1209,10 @@ function splitFollowUp(details: string): { body: string; question: string | null
   };
 }
 
-function ChallengeCard({ challenge, details, relevance }: { challenge: string; details?: string | null; relevance: string }) {
+function ChallengeCard({ id, challenge, details, relevance }: { id: string; challenge: string; details?: string | null; relevance: string }) {
   const { body, question } = details ? splitFollowUp(details) : { body: null, question: null };
   return (
-    <div className="challenge-full">
+    <div id={id} className="challenge-full">
       <h3 className="challenge-full-title">{challenge}</h3>
       {body ? (
         <p className="challenge-full-body">{body}</p>

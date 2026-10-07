@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { GOTO_TAB_EVENT } from './GoToTab';
 import type { BoxTab } from './BoxTabs';
 
 // Page-level tabs under the company header. Returns a fragment so the active
@@ -9,6 +10,16 @@ import type { BoxTab } from './BoxTabs';
 export default function PageTabs({ tabs }: { tabs: BoxTab[] }) {
   const [active, setActive] = useState(tabs[0]?.key);
   const current = tabs.find((t) => t.key === active) ?? tabs[0];
+  // Cards on one tab can open another (GoToTab), optionally scrolling to an element in it.
+  useEffect(() => {
+    const on = (e: Event) => {
+      const { tab, anchor } = (e as CustomEvent<{ tab: string; anchor?: string }>).detail;
+      setActive(tab);
+      if (anchor) requestAnimationFrame(() => document.getElementById(anchor)?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+    };
+    window.addEventListener(GOTO_TAB_EVENT, on);
+    return () => window.removeEventListener(GOTO_TAB_EVENT, on);
+  }, []);
 
   return (
     <>
