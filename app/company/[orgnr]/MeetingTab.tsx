@@ -9,12 +9,16 @@ import { updateMeetingAction, type ActionState } from '@/app/admin/actions';
 export default function MeetingTab({
   id,
   date,
+  location,
+  attendees,
   prep,
   notes,
   canEdit,
 }: {
   id: number;
   date: string | null;
+  location: string | null;
+  attendees: string | null;
   prep: string | null;
   notes: string | null;
   canEdit: boolean;
@@ -25,6 +29,8 @@ export default function MeetingTab({
     return (
       <div style={{ display: 'grid', gap: 14, fontSize: '0.88rem' }}>
         <ReadOnly label="Møtedato" text={date} />
+        <ReadOnly label="Sted" text={location} />
+        <ReadOnly label="Deltakere" text={attendees} />
         <ReadOnly label="Forberedelse" text={prep} />
         <ReadOnly label="Oppsummering etter møtet" text={notes} />
       </div>
@@ -34,12 +40,22 @@ export default function MeetingTab({
   return (
     <form action={action} style={{ display: 'grid', gap: 14 }}>
       <input type="hidden" name="id" value={id} />
-      <label className="field" style={{ maxWidth: 220 }}>
-        Møtedato
-        <input type="date" name="date" defaultValue={date ?? ''} />
+      <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+        <label className="field" style={{ width: 220 }}>
+          Møtedato
+          <input type="date" name="date" defaultValue={date ?? ''} />
+        </label>
+        <label className="field" style={{ flex: '1 1 260px' }}>
+          Sted <span className="muted">(adresse, Teams, …)</span>
+          <input type="text" name="location" defaultValue={location ?? ''} maxLength={300} />
+        </label>
+      </div>
+      <label className="field">
+        Deltakere <span className="muted">(én per linje — fra kunden og fra oss, gjerne med rolle)</span>
+        <textarea name="attendees" rows={3} defaultValue={attendees ?? ''} />
       </label>
       <label className="field">
-        Forberedelse <span className="muted">(mål for møtet, hvem som kommer, hva vi vil vite)</span>
+        Forberedelse <span className="muted">(mål for møtet, hva vi vil vite)</span>
         <textarea name="prep" rows={5} defaultValue={prep ?? ''} />
       </label>
       <label className="field">

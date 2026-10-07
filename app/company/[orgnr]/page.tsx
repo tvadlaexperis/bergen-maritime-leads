@@ -519,6 +519,8 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
                     <MeetingTab
                       id={co.id}
                       date={co.meeting_date}
+                      location={co.meeting_location}
+                      attendees={co.meeting_attendees}
                       prep={co.meeting_prep}
                       notes={co.meeting_notes}
                       canEdit={isAdmin}

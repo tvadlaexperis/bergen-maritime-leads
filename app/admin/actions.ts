@@ -58,7 +58,13 @@ export async function updateMeetingAction(_prev: ActionState, formData: FormData
   const text = (k: string) => String(formData.get(k) ?? '').trim().slice(0, 8000) || null;
   const date = String(formData.get('date') ?? '').trim();
   if (date && !/^\d{4}-\d{2}-\d{2}$/.test(date)) return { error: 'Ugyldig dato.' };
-  await setCompanyMeeting(id, { date: date || null, prep: text('prep'), notes: text('notes') });
+  await setCompanyMeeting(id, {
+    date: date || null,
+    location: text('location')?.slice(0, 300) ?? null,
+    attendees: text('attendees')?.slice(0, 2000) ?? null,
+    prep: text('prep'),
+    notes: text('notes'),
+  });
   await audit('company.meeting', { actor: user.email, target: `company:${id}` });
   revalidatePath('/company');
   return { ok: 'Møtenotater lagret.' };
