@@ -63,6 +63,7 @@ export async function updateMeetingAction(_prev: ActionState, formData: FormData
     location: text('location')?.slice(0, 300) ?? null,
     attendees: text('attendees')?.slice(0, 2000) ?? null,
     prep: text('prep'),
+    during: text('during'),
     notes: text('notes'),
   });
   await audit('company.meeting', { actor: user.email, target: `company:${id}` });

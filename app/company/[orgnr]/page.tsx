@@ -522,6 +522,7 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
                       location={co.meeting_location}
                       attendees={co.meeting_attendees}
                       prep={co.meeting_prep}
+                      during={co.meeting_during}
                       notes={co.meeting_notes}
                       canEdit={isAdmin}
                     />

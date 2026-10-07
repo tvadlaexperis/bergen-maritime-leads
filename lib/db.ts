@@ -73,6 +73,7 @@ export interface Company {
   meeting_date: string | null; // «Bedriftsmøte» tab: YYYY-MM-DD
   meeting_prep: string | null; // notes before the meeting
   meeting_notes: string | null; // summary after the meeting
+  meeting_during: string | null; // notes taken in the meeting
   meeting_location: string | null; // where (address, Teams, …)
   meeting_attendees: string | null; // who takes part, theirs and ours — free text
   news_checked_at: number | null;
@@ -232,6 +233,7 @@ const CONTACT_COLUMNS = [
   'meeting_notes TEXT',
   'meeting_location TEXT',
   'meeting_attendees TEXT',
+  'meeting_during TEXT',
   'news_checked_at INTEGER',
   'konsern_root_orgnr TEXT',
   'konsern_root_name TEXT',
@@ -1150,13 +1152,13 @@ export async function setCompanyWebsite(id: number, website: string | null): Pro
 // summary afterwards. One meeting per company for now.
 export async function setCompanyMeeting(
   id: number,
-  m: { date: string | null; location: string | null; attendees: string | null; prep: string | null; notes: string | null },
+  m: { date: string | null; location: string | null; attendees: string | null; prep: string | null; during: string | null; notes: string | null },
 ): Promise<void> {
   const c = await db();
   await c.execute({
     sql: `UPDATE companies SET meeting_date = ?, meeting_location = ?, meeting_attendees = ?, meeting_prep = ?,
-            meeting_notes = ?, updated_at = ? WHERE id = ?`,
-    args: [m.date, m.location, m.attendees, m.prep, m.notes, Date.now(), id],
+            meeting_during = ?, meeting_notes = ?, updated_at = ? WHERE id = ?`,
+    args: [m.date, m.location, m.attendees, m.prep, m.during, m.notes, Date.now(), id],
   });
 }
 

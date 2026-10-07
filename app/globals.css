@@ -1582,3 +1582,37 @@ a {
   cursor: pointer;
 }
 .icon-btn:hover { color: var(--accent); background: var(--accent-soft); border-color: var(--accent-border); }
+
+/* «Bedriftsmøte»: before / during / after as tabs, the text gets the room. */
+.meeting-form { display: grid; gap: 14px; }
+.meeting-phases {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--border);
+  margin-top: 4px;
+}
+.meeting-phase {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  background: transparent;
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.meeting-phase:hover { color: var(--accent); }
+.meeting-phase.active { color: var(--accent); border-bottom-color: var(--accent); }
+.meeting-phase-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+.meeting-phase-field[hidden] { display: none; }
+.meeting-phase-field textarea {
+  min-height: max(360px, 55vh);
+  font-size: 0.95rem;
+  line-height: 1.6;
+  resize: vertical;
+}
