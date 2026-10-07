@@ -266,6 +266,16 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
               <BackArrow href="/" label="Tilbake til alle selskaper" />
               <h1 style={{ fontSize: '1.5rem', fontWeight: 800, letterSpacing: '-0.02em' }}>{co.name}</h1>
+              {co.lead_score != null && (
+                <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: 6 }} title="Lead-score — se «Hvorfor aktuell»">
+                  <span className="num" data-band={band} style={{ fontSize: '1.5rem', fontWeight: 800, lineHeight: 1 }}>
+                    {co.lead_score}
+                  </span>
+                  <span className="muted" style={{ fontSize: '0.78rem' }}>
+                    / 100 · {band === 'high' ? 'prioritert lead' : band === 'mid' ? 'verdt en vurdering' : 'lav prioritet'}
+                  </span>
+                </span>
+              )}
               {co.under_liquidation === 1 && <span className="liquidation-badge">Under avvikling</span>}
             </div>
             <p className="muted" style={{ fontSize: '0.82rem', marginTop: 6 }}>
@@ -394,70 +404,6 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
             />
           </div>
 
-          {/* Score + AI factors (merged: they listed the same factors) */}
-          <div className="box">
-            <div className="box-header">
-              <span className="box-title">Hvorfor aktuell</span>
-              <span className="muted" style={{ fontSize: '0.72rem' }}>lead-score + AI-faktorer</span>
-            </div>
-            <div className="box-pad" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            {co.lead_score != null ? (
-              // Two columns: the computed score (bars) left, the AI's
-              // qualitative factors right — wraps to one column when narrow.
-              <div className="score-split">
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 14, minWidth: 0 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                  <span className="num" data-band={band} style={{ fontSize: '2.4rem', fontWeight: 800, lineHeight: 1 }}>
-                    {co.lead_score}
-                  </span>
-                  <span className="muted" style={{ fontSize: '0.8rem' }}>
-                    / 100
-                    <br />
-                    {band === 'high' ? 'prioritert lead' : band === 'mid' ? 'verdt en vurdering' : 'lav prioritet'}
-                  </span>
-                </div>
-
-                <div style={{ display: 'grid', gap: 8 }}>
-                  {SUBSCORES.map((s) => {
-                    const v = co[s.key] ?? 0;
-                    return (
-                      <div key={s.key} style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 6, alignItems: 'center' }}>
-                        <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
-                          {s.label} <span className="muted">{s.weight}</span>
-                        </span>
-                        <span className="num muted" style={{ fontSize: '0.76rem', textAlign: 'right' }}>{v}</span>
-                        <span className="meter" style={{ gridColumn: '1 / -1' }}>
-                          <span style={{ width: `${v}%` }} />
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-                {co.reason && <p style={{ fontSize: '0.86rem', color: 'var(--text-secondary)' }}>{co.reason}</p>}
-                {history.length > 1 && (
-                  <p className="muted" style={{ fontSize: '0.72rem' }}>
-                    Historikk: {history.slice().reverse().map((h) => h.lead_score).join(' → ')}
-                  </p>
-                )}
-              </div>
-              <div className="score-split-factors">
-                <span className="muted" style={{ fontSize: '0.72rem', fontWeight: 700 }}>
-                  Faktorer (AI-vurdert)
-                </span>
-                {analysis && analysis.scoreFactors.length > 0 ? (
-                  <ScoreFactorList factors={analysis.scoreFactors} />
-                ) : (
-                  <p className="muted" style={{ fontSize: '0.84rem', marginTop: 6 }}>Ingen AI-vurdering ennå.</p>
-                )}
-              </div>
-              </div>
-            ) : (
-              <p className="muted">
-                Ingen score ennå. {isAdmin ? 'Bruk «Oppdater fra registrene» under.' : 'Neste skann beregner en.'}
-              </p>
-            )}
-            </div>
-          </div>
         </div>
         <div className="split-scroll-col">
           {/* Contacts — one card per person, all sources merged (the same
@@ -584,6 +530,69 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
           {isAdmin && base && <NotesBox notes={base.notes ?? ''} />}
         </div>
       </div>
+            ),
+          },
+          {
+            key: 'why',
+            label: 'Hvorfor aktuell',
+            content: (
+              <div className="split-scroll">
+                <div className="split-scroll-col">
+          {/* Score + AI factors (merged: they listed the same factors) */}
+          <div className="box">
+            <div className="box-header">
+              <span className="box-title">Hvorfor aktuell</span>
+              <span className="muted" style={{ fontSize: '0.72rem' }}>lead-score + AI-faktorer</span>
+            </div>
+            <div className="box-pad" style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {co.lead_score != null ? (
+              // Two columns: the computed score (bars) left, the AI's
+              // qualitative factors right — wraps to one column when narrow.
+              <div className="score-split">
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 14, minWidth: 0 }}>
+                <div style={{ display: 'grid', gap: 8 }}>
+                  {SUBSCORES.map((s) => {
+                    const v = co[s.key] ?? 0;
+                    return (
+                      <div key={s.key} style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 6, alignItems: 'center' }}>
+                        <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+                          {s.label} <span className="muted">{s.weight}</span>
+                        </span>
+                        <span className="num muted" style={{ fontSize: '0.76rem', textAlign: 'right' }}>{v}</span>
+                        <span className="meter" style={{ gridColumn: '1 / -1' }}>
+                          <span style={{ width: `${v}%` }} />
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+                {co.reason && <p style={{ fontSize: '0.86rem', color: 'var(--text-secondary)' }}>{co.reason}</p>}
+                {history.length > 1 && (
+                  <p className="muted" style={{ fontSize: '0.72rem' }}>
+                    Historikk: {history.slice().reverse().map((h) => h.lead_score).join(' → ')}
+                  </p>
+                )}
+              </div>
+              <div className="score-split-factors">
+                <span className="muted" style={{ fontSize: '0.72rem', fontWeight: 700 }}>
+                  Faktorer (AI-vurdert)
+                </span>
+                {analysis && analysis.scoreFactors.length > 0 ? (
+                  <ScoreFactorList factors={analysis.scoreFactors} />
+                ) : (
+                  <p className="muted" style={{ fontSize: '0.84rem', marginTop: 6 }}>Ingen AI-vurdering ennå.</p>
+                )}
+              </div>
+              </div>
+            ) : (
+              <p className="muted">
+                Ingen score ennå. {isAdmin ? 'Bruk «Oppdater fra registrene» under.' : 'Neste skann beregner en.'}
+              </p>
+            )}
+            </div>
+          </div>
+                </div>
+              </div>
             ),
           },
           {
