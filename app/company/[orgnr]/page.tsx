@@ -267,11 +267,9 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
               <BackArrow href="/" label="Tilbake til alle selskaper" />
               <h1 style={{ fontSize: '1.5rem', fontWeight: 800, letterSpacing: '-0.02em' }}>{co.name}</h1>
               {co.lead_score != null && (
-                <span style={{ display: 'inline-flex', alignItems: 'baseline', gap: 6 }} title="Lead-score — se «Hvorfor aktuell»">
-                  <span className="num" data-band={band} style={{ fontSize: '1.5rem', fontWeight: 800, lineHeight: 1 }}>
-                    {co.lead_score}
-                  </span>
-                  <span className="muted" style={{ fontSize: '0.78rem' }}>
+                <span className="score-badge score-badge-lg" data-band={band} title="Lead-score — se «Hvorfor aktuell»">
+                  <span className="num">{co.lead_score}</span>
+                  <span className="score-badge-lg-label">
                     / 100 · {band === 'high' ? 'prioritert lead' : band === 'mid' ? 'verdt en vurdering' : 'lav prioritet'}
                   </span>
                 </span>
@@ -777,20 +775,7 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
                     <div className="box-pad" style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
                       {analysis?.industryChallenges && analysis.industryChallenges.length > 0 ? (
                         analysis.industryChallenges.map((c, i) => (
-                          <div key={i} className="challenge-full">
-                            <strong style={{ fontSize: '0.98rem' }}>{c.challenge}</strong>
-                            <p style={{ margin: '6px 0 0', lineHeight: 1.55 }}>
-                              {c.details ?? (
-                                <span className="muted">
-                                  Utdypingen lages ved neste AI-vurdering av selskapet (Admin → Datakvalitet).
-                                </span>
-                              )}
-                            </p>
-                            <p style={{ margin: '6px 0 0', fontSize: '0.86rem', color: 'var(--text-secondary)' }}>
-                              <span className="muted">Hvordan vi kan hjelpe: </span>
-                              {c.relevance}
-                            </p>
-                          </div>
+                          <ChallengeCard key={i} challenge={c.challenge} details={c.details} relevance={c.relevance} />
                         ))
                       ) : (
                         <p className="muted" style={{ fontSize: '0.86rem' }}>
@@ -1204,5 +1189,44 @@ function PhoneSmallIcon() {
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
       <path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.5c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z" />
     </svg>
+  );
+}
+
+// The AI's «details» ends with a suggested follow-up question inside the
+// prose; pulled out to its own line so the card reads as: what, how we help, ask.
+function splitFollowUp(details: string): { body: string; question: string | null } {
+  const sentences = details.match(/[^.!?]+[.!?]+(\s|$)/g) ?? [details];
+  const i = sentences.findIndex((x) => /oppfølgingsspørsmål/i.test(x));
+  if (i < 0) return { body: details, question: null };
+  const q = sentences[i]
+    .replace(/^\s*(et\s+)?(godt|relevant)?\s*oppfølgingsspørsmål\s*(selgeren kan stille|å stille|kan være)?\s*(er|kan være)?\s*:?\s*(å spørre\s*)?/i, '')
+    .trim();
+  return {
+    body: sentences.filter((_, j) => j !== i).join('').trim(),
+    question: q ? q.charAt(0).toUpperCase() + q.slice(1) : null,
+  };
+}
+
+function ChallengeCard({ challenge, details, relevance }: { challenge: string; details?: string | null; relevance: string }) {
+  const { body, question } = details ? splitFollowUp(details) : { body: null, question: null };
+  return (
+    <div className="challenge-full">
+      <h3 className="challenge-full-title">{challenge}</h3>
+      {body ? (
+        <p className="challenge-full-body">{body}</p>
+      ) : (
+        <p className="muted challenge-full-body">Utdypingen lages ved neste AI-vurdering av selskapet (Admin → Datakvalitet).</p>
+      )}
+      <div className="challenge-full-help">
+        <span className="challenge-full-label">Hvordan vi kan hjelpe</span>
+        {relevance}
+      </div>
+      {question && (
+        <div className="challenge-full-ask">
+          <span className="challenge-full-label">Spør kunden</span>
+          {question}
+        </div>
+      )}
+    </div>
   );
 }

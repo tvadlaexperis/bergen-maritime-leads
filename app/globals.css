@@ -7,6 +7,8 @@
    (guarded so the toggle can force light) and [data-theme="dark"].
    ============================================================ */
 :root {
+  /* One content width for every page — the header's side padding uses it too. */
+  --page-max: 1600px;
   --bg-1: #f5f8fc;
   --bg-2: #e9eff6;
   --surface: #ffffff;
@@ -128,9 +130,9 @@ a {
   justify-content: space-between;
   gap: 12px;
   /* Side padding lines the logo and menu up with the page content below,
-     which is capped at 1440px and centred inside .app-main's 28px padding
+     which is capped at --page-max and centred inside .app-main's 28px padding
      (.app-main-inner) — instead of running out to the window edges. */
-  padding: 16px max(28px, calc((100% - 1440px) / 2));
+  padding: 16px max(28px, calc((100% - var(--page-max)) / 2));
   border-bottom: 1px solid var(--border);
   border-top: 2px solid var(--accent-border);
   background: var(--surface-raised);
@@ -254,7 +256,7 @@ a {
   /* Wide enough for the company list's growing column count (status, driftsresultat,
      driftsmargin, sist oppdatert, …) without forcing .box-scroll's horizontal scrollbar
      on a normal desktop viewport. */
-  max-width: 1440px;
+  max-width: var(--page-max);
   margin: 0 auto;
   display: flex;
   flex-direction: column;
@@ -909,6 +911,21 @@ a {
   background: var(--signal-soft);
   border-color: color-mix(in srgb, var(--signal) 45%, transparent);
 }
+.score-badge-lg {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-left: 10px;
+  font-family: inherit;
+  font-size: 1.25rem;
+  font-weight: 800;
+  padding: 4px 14px;
+}
+.score-badge-lg-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  opacity: 0.85;
+}
 .score-badge[data-band='none'] {
   color: var(--text-muted);
   background: transparent;
@@ -1458,9 +1475,6 @@ a {
 
 /* Company page: use more of wide screens, and give Nyheter its own column
    on the Salg tab when there is room. */
-.app-main-inner:has(.split-scroll) {
-  max-width: 1920px;
-}
 .news-wide {
   display: none;
 }
@@ -1477,6 +1491,44 @@ a {
 }
 
 .challenge-full {
-  padding-left: 12px;
+  display: grid;
+  gap: 10px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
   border-left: 3px solid var(--signal);
+  border-radius: var(--radius-card);
+  background: var(--surface-raised);
+}
+.challenge-full-title {
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1.35;
+  margin: 0;
+}
+.challenge-full-body {
+  margin: 0;
+  max-width: 72ch;
+  font-size: 0.9rem;
+  line-height: 1.65;
+  color: var(--text-secondary);
+}
+.challenge-full-help,
+.challenge-full-ask {
+  display: grid;
+  gap: 2px;
+  max-width: 72ch;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 0.86rem;
+  line-height: 1.55;
+}
+.challenge-full-help { background: var(--accent-soft); }
+.challenge-full-ask { background: var(--surface-hover); font-style: italic; }
+.challenge-full-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  font-style: normal;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
 }
