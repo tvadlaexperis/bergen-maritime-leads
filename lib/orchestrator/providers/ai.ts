@@ -2,7 +2,7 @@ import type { Provider } from '../types';
 import { recordAiUsage } from '../../aiUsage';
 import { safeFetchText, safeFetchResult } from '../../http/safeFetch';
 import { cleanWebsite } from '../../brreg';
-import { stripHtml, contactPageCandidates, deeperContactPages } from '../../website';
+import { stripHtml, contactPageCandidates, deeperContactPages, aboutPageCandidates } from '../../website';
 import { parseNewsAnswer, findJsonArray, NEWS_CATEGORIES, type FoundNews } from '../../companyNews';
 import { linkedinCompanyName } from '../../brreg';
 import { claudeText, claudeModel } from './claude';
@@ -578,6 +578,17 @@ const CONTACTS_SCHEMA = {
     },
     itEnvironment: YES_NO,
     digitalProducts: YES_NO,
+    profile: {
+      type: 'object',
+      properties: {
+        summary: { type: ['string', 'null'] },
+        history: { type: ['string', 'null'] },
+        offerings: { type: 'array', items: { type: 'string' } },
+        markets: { type: 'array', items: { type: 'string' } },
+        sourceUrl: { type: ['string', 'null'] },
+      },
+      required: ['summary', 'history', 'offerings', 'markets', 'sourceUrl'],
+    },
     contacts: {
       type: 'array',
       items: {
@@ -592,7 +603,7 @@ const CONTACTS_SCHEMA = {
       },
     },
   },
-  required: ['contacts', 'technologies', 'itEnvironment', 'digitalProducts'],
+  required: ['contacts', 'technologies', 'itEnvironment', 'digitalProducts', 'profile'],
 } as const;
 
 export interface WebsiteTech {
@@ -605,7 +616,16 @@ export interface YesNo {
   value: 'ja' | 'nei' | 'ukjent';
   evidence: string | null;
 }
+/** What the company says about itself on its own site — no outside knowledge. */
+export interface CompanyProfile {
+  summary: string; // what they do, 2-4 sentences
+  history: string | null; // founded, milestones, ownership — as told on the site
+  offerings: string[]; // products / services
+  markets: string[]; // customers, segments, regions
+  sourceUrl: string | null;
+}
 export interface WebsiteInsights {
+  profile: CompanyProfile | null;
   contacts: ExtractedContact[];
   technologies: WebsiteTech[];
   itEnvironment: YesNo;
@@ -613,7 +633,7 @@ export interface WebsiteInsights {
 }
 
 const UNKNOWN: YesNo = { value: 'ukjent', evidence: null };
-const EMPTY_INSIGHTS: WebsiteInsights = { contacts: [], technologies: [], itEnvironment: UNKNOWN, digitalProducts: UNKNOWN };
+const EMPTY_INSIGHTS: WebsiteInsights = { profile: null, contacts: [], technologies: [], itEnvironment: UNKNOWN, digitalProducts: UNKNOWN };
 
 // The model's evidence must actually be in the text we sent, and its source
 // one of the pages we read — otherwise it's dropped. Spec §3: never claim a
@@ -665,6 +685,9 @@ async function requestContacts(name: string, website: string, contactPage: strin
   // under a /contacts hub (wilsonship.no), which the homepage never links to.
   const visited = new Set([website, ...(contactPage ? [contactPage] : []), ...level1.map((p) => p.url)]);
   const level2 = await fetchAll(deeperContactPages([...pinned, ...level1], visited, 4));
+  // About / history / what-we-do pages, for the company profile.
+  for (const p of level2) visited.add(p.url);
+  const about = homepageHtml ? await fetchAll(aboutPageCandidates(homepageHtml, website, visited, 3)) : [];
 
   // Most specific pages first, so the text cap trims the homepage, not the
   // page that actually lists the people. The pinned page leads.
@@ -672,6 +695,7 @@ async function requestContacts(name: string, website: string, contactPage: strin
     ...pinned,
     ...level2,
     ...level1,
+    ...about,
     ...(homepageHtml ? [{ url: website, html: homepageHtml }] : []),
   ];
   const combinedText = pages
@@ -679,7 +703,7 @@ async function requestContacts(name: string, website: string, contactPage: strin
     // people start ~7,500 characters in, after a long menu.
     .map((p) => `--- ${p.url} ---\n${stripHtml(p.html).slice(0, p.url === contactPage ? 20_000 : 9_000)}`)
     .join('\n\n')
-    .slice(0, 40_000);
+    .slice(0, 50_000);
   if (!combinedText.trim()) return EMPTY_INSIGHTS;
 
   const prompt =
@@ -697,7 +721,13 @@ async function requestContacts(name: string, website: string, contactPage: strin
     'teknologi ut fra bransje. Ingenting nevnt: tom liste.\n' +
     '- "itEnvironment": "ja" bare hvis teksten viser egen IT-avdeling, IT-ansatte eller utviklere; "nei" bare hvis den ' +
     'sier at IT er satt bort; ellers "ukjent". "digitalProducts": "ja" bare hvis selskapet selv utvikler eller selger ' +
-    'programvare/digitale tjenester. "evidence" er et ordrett sitat (null ved "ukjent").\n\n' +
+    'programvare/digitale tjenester. "evidence" er et ordrett sitat (null ved "ukjent").\n' +
+    '- "profile": en kort selskapsprofil på norsk bokmål, KUN ut fra det selskapet selv skriver i teksten — ' +
+    'ingen egen kunnskap, ingen gjetning, ikke reklamespråk. "summary": 2-4 setninger om hva selskapet driver med ' +
+    '(hva de lager/leverer, til hvem, hvor). "history": 2-4 setninger om historikken slik teksten forteller den ' +
+    '(stiftet år, opprinnelse, oppkjøp, eierskap, milepæler) — null hvis teksten ikke sier noe om det. "offerings": ' +
+    'inntil 6 korte navn på produkter/tjenester. "markets": inntil 5 korte kundegrupper, segmenter eller regioner. ' +
+    '"sourceUrl": URL-en til siden det meste av profilen kommer fra. Sier teksten for lite, sett summary til null.\n\n' +
     combinedText;
 
   // No freePrompt: page text has people's names, never sent to Gemini's free tier.
@@ -728,7 +758,22 @@ export function verifyWebsiteInsights(parsed: { contacts: ExtractedContact[] }, 
     if (!text.includes(squash(tech.evidence).slice(0, 60)) || !text.includes(tech.name.toLowerCase())) continue;
     if (!technologies.some((x) => x.name.toLowerCase() === tech.name.toLowerCase())) technologies.push(tech);
   }
+  const pr = ((parsed as { profile?: Record<string, unknown> }).profile ?? {}) as Record<string, unknown>;
+  const str = (v: unknown, max: number) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, max) : null);
+  const list = (v: unknown, n: number) =>
+    Array.isArray(v) ? v.map((x) => str(x, 80)).filter((x): x is string => !!x).slice(0, n) : [];
+  const summary = str(pr.summary, 700);
+  const profile: CompanyProfile | null = summary
+    ? {
+        summary,
+        history: str(pr.history, 700),
+        offerings: list(pr.offerings, 6),
+        markets: list(pr.markets, 5),
+        sourceUrl: typeof pr.sourceUrl === 'string' && pageUrls.has(pr.sourceUrl) ? pr.sourceUrl : null,
+      }
+    : null;
   return {
+    profile,
     contacts: parsed.contacts.filter((ct) => ct.name?.trim()).slice(0, 30),
     technologies: technologies.slice(0, 20),
     itEnvironment: verifiedYesNo(raw.itEnvironment, text),

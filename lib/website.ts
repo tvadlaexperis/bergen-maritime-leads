@@ -107,6 +107,52 @@ export function contactPageCandidates(html: string, baseUrl: string, limit = 4):
   return out;
 }
 
+const ABOUT_WORDS = ['om-oss', 'om oss', 'about', 'historie', 'history', 'who-we-are', 'who we are', 'selskapet', 'company', 'virksomhet', 'what-we-do', 'what we do', 'tjenester', 'services', 'products', 'produkter'];
+const COMMON_ABOUT_PATHS = ['/om-oss', '/about', '/about-us', '/historie', '/history'];
+
+/**
+ * Pages that describe the company itself — about / history / what we do —
+ * for the company profile. Same site, not already in `visited`, capped.
+ */
+export function aboutPageCandidates(html: string, baseUrl: string, visited: Set<string>, limit = 3): string[] {
+  let base: URL;
+  try {
+    base = new URL(baseUrl);
+  } catch {
+    return [];
+  }
+  const norm = (u: string) => u.replace(/#.*$/, '').replace(/\/$/, '').toLowerCase();
+  const seen = new Set([...visited].map(norm));
+  const scored = new Map<string, number>();
+  const linkRe = /<a\s+[^>]*href=["']([^"'#]+)["'][^>]*>([\s\S]*?)<\/a>/gi;
+  let m: RegExpExecArray | null;
+  while ((m = linkRe.exec(html))) {
+    const hay = `${m[1]} ${stripHtml(m[2])}`.toLowerCase();
+    // History pages are what the contact crawler skips, so they rank highest.
+    const score = ABOUT_WORDS.reduce((n, w) => n + (hay.includes(w) ? (w.startsWith('histor') ? 3 : 1) : 0), 0);
+    if (!score) continue;
+    let abs: URL;
+    try {
+      abs = new URL(m[1], base);
+    } catch {
+      continue;
+    }
+    abs.hash = '';
+    if (!sameSite(abs.hostname, base.hostname) || seen.has(norm(abs.toString()))) continue;
+    scored.set(abs.toString(), Math.max(scored.get(abs.toString()) ?? 0, score));
+  }
+  const out = [...scored.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([u]) => u)
+    .slice(0, limit);
+  for (const path of COMMON_ABOUT_PATHS) {
+    if (out.length >= limit) break;
+    const url = new URL(path, base).toString();
+    if (!seen.has(norm(url)) && !out.some((u) => norm(u) === norm(url))) out.push(url);
+  }
+  return out;
+}
+
 // Second-level pages worth reading first: where the named people usually
 // are on sites that split contacts by office or department
 // (wilsonship.no: /contacts → /contacts/office/bergen-headquarter).

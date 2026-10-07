@@ -624,6 +624,7 @@ async function aiPass(
       technologies: insights.data.technologies,
       itEnvironment: insights.data.itEnvironment,
       digitalProducts: insights.data.digitalProducts,
+      profile: insights.data.profile,
       checkedAt: Date.now(),
     });
     await setContactsScraped(company.id);

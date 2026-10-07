@@ -26,7 +26,7 @@ import {
 } from '@/lib/brreg';
 import { fmtPct, fmtInt, dateLabel } from '@/app/format';
 import { bandFor } from '@/app/components/ScoreBadge';
-import type { LeadAnalysis, ScoreVerdict, SignalLevel } from '@/lib/orchestrator/providers/ai';
+import type { LeadAnalysis, ScoreVerdict, SignalLevel, CompanyProfile } from '@/lib/orchestrator/providers/ai';
 import BackArrow from '@/app/components/BackArrow';
 import AdminControls from './AdminControls';
 import MeetingTab from './MeetingTab';
@@ -66,6 +66,7 @@ interface TechInfo {
   technologies: { name: string; category: string; evidence: string; sourceUrl: string }[];
   itEnvironment?: { value: string; evidence: string | null };
   digitalProducts?: { value: string; evidence: string | null };
+  profile?: CompanyProfile | null;
   checkedAt: number;
 }
 
@@ -599,6 +600,15 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
             content: (
       <div className="split-scroll">
         <div className="split-scroll-col">
+          <ProfileBox
+            profile={tech?.profile ?? null}
+            checkedAt={tech?.checkedAt ?? null}
+            hasWebsite={!!co.website}
+            established={co.established_at}
+            registered={co.registered_at}
+            orgForm={co.org_form}
+            activity={co.matched_label}
+          />
             {groupMembers.length > 1 ? (
               // One customer, several legal entities — show them together,
               // and say whether the register or our inference joined them.
@@ -1227,6 +1237,109 @@ function ChallengeCard({ challenge, details, relevance }: { challenge: string; d
           {question}
         </div>
       )}
+    </div>
+  );
+}
+
+// «Om selskapet»: what the company does and its history, in its own words
+// (read off its website by the AI pass — lib/orchestrator/providers/ai.ts
+// requestContacts) next to the register's dates.
+function ProfileBox({
+  profile,
+  checkedAt,
+  hasWebsite,
+  established,
+  registered,
+  orgForm,
+  activity,
+}: {
+  profile: CompanyProfile | null;
+  checkedAt: number | null;
+  hasWebsite: boolean;
+  established: string | null;
+  registered: string | null;
+  orgForm: string | null;
+  activity: string | null;
+}) {
+  const year = (d: string | null) => (d ? d.slice(0, 4) : null);
+  const facts = [
+    year(established) && { label: 'Stiftet', value: year(established)! },
+    year(registered) && year(registered) !== year(established) && { label: 'Registrert', value: year(registered)! },
+    orgForm && { label: 'Selskapsform', value: orgForm },
+    activity && { label: 'Bransje (Brreg)', value: activity },
+  ].filter(Boolean) as { label: string; value: string }[];
+  return (
+    <div className="box">
+      <div className="box-header">
+        <span className="box-title">Om selskapet</span>
+        <span className="muted" style={{ fontSize: '0.72rem' }}>
+          {profile ? 'AI-sammendrag av selskapets egen nettside' : 'Brønnøysund'}
+        </span>
+      </div>
+      <div className="box-pad profile-box">
+        {facts.length > 0 && (
+          <dl className="profile-facts">
+            {facts.map((f) => (
+              <div key={f.label}>
+                <dt>{f.label}</dt>
+                <dd>{f.value}</dd>
+              </div>
+            ))}
+          </dl>
+        )}
+        {profile ? (
+          <>
+            <section>
+              <h3 className="profile-h">Hva de driver med</h3>
+              <p className="profile-text">{profile.summary}</p>
+            </section>
+            {profile.history && (
+              <section>
+                <h3 className="profile-h">Historikk</h3>
+                <p className="profile-text">{profile.history}</p>
+              </section>
+            )}
+            {profile.offerings.length > 0 && (
+              <section>
+                <h3 className="profile-h">Produkter og tjenester</h3>
+                <div className="profile-chips">
+                  {profile.offerings.map((o) => (
+                    <span key={o} className="chip">{o}</span>
+                  ))}
+                </div>
+              </section>
+            )}
+            {profile.markets.length > 0 && (
+              <section>
+                <h3 className="profile-h">Kunder og markeder</h3>
+                <div className="profile-chips">
+                  {profile.markets.map((o) => (
+                    <span key={o} className="chip">{o}</span>
+                  ))}
+                </div>
+              </section>
+            )}
+            <p className="muted" style={{ fontSize: '0.72rem' }}>
+              {checkedAt ? `Lest ${dateLabel(checkedAt)}` : ''}
+              {profile.sourceUrl && (
+                <>
+                  {' · '}
+                  <a href={profile.sourceUrl} target="_blank" rel="noopener noreferrer" className="link-accent">
+                    kilde ↗
+                  </a>
+                </>
+              )}
+              {' · bygger bare på det selskapet selv skriver.'}
+            </p>
+          </>
+        ) : (
+          <p className="muted" style={{ fontSize: '0.84rem' }}>
+            {hasWebsite
+              ? 'Ingen beskrivelse ennå — lages neste gang AI-vurderingen leser nettsiden.'
+              : 'Ingen kjent nettside, så ingen beskrivelse av virksomheten ennå.'}
+          </p>
+        )}
+      </div>
     </div>
   );
 }

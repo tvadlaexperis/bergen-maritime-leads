@@ -1603,9 +1603,12 @@ export async function countBrregStale(staleDays = 3): Promise<number> {
 // A website we've never successfully read for contacts (and that has none
 // stored — rows from before contacts_scraped_at existed count as read).
 // A contact page set by an admin always counts (it's set to be read).
-const NEEDS_CONTACT_SCRAPE = `((co.website IS NOT NULL OR co.contact_page_url IS NOT NULL) AND co.contacts_scraped_at IS NULL
+// Second half: a site read before the company profile existed (2026-10-07)
+// is read once more for it.
+const NEEDS_CONTACT_SCRAPE = `(((co.website IS NOT NULL OR co.contact_page_url IS NOT NULL) AND co.contacts_scraped_at IS NULL
   AND (co.contact_page_url IS NOT NULL
-    OR NOT EXISTS (SELECT 1 FROM company_contacts cc WHERE cc.company_id = co.id AND cc.source = 'nettside')))`;
+    OR NOT EXISTS (SELECT 1 FROM company_contacts cc WHERE cc.company_id = co.id AND cc.source = 'nettside')))
+  OR (co.website IS NOT NULL AND (co.tech_json IS NULL OR co.tech_json NOT LIKE '%"profile"%')))`;
 // News is re-searched every NEWS_REFRESH_DAYS (Google Search-grounded, billed
 // per search — 5,000/month free across Gemini 3.x).
 export const NEWS_REFRESH_DAYS = 30;

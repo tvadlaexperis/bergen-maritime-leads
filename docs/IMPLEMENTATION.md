@@ -139,7 +139,9 @@ the guest magic-link flow, `scripts/hash-password.mjs`, `scripts/create-user.mjs
    `web_search` tool). Switched to Claude 2026-10-01 after Gemini's prepaid credit ran out.
    Its own queue (`listCompaniesForAi`: never-attempted
    first, highest lead score first, then oldest `ai_attempted_at`), up to `SCAN_AI_BATCH`
-   (default 12) companies in waves of 6. The queue only covers the top `AI_TOP_N` (50) leads,
+   (default 12) companies in waves of 6. The website read (`ai.extractContacts`) also reads up to
+   three about/history pages and returns a `profile` (what they do, history, offerings, markets —
+   only from the site's own text), stored in `tech_json.profile` and shown in «Om selskapet». The queue only covers the top `AI_TOP_N` (50) leads,
    a konsern counted once (its best member); the admin Datakvalitet tab has a «Høyest lead-score»
    filter (`?topp=alle|50|100|200|500`, default 50, `parseTopN`) that scopes both the coverage
    boxes and the «AI-vurdering» run next to it. Token use and an estimated cost per run (`lib/aiUsage.ts`, list prices,
