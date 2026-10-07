@@ -1145,9 +1145,6 @@ a {
   border-color: var(--accent-border);
   border-left: 4px solid var(--accent);
 }
-.box-featured > .box-header {
-  background: var(--accent-soft);
-}
 .entry-contact {
   padding: 12px 14px;
   border-radius: var(--radius-control);
