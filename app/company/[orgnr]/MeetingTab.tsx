@@ -80,20 +80,22 @@ export default function MeetingTab({
           Møtedato
           <input type="date" name="date" defaultValue={date ?? ''} />
         </label>
-        <label className="field" style={{ flex: '1 1 240px' }}>
+        <label className="field" style={{ flex: '1 1 200px' }}>
           Sted
           <input type="text" name="location" defaultValue={location ?? ''} maxLength={300} placeholder="Adresse, Teams, …" />
         </label>
+        <label className="field" style={{ flex: '2 1 320px' }}>
+          Deltakere
+          <input
+            type="text"
+            name="attendees"
+            // Older entries were one per line — shown comma-separated now.
+            defaultValue={(attendees ?? '').split(/\n+/).map((x) => x.trim()).filter(Boolean).join(', ')}
+            maxLength={2000}
+            placeholder="Fra kunden og fra oss, gjerne med rolle — kommaseparert"
+          />
+        </label>
       </div>
-      <label className="field">
-        Deltakere
-        <textarea
-          name="attendees"
-          rows={2}
-          defaultValue={attendees ?? ''}
-          placeholder="Én per linje — fra kunden og fra oss, gjerne med rolle"
-        />
-      </label>
 
       {tabs}
       {PHASES.map((p) => (
