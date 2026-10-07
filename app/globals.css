@@ -1567,3 +1567,18 @@ a {
 .profile-text { margin: 0; max-width: 72ch; font-size: 0.92rem; line-height: 1.65; }
 .profile-chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .profile-chips .chip { cursor: default; }
+
+/* Small icon-only button in a box header (e.g. the notes pencil). */
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.icon-btn:hover { color: var(--accent); background: var(--accent-soft); border-color: var(--accent-border); }

@@ -527,7 +527,7 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
           </div>
         </div>
         <div className="split-scroll-col">
-          {isAdmin && base && <NotesBox notes={base.notes ?? ''} />}
+          {isAdmin && base && <NotesBox id={co.id} notes={base.notes ?? ''} />}
         </div>
       </div>
             ),
