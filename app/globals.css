@@ -971,13 +971,16 @@ a {
   margin-left: 6px;
   padding: 1px 7px;
   border-radius: var(--radius-pill);
-  border: 1px solid color-mix(in srgb, var(--positive) 40%, transparent);
-  background: color-mix(in srgb, var(--positive) 10%, transparent);
-  color: var(--positive);
+  /* Filled, not tinted: it's the one flag in the list worth spotting at a glance. */
+  border: 1px solid var(--positive);
+  background: var(--positive);
+  color: var(--surface-raised); /* white in light mode, dark on the bright teal in dark mode */
   font-size: 0.68rem;
   font-weight: 700;
+  letter-spacing: 0.02em;
   white-space: nowrap;
   vertical-align: middle;
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--positive) 35%, transparent);
 }
 
 /* ── Corporate-group cross-sell flag — informational, not a warning or a buy
@@ -1386,10 +1389,12 @@ a {
   color: var(--text-muted);
 }
 .news-card-signal {
-  color: var(--signal);
-  border: 1px solid var(--signal);
+  color: var(--surface-raised);
+  background: var(--positive);
+  border: 1px solid var(--positive);
   border-radius: var(--radius-pill);
-  padding: 0 6px;
+  padding: 0 7px;
+  font-weight: 700;
 }
 /* Teknologi og kunderelevans */
 .tech-chip {
