@@ -1618,3 +1618,50 @@ a {
   line-height: 1.6;
   resize: vertical;
 }
+
+/* ── Venner + sending companies (FriendsMenu, /venner, ShareCompany) ── */
+.friend-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+.friend-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  font-size: 0.85rem;
+}
+.friend-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+}
+.share-panel { width: 300px; max-height: none; }
+.share-friend {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 4px;
+  border-radius: 6px;
+  font-size: 0.86rem;
+  cursor: pointer;
+}
+.share-friend:hover { background: var(--surface-hover); }
+.notif-item-new { background: var(--accent-soft); }
+.notif-note {
+  font-size: 0.78rem;
+  font-style: italic;
+  color: var(--text-primary);
+}

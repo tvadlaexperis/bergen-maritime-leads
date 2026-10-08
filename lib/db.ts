@@ -526,6 +526,34 @@ async function ensureSchema(): Promise<void> {
         count INTEGER NOT NULL,
         PRIMARY KEY (bucket, window_start)
       );
+
+      -- Venner (same model as minmatside): a request is pending until the
+      -- addressee accepts; declining or unfriending deletes the row.
+      CREATE TABLE IF NOT EXISTS friendships (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        requester_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        addressee_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        status TEXT NOT NULL DEFAULT 'pending',
+        created_at INTEGER NOT NULL,
+        UNIQUE(requester_id, addressee_id)
+      );
+      CREATE INDEX IF NOT EXISTS idx_friendships_requester ON friendships(requester_id);
+      CREATE INDEX IF NOT EXISTS idx_friendships_addressee ON friendships(addressee_id);
+
+      -- Per-user notifications (friend requests, shared companies) — the
+      -- \`notifications\` table above is the shared scan feed everyone sees.
+      CREATE TABLE IF NOT EXISTS user_notifications (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        type TEXT NOT NULL,
+        actor_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        orgnr TEXT,
+        company_name TEXT,
+        message TEXT,
+        created_at INTEGER NOT NULL,
+        read_at INTEGER
+      );
+      CREATE INDEX IF NOT EXISTS idx_user_notifications_user ON user_notifications(user_id, created_at);
     `,
       )
       .then(() => addColumnsIfMissing('companies', CONTACT_COLUMNS))
@@ -675,6 +703,185 @@ export async function getUserById(id: number): Promise<User | undefined> {
   const c = await db();
   const res = await c.execute({ sql: 'SELECT * FROM users WHERE id = ?', args: [id] });
   return res.rows[0] as unknown as User | undefined;
+}
+
+// --- Venner ---
+// Same model as minmatside (lib/db.ts there): search → request → accept.
+// The shared guest login (GUEST_EMAIL) is never offered as a friend.
+
+export type FriendshipStatus = 'none' | 'pending_sent' | 'pending_received' | 'friends';
+
+export interface Friend {
+  id: number;
+  display_name: string;
+  email: string;
+}
+export interface FriendRequest {
+  friendship_id: number;
+  user_id: number;
+  display_name: string;
+  email: string;
+  created_at: number;
+}
+export interface UserSearchResult extends Friend {
+  status: FriendshipStatus;
+  friendship_id: number | null;
+}
+interface FriendshipRow {
+  id: number;
+  requester_id: number;
+  addressee_id: number;
+  status: 'pending' | 'accepted';
+  created_at: number;
+}
+
+const guestEmail = () => (process.env.GUEST_EMAIL ?? '').trim().toLowerCase();
+
+export async function searchUsers(q: string, me: number): Promise<UserSearchResult[]> {
+  const c = await db();
+  const like = `%${q.replace(/[%_]/g, '')}%`;
+  const users = plain<Friend>(
+    (
+      await c.execute({
+        sql: `SELECT id, display_name, email FROM users
+              WHERE id != ? AND email != ? AND (display_name LIKE ? OR email LIKE ?)
+              ORDER BY display_name COLLATE NOCASE LIMIT 20`,
+        args: [me, guestEmail(), like, like],
+      })
+    ).rows,
+  );
+  const rows = plain<FriendshipRow>(
+    (await c.execute({ sql: 'SELECT * FROM friendships WHERE requester_id = ? OR addressee_id = ?', args: [me, me] })).rows,
+  );
+  return users.map((u) => {
+    const f = rows.find((r) => r.requester_id === u.id || r.addressee_id === u.id);
+    if (!f) return { ...u, status: 'none' as const, friendship_id: null };
+    const status: FriendshipStatus =
+      f.status === 'accepted' ? 'friends' : f.requester_id === me ? 'pending_sent' : 'pending_received';
+    return { ...u, status, friendship_id: f.id };
+  });
+}
+
+export async function getFriendshipBetween(a: number, b: number): Promise<FriendshipRow | undefined> {
+  const c = await db();
+  const res = await c.execute({
+    sql: 'SELECT * FROM friendships WHERE (requester_id = ? AND addressee_id = ?) OR (requester_id = ? AND addressee_id = ?)',
+    args: [a, b, b, a],
+  });
+  return plain<FriendshipRow>(res.rows)[0];
+}
+
+export async function getFriendshipById(id: number): Promise<FriendshipRow | undefined> {
+  const c = await db();
+  return plain<FriendshipRow>((await c.execute({ sql: 'SELECT * FROM friendships WHERE id = ?', args: [id] })).rows)[0];
+}
+
+export async function sendFriendRequest(requesterId: number, addresseeId: number): Promise<number> {
+  const c = await db();
+  const res = await c.execute({
+    sql: "INSERT INTO friendships (requester_id, addressee_id, status, created_at) VALUES (?, ?, 'pending', ?)",
+    args: [requesterId, addresseeId, Date.now()],
+  });
+  return Number(res.lastInsertRowid);
+}
+
+export async function acceptFriendRequest(id: number): Promise<void> {
+  const c = await db();
+  await c.execute({ sql: "UPDATE friendships SET status = 'accepted' WHERE id = ?", args: [id] });
+}
+
+/** Declines a request, withdraws one you sent, or unfriends. */
+export async function deleteFriendship(id: number): Promise<void> {
+  const c = await db();
+  await c.execute({ sql: 'DELETE FROM friendships WHERE id = ?', args: [id] });
+}
+
+async function listRequests(me: number, incoming: boolean): Promise<FriendRequest[]> {
+  const c = await db();
+  const res = await c.execute({
+    sql: `SELECT f.id AS friendship_id, u.id AS user_id, u.display_name, u.email, f.created_at
+          FROM friendships f JOIN users u ON u.id = ${incoming ? 'f.requester_id' : 'f.addressee_id'}
+          WHERE ${incoming ? 'f.addressee_id' : 'f.requester_id'} = ? AND f.status = 'pending'
+          ORDER BY f.created_at DESC`,
+    args: [me],
+  });
+  return plain<FriendRequest>(res.rows);
+}
+export const listIncomingFriendRequests = (me: number) => listRequests(me, true);
+export const listOutgoingFriendRequests = (me: number) => listRequests(me, false);
+
+export async function listFriends(me: number): Promise<(Friend & { friendship_id: number })[]> {
+  const c = await db();
+  const res = await c.execute({
+    sql: `SELECT u.id, u.display_name, u.email, f.id AS friendship_id
+          FROM friendships f JOIN users u ON u.id = CASE WHEN f.requester_id = ? THEN f.addressee_id ELSE f.requester_id END
+          WHERE (f.requester_id = ? OR f.addressee_id = ?) AND f.status = 'accepted'
+          ORDER BY u.display_name COLLATE NOCASE`,
+    args: [me, me, me],
+  });
+  return plain<Friend & { friendship_id: number }>(res.rows);
+}
+
+export async function areFriends(a: number, b: number): Promise<boolean> {
+  return (await getFriendshipBetween(a, b))?.status === 'accepted';
+}
+
+// --- Personal notifications ---
+
+export type UserNotificationType = 'friend_request' | 'friend_accepted' | 'company_shared';
+export interface UserNotification {
+  id: number;
+  type: UserNotificationType;
+  actor_name: string;
+  orgnr: string | null;
+  company_name: string | null;
+  message: string | null;
+  created_at: number;
+  read_at: number | null;
+}
+
+export async function addUserNotification(n: {
+  userId: number;
+  type: UserNotificationType;
+  actorId: number;
+  orgnr?: string | null;
+  companyName?: string | null;
+  message?: string | null;
+}): Promise<void> {
+  const c = await db();
+  await c.execute({
+    sql: `INSERT INTO user_notifications (user_id, type, actor_id, orgnr, company_name, message, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    args: [n.userId, n.type, n.actorId, n.orgnr ?? null, n.companyName ?? null, n.message ?? null, Date.now()],
+  });
+}
+
+export async function listUserNotifications(userId: number, limit = 15): Promise<UserNotification[]> {
+  const c = await db();
+  const res = await c.execute({
+    sql: `SELECT n.id, n.type, u.display_name AS actor_name, n.orgnr, n.company_name, n.message, n.created_at, n.read_at
+          FROM user_notifications n JOIN users u ON u.id = n.actor_id
+          WHERE n.user_id = ? ORDER BY n.created_at DESC, n.id DESC LIMIT ?`,
+    args: [userId, limit],
+  });
+  return plain<UserNotification>(res.rows);
+}
+
+export async function countUnreadUserNotifications(userId: number): Promise<number> {
+  const c = await db();
+  const res = await c.execute({
+    sql: 'SELECT COUNT(*) AS n FROM user_notifications WHERE user_id = ? AND read_at IS NULL',
+    args: [userId],
+  });
+  return Number((res.rows[0] as unknown as { n: number }).n);
+}
+
+export async function markUserNotificationsRead(userId: number): Promise<void> {
+  const c = await db();
+  await c.execute({
+    sql: 'UPDATE user_notifications SET read_at = ? WHERE user_id = ? AND read_at IS NULL',
+    args: [Date.now(), userId],
+  });
 }
 
 // --- Companies ---

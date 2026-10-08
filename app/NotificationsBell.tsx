@@ -3,7 +3,8 @@
 import { useRef, useState, useTransition } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import type { Notification } from '@/lib/db';
+import type { Notification, UserNotification } from '@/lib/db';
+import { markMyNotificationsReadAction } from './venner/actions';
 import { agoLabel } from './format';
 import { markNotificationsReadAction } from './notificationsActions';
 
@@ -14,9 +15,12 @@ import { markNotificationsReadAction } from './notificationsActions';
 export default function NotificationsBell({
   initial,
   initialUnread,
+  personal = [],
 }: {
   initial: Notification[];
   initialUnread: number;
+  /** Friend requests and companies shared with you — shown first. */
+  personal?: UserNotification[];
 }) {
   const [open, setOpen] = useState(false);
   const [unread, setUnread] = useState(initialUnread);
@@ -30,7 +34,7 @@ export default function NotificationsBell({
     if (next && unread > 0) {
       setUnread(0);
       startTransition(async () => {
-        await markNotificationsReadAction();
+        await Promise.all([markNotificationsReadAction(), personal.length ? markMyNotificationsReadAction() : null]);
         router.refresh();
       });
     }
@@ -61,6 +65,35 @@ export default function NotificationsBell({
       </button>
       {open && (
         <div className="notif-panel">
+          {personal.length > 0 && (
+            <>
+              <div className="notif-panel-header">Til deg</div>
+              <ul className="notif-list">
+                {personal.map((n) => (
+                  <li key={`u${n.id}`}>
+                    <Link
+                      href={n.type === 'company_shared' && n.orgnr ? `/company/${n.orgnr}` : '/venner'}
+                      className={`notif-item${n.read_at ? '' : ' notif-item-new'}`}
+                      onClick={() => setOpen(false)}
+                    >
+                      <span className="notif-company">
+                        {n.type === 'company_shared' ? n.company_name : n.actor_name}
+                      </span>
+                      <span className="notif-message">
+                        {n.type === 'company_shared'
+                          ? `${n.actor_name} sendte deg dette selskapet`
+                          : n.type === 'friend_request'
+                            ? 'vil bli venn med deg'
+                            : 'godtok venneforespørselen din'}
+                      </span>
+                      {n.message && <span className="notif-note">«{n.message}»</span>}
+                      <span className="notif-time muted">{agoLabel(n.created_at)}</span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
           <div className="notif-panel-header">Siste oppdateringer</div>
           {initial.length === 0 ? (
             <p className="muted" style={{ padding: '10px 14px', fontSize: '0.82rem' }}>

@@ -5,12 +5,20 @@ import Link from 'next/link';
 import { Plus_Jakarta_Sans } from 'next/font/google';
 import { getCurrentUser } from '@/lib/auth';
 import { getThemePref, themeAttr } from '@/lib/theme';
-import { listRecentNotifications, countUnreadNotifications } from '@/lib/db';
+import {
+  listRecentNotifications,
+  countUnreadNotifications,
+  listUserNotifications,
+  countUnreadUserNotifications,
+  listFriends,
+  listIncomingFriendRequests,
+} from '@/lib/db';
 import { Suspense } from 'react';
 import ThemeToggle from './ThemeToggle';
 import NavLinks from './NavLinks';
 import FxTicker from './FxTicker';
 import NotificationsBell from './NotificationsBell';
+import FriendsMenu from './FriendsMenu';
 import ProfileMenu from './ProfileMenu';
 
 const font = Plus_Jakarta_Sans({ subsets: ['latin'], variable: '--font-sans' });
@@ -30,6 +38,16 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
   const [notifications, unreadCount] = user
     ? await Promise.all([listRecentNotifications(15), countUnreadNotifications()])
     : [[], 0];
+  // Venner + personal notifications — not for the shared guest login.
+  const social =
+    user && user.email.toLowerCase() !== (process.env.GUEST_EMAIL ?? '').trim().toLowerCase()
+      ? await Promise.all([
+          listUserNotifications(Number(user.sub), 15),
+          countUnreadUserNotifications(Number(user.sub)),
+          listFriends(Number(user.sub)),
+          listIncomingFriendRequests(Number(user.sub)),
+        ])
+      : null;
 
   return (
     <html lang="nb" data-theme={themeAttr(theme)} className={font.variable} suppressHydrationWarning>
@@ -52,7 +70,14 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
 
           <div className="app-nav">
             {user && <NavLinks />}
-            {user && <NotificationsBell initial={notifications} initialUnread={unreadCount} />}
+            {social && <FriendsMenu friends={social[2]} pending={social[3].length} />}
+            {user && (
+              <NotificationsBell
+                initial={notifications}
+                initialUnread={unreadCount + (social?.[1] ?? 0)}
+                personal={social?.[0] ?? []}
+              />
+            )}
             {user ? (
               <ProfileMenu user={{ displayName: user.displayName, email: user.email, role: user.role }} theme={theme} />
             ) : (

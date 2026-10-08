@@ -177,3 +177,15 @@ the guest magic-link flow, `scripts/hash-password.mjs`, `scripts/create-user.mjs
   Turso, new scans + the audit log don't persist or share across instances.
 - **Open item — SSO.** Auth is a shared admin password + optional guest link. Auth.js
   (Google/Entra) is the intended upgrade.
+
+
+## Venner og deling (2026-10-08)
+
+Same model as minmatside: `/venner` to search colleagues (name/e-mail, the shared
+`GUEST_EMAIL` login excluded), send/accept/decline/withdraw requests and remove friends.
+Tables `friendships` (pending → accepted; declining/unfriending deletes the row) and
+`user_notifications` (per user: `friend_request`, `friend_accepted`, `company_shared` with an
+optional note). The scan feed in `notifications` stays shared. «Send til venn» on the company
+page sends to confirmed friends only; the bell shows «Til deg» above «Siste oppdateringer».
+Server Actions in `app/venner/actions.ts` (rate-limited per user). No e-mail yet — users are
+still created with `scripts/create-user.mjs`.

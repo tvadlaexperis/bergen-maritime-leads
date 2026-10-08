@@ -36,6 +36,7 @@ import ContactsEditForm from './ContactsEditForm';
 import BoxTabs from './BoxTabs';
 import PageTabs from './PageTabs';
 import GoToTab from './GoToTab';
+import ShareCompany from './ShareCompany';
 import FinancialsTabs from './FinancialsTabs';
 import NotesBox from './NotesBox';
 import { industryChallengesFor } from '@/lib/industryChallenges';
@@ -193,6 +194,8 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
   const boardContacts = allContacts.filter((c) => c.source === 'brreg');
   const liName = linkedinCompanyName(co.name);
   const isAdmin = user?.role === 'admin';
+  // Everyone but the shared guest login can send companies to friends.
+  const canShare = !!user && user.email.toLowerCase() !== (process.env.GUEST_EMAIL ?? '').trim().toLowerCase();
   const band = bandFor(co.lead_score);
   const analysis = parseAnalysis(co.ai_analysis);
   const tech = parseTech(co.tech_json);
@@ -343,6 +346,7 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
                 )}
                 </span>
               </span>
+              {canShare && <ShareCompany orgnr={co.orgnr} />}
               {isAdmin && <AdminPanelToggle />}
             </div>
           </div>
