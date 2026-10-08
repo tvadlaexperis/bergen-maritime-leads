@@ -1745,3 +1745,50 @@ a {
   white-space: nowrap;
 }
 .side-list-meta { font-size: 0.7rem; font-weight: 400; overflow: hidden; text-overflow: ellipsis; }
+
+/* ── «Kundekontakt» tab ── */
+.contact-log-form {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--surface-hover);
+}
+.contact-log-row { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; }
+.contact-log-heading {
+  margin: 0 0 8px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.contact-log-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.contact-log-item { padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-control); }
+.contact-log-top { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 0.86rem; }
+.contact-log-outcome {
+  padding: 1px 8px;
+  border-radius: var(--radius-pill);
+  font-size: 0.72rem;
+  font-weight: 700;
+  background: var(--surface-hover);
+  color: var(--text-secondary);
+}
+.contact-log-outcome[data-outcome='snakket med'],
+.contact-log-outcome[data-outcome='avtalt møte'] { background: var(--positive); color: var(--surface-raised); }
+.contact-log-outcome[data-outcome='ring tilbake'] { background: var(--accent-soft); color: var(--accent); }
+.contact-log-outcome[data-outcome='ikke interessert'] { color: var(--negative); }
+.contact-log-delete {
+  margin-left: auto;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.contact-log-delete:hover { color: var(--negative); }
+.contact-log-note { margin: 6px 0 0; font-size: 0.86rem; line-height: 1.55; white-space: pre-wrap; }
+.contact-log-meta { margin: 4px 0 0; font-size: 0.72rem; }
+.person-card-contacted { display: block; margin-top: 4px; font-size: 0.72rem; color: var(--positive); font-weight: 600; }

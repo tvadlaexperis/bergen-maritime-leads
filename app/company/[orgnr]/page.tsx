@@ -12,6 +12,8 @@ import {
   listJobAds,
   SEARCH_MIN_SCORE,
   listCompaniesBrief,
+  listContactLog,
+  type ContactLogEntry,
 } from '@/lib/db';
 import { NEWS_CATEGORY_LABEL, type NewsCategory } from '@/lib/companyNews';
 import { describeGroupBasis, type GroupBasis } from '@/lib/groups';
@@ -38,6 +40,7 @@ import BoxTabs from './BoxTabs';
 import PageTabs from './PageTabs';
 import GoToTab from './GoToTab';
 import ShareCompany from './ShareCompany';
+import ContactLogTab from './ContactLogTab';
 import ViewToggle from './ViewToggle';
 import CompanySideList from './CompanySideList';
 import { getCompanyView } from '@/lib/companyView';
@@ -109,13 +112,14 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
   if (!co) notFound();
 
   const base = await getCompany(co.id);
-  const [financials, history, user, storedNews, groupMembers, allContacts] = await Promise.all([
+  const [financials, history, user, storedNews, groupMembers, allContacts, contactLog] = await Promise.all([
     listFinancials(co.id),
     getScoreHistory(co.id, 12),
     getCurrentUser(),
     listCompanyNews(co.id, 6),
     co.group_key ? listGroupMembers(co.group_key) : Promise.resolve([]),
     listWebsiteContacts(co.id),
+    listContactLog(co.id),
   ]);
   // The rest of the group (lib/groups.ts): their website contacts and news
   // are shown here too — for a salesperson the group is one customer.
@@ -161,6 +165,7 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
     group: otherMembers.flatMap((m, i) => groupContactLists[i].map((c) => ({ ...c, via: linkedinCompanyName(m.name) }))),
     board: allContacts.filter((c) => c.source === 'brreg'),
     jobAds: jobContacts,
+    log: contactLog,
   });
 
   // Stored news from the AI pass's web search only. (A live GDELT lookup
@@ -412,6 +417,20 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
                     <p className="muted" style={{ fontSize: '0.86rem' }}>
                       Ingen AI-vurdering ennå. {isAdmin ? 'Bruk «Oppdater fra registrene» under.' : 'Neste skann beregner en.'}
                     </p>
+                  ),
+                },
+                {
+                  key: 'contact-log',
+                  label: contactLog.length ? `Kundekontakt (${contactLog.length})` : 'Kundekontakt',
+                  content: (
+                    <ContactLogTab
+                      companyId={co.id}
+                      people={people.map((p) => ({ name: p.name, phone: p.phones[0] ?? null }))}
+                      entries={contactLog}
+                      canLog={canShare}
+                      currentUserId={user ? Number(user.sub) : null}
+                      isAdmin={isAdmin}
+                    />
                   ),
                 },
               ]}
@@ -1099,10 +1118,13 @@ function KonsernIcon() {
 interface ContactPerson {
   key: string;
   name: string;
-  roles: { label: string; source: 'brreg' | 'nettside' | 'manuell' | 'annonse'; via?: string }[];
+  roles: { label: string; source: 'brreg' | 'nettside' | 'manuell' | 'annonse' | 'kundekontakt'; via?: string }[];
   emails: string[];
   phones: string[];
   isNew: boolean;
+  /** Newest number came from «Kundekontakt» — and when. */
+  phoneUpdatedOn?: string;
+  lastContact?: { on: string; outcome: string; by: string | null };
 }
 
 type SourcedContact = { name: string; role: string | null; email: string | null; phone: string | null };
@@ -1117,6 +1139,7 @@ function buildContactPeople(input: {
   group: (SourcedContact & { via: string })[];
   board: SourcedContact[];
   jobAds: SourcedContact[];
+  log: ContactLogEntry[];
 }): ContactPerson[] {
   const byKey = new Map<string, ContactPerson>();
   const add = (
@@ -1142,6 +1165,20 @@ function buildContactPeople(input: {
   for (const g of input.group) add(g.name, { label: g.role ?? 'Ansatt', source: 'nettside', via: g.via }, g.email, g.phone);
   for (const j of input.jobAds) add(j.name, { label: j.role ?? 'Kontakt i stillingsannonse', source: 'annonse' }, j.email, j.phone);
   for (const b of input.board) add(b.name, { label: b.role ?? 'Styremedlem', source: 'brreg' });
+  // «Kundekontakt» (newest first): the latest logged number goes to the top of
+  // that person's numbers; someone we called who isn't in any source yet is
+  // added. Each person gets their most recent contact.
+  for (const e of input.log) {
+    if (!e.person?.trim()) continue;
+    const key = e.person.toLowerCase().replace(/\s+/g, ' ').trim();
+    if (!byKey.has(key)) add(e.person, { label: 'Kontaktet', source: 'kundekontakt' });
+    const p = byKey.get(key)!;
+    if (!p.lastContact) p.lastContact = { on: e.contacted_on, outcome: e.outcome, by: e.user_name };
+    if (e.phone && !p.phoneUpdatedOn) {
+      p.phones = [e.phone, ...p.phones.filter((x) => x.replace(/\s/g, '') !== e.phone!.replace(/\s/g, ''))];
+      p.phoneUpdatedOn = e.contacted_on;
+    }
+  }
   return [...byKey.values()];
 }
 
@@ -1150,6 +1187,7 @@ const SOURCE_LABEL: Record<ContactPerson['roles'][number]['source'], string> = {
   nettside: 'nettside',
   manuell: 'lagt inn',
   annonse: 'stillingsannonse (NAV)',
+  kundekontakt: 'kundekontakt',
 };
 
 function PersonCard({ person, company }: { person: ContactPerson; company: string }) {
@@ -1186,11 +1224,20 @@ function PersonCard({ person, company }: { person: ContactPerson; company: strin
           <MailIcon /> {e}
         </a>
       ))}
-      {person.phones.map((ph) => (
+      {person.phones.map((ph, i) => (
         <a key={ph} href={`tel:${ph.replace(/\s/g, '')}`} className="person-card-line link-accent">
           <PhoneSmallIcon /> {ph}
+          {i === 0 && person.phoneUpdatedOn && (
+            <span className="muted" style={{ fontSize: '0.7rem' }}> · oppdatert {isoDateLabel(person.phoneUpdatedOn)}</span>
+          )}
         </a>
       ))}
+      {person.lastContact && (
+        <span className="person-card-contacted">
+          Kontaktet {isoDateLabel(person.lastContact.on)} · {person.lastContact.outcome}
+          {person.lastContact.by ? ` · ${person.lastContact.by}` : ''}
+        </span>
+      )}
     </div>
   );
 }
@@ -1352,4 +1399,10 @@ function ProfileBox({
       </div>
     </div>
   );
+}
+
+// "2026-10-08" → "8. okt. 2026" without a timezone shift.
+function isoDateLabel(iso: string): string {
+  const [y, m, d] = iso.split('-').map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString('nb-NO', { day: 'numeric', month: 'short', year: 'numeric' });
 }

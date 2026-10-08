@@ -554,6 +554,23 @@ async function ensureSchema(): Promise<void> {
         read_at INTEGER
       );
       CREATE INDEX IF NOT EXISTS idx_user_notifications_user ON user_notifications(user_id, created_at);
+
+      -- «Kundekontakt»: who we called/e-mailed/met, when, how it went. A
+      -- phone typed here is the newest number for that person (contact card).
+      CREATE TABLE IF NOT EXISTS contact_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+        user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+        contacted_on TEXT NOT NULL,
+        channel TEXT NOT NULL,
+        person TEXT,
+        phone TEXT,
+        outcome TEXT NOT NULL,
+        note TEXT,
+        follow_up_on TEXT,
+        created_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_contact_log_company ON contact_log(company_id, contacted_on);
     `,
       )
       .then(() => addColumnsIfMissing('companies', CONTACT_COLUMNS))
@@ -882,6 +899,66 @@ export async function markUserNotificationsRead(userId: number): Promise<void> {
     sql: 'UPDATE user_notifications SET read_at = ? WHERE user_id = ? AND read_at IS NULL',
     args: [Date.now(), userId],
   });
+}
+
+// --- Kundekontakt (contact log) ---
+
+export { CONTACT_CHANNELS, CONTACT_OUTCOMES } from './contactLog';
+
+export interface ContactLogEntry {
+  id: number;
+  user_id: number | null;
+  user_name: string | null;
+  contacted_on: string; // YYYY-MM-DD
+  channel: string;
+  person: string | null;
+  phone: string | null;
+  outcome: string;
+  note: string | null;
+  follow_up_on: string | null;
+  created_at: number;
+}
+
+export async function listContactLog(companyId: number): Promise<ContactLogEntry[]> {
+  const c = await db();
+  const res = await c.execute({
+    sql: `SELECT l.id, l.user_id, u.display_name AS user_name, l.contacted_on, l.channel, l.person, l.phone,
+                 l.outcome, l.note, l.follow_up_on, l.created_at
+          FROM contact_log l LEFT JOIN users u ON u.id = l.user_id
+          WHERE l.company_id = ? ORDER BY l.contacted_on DESC, l.created_at DESC`,
+    args: [companyId],
+  });
+  return plain<ContactLogEntry>(res.rows);
+}
+
+export async function addContactLog(e: {
+  companyId: number;
+  userId: number;
+  contactedOn: string;
+  channel: string;
+  person: string | null;
+  phone: string | null;
+  outcome: string;
+  note: string | null;
+  followUpOn: string | null;
+}): Promise<void> {
+  const c = await db();
+  await c.execute({
+    sql: `INSERT INTO contact_log (company_id, user_id, contacted_on, channel, person, phone, outcome, note, follow_up_on, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    args: [e.companyId, e.userId, e.contactedOn, e.channel, e.person, e.phone, e.outcome, e.note, e.followUpOn, Date.now()],
+  });
+}
+
+export async function getContactLogEntry(id: number): Promise<{ id: number; company_id: number; user_id: number | null } | undefined> {
+  const c = await db();
+  const res = await c.execute({ sql: 'SELECT id, company_id, user_id FROM contact_log WHERE id = ?', args: [id] });
+  return plain<{ id: number; company_id: number; user_id: number | null }>(res.rows)[0];
+}
+
+export async function deleteContactLog(id: number): Promise<void> {
+  const c = await db();
+  await c.execute({ sql: 'DELETE FROM contact_log WHERE id = ?', args: [id] });
 }
 
 // --- Companies ---
