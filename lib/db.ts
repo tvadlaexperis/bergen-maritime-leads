@@ -1053,6 +1053,33 @@ export async function listCompaniesForCoverage(
   return out.sort((a, b) => a.name.localeCompare(b.name, 'nb'));
 }
 
+export interface CompanyBrief {
+  orgnr: string;
+  name: string;
+  poststed: string | null;
+  lead_score: number | null;
+  group_size: number;
+}
+
+// The company page's side list (split view): one row per customer — a
+// konsern shows as its best-scoring company, like the main list's
+// «Slå sammen konsern» — best lead score first. Only the columns it shows.
+export async function listCompaniesBrief(): Promise<CompanyBrief[]> {
+  const c = await db();
+  const res = await c.execute(`
+    SELECT orgnr, name, poststed, lead_score, group_size FROM (
+      SELECT co.orgnr, co.name, co.poststed, sc.lead_score,
+        COUNT(*) OVER (PARTITION BY COALESCE(co.group_key, 'c' || co.id)) AS group_size,
+        ROW_NUMBER() OVER (PARTITION BY COALESCE(co.group_key, 'c' || co.id)
+          ORDER BY COALESCE(sc.lead_score, -1) DESC, co.id) AS rn
+      FROM companies co ${SCORE_JOIN}
+      WHERE co.status = 'active'
+    ) WHERE rn = 1
+    ORDER BY (lead_score IS NULL), lead_score DESC, name COLLATE NOCASE
+  `);
+  return plain<CompanyBrief>(res.rows);
+}
+
 export async function listCompaniesWithScore(): Promise<CompanyWithScore[]> {
   const c = await db();
   const res = await c.execute(`

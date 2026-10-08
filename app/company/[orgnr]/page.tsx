@@ -11,6 +11,7 @@ import {
   listCompanyNews,
   listJobAds,
   SEARCH_MIN_SCORE,
+  listCompaniesBrief,
 } from '@/lib/db';
 import { NEWS_CATEGORY_LABEL, type NewsCategory } from '@/lib/companyNews';
 import { describeGroupBasis, type GroupBasis } from '@/lib/groups';
@@ -37,6 +38,9 @@ import BoxTabs from './BoxTabs';
 import PageTabs from './PageTabs';
 import GoToTab from './GoToTab';
 import ShareCompany from './ShareCompany';
+import ViewToggle from './ViewToggle';
+import CompanySideList from './CompanySideList';
+import { getCompanyView } from '@/lib/companyView';
 import FinancialsTabs from './FinancialsTabs';
 import NotesBox from './NotesBox';
 import { industryChallengesFor } from '@/lib/industryChallenges';
@@ -260,8 +264,13 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
     </div>
   );
 
+  const view = getCompanyView();
+  const sideList = view === 'delt' ? await listCompaniesBrief() : null;
+
   return (
     <AdminPanelProvider>
+    <div className={sideList ? 'company-split' : 'page-fill'}>
+    {sideList && <CompanySideList companies={sideList} current={co.orgnr} />}
     {/* The page itself doesn't scroll: the header and AI strip stay put and
         each column below scrolls on its own (.split-scroll). */}
     <div className="page-fill" style={{ gap: 18 }}>
@@ -289,6 +298,7 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
             </p>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'flex-end' }}>
+            <ViewToggle view={view} />
             <p style={{ fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
               {co.phone && (
                 <a href={`tel:${co.phone.replace(/\s/g, '')}`} title={co.phone} className="link-accent" style={{ display: 'inline-flex' }}>
@@ -847,6 +857,7 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
           />
         </AdminPanelModal>
       )}
+    </div>
     </div>
     </AdminPanelProvider>
   );
