@@ -60,7 +60,17 @@ async function searchEnheter(kommunenummer: string, naeringskode: string): Promi
 }
 
 async function getEnhet(orgnr: string): Promise<Company | null> {
-  const json = await getJson(`${ENHET_BASE}/${encodeURIComponent(orgnr)}`);
+  let json = await getJson(`${ENHET_BASE}/${encodeURIComponent(orgnr)}`);
+  // Not a main unit: try the underenhet register — for a unit on
+  // EXTRA_COMPANIES that has no company of its own (Bergen Vann is a unit of
+  // Bergen kommune). Its address is `beliggenhetsadresse`; it has no
+  // accounts, roles or group, so those lookups just come back empty.
+  if (!json) {
+    const sub = (await getJson(`https://${BRREG_ENHET_HOST}/enhetsregisteret/api/underenheter/${encodeURIComponent(orgnr)}`)) as
+      | (Record<string, unknown> & { beliggenhetsadresse?: unknown })
+      | null;
+    if (sub) json = { ...sub, forretningsadresse: sub.beliggenhetsadresse };
+  }
   if (!json) return null;
   // A single enhet is returned unwrapped, not under _embedded.
   const parsed = parseEnhetPage({ _embedded: { enheter: [json] } });

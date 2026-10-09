@@ -47,6 +47,14 @@ export const EXTRA_COMPANIES = [
     why: 'Programvare for skipsdrift og rederier (Karmøy)',
     segment: { code: '62.100', label: 'Maritim programvare', group: 'Havn & tjenester' },
   },
+  {
+    // An underenhet of Bergen kommune — no accounts of its own, so no
+    // revenue/growth/profitability in the score. Buys through public tenders.
+    orgnr: '974600951',
+    name: 'BERGEN VANN',
+    why: 'Kommunal vann og avløp i Bergen (underenhet av Bergen kommune)',
+    segment: { code: '36.000', label: 'Vann og avløp (kommunal)', group: 'Offentlig' },
+  },
 ];
 
 /** @type {{ code: string, label: string, group: string }[]} */
