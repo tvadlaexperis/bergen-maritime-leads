@@ -62,6 +62,14 @@ export const EXTRA_COMPANIES = [
     why: 'Kamerasystemer for trål og fiskeri (Bergen)',
     segment: { code: '72.100', label: 'Marin teknologi (fiskeri)', group: 'Sjømat' },
   },
+  {
+    // Not maritime — an IT consultancy (identity and access management),
+    // added on request to try it out.
+    orgnr: '994479865',
+    name: 'IDENTUM AS',
+    why: 'IT-konsulent innen identitets- og tilgangsstyring (Bergen)',
+    segment: { code: '62.200', label: 'IT-konsulent (IAM)', group: 'IT og teknologi' },
+  },
 ];
 
 /** @type {{ code: string, label: string, group: string }[]} */
