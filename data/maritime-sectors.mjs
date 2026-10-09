@@ -23,12 +23,14 @@ export const KOMMUNER = [
   { nr: '4625', name: 'Austevoll' },
 ];
 
-/** @type {{ orgnr: string, name: string, why: string }[]} */
+/** @type {{ orgnr: string, name: string, why: string, segment?: { code: string, label: string, group: string } }[]} */
 // Companies outside KOMMUNER that belong in the tool anyway — ferry and
 // express-boat operators with big routes, crews or contracts in the Bergen
 // region (Fjord1 sits in Florø, Norled in Stavanger, …). The scan always
 // fetches these and never hides them for their address. Add an orgnr here
 // to include another; the scan picks it up on its next discovery run.
+// `segment` places a company whose NACE code isn't on the maritime list
+// (e.g. maritime software, 62.100) in one of the list's segments.
 export const EXTRA_COMPANIES = [
   { orgnr: '983472583', name: 'FJORD1 AS', why: 'Største ferjerederi på Vestlandet (Florø)' },
   { orgnr: '982985927', name: 'F1 ADMINISTRASJON AS', why: 'Fjord1-konsernets administrasjon (Florø)' },
@@ -39,6 +41,12 @@ export const EXTRA_COMPANIES = [
   { orgnr: '918458999', name: 'HAVILA KYSTRUTEN OPERATIONS AS', why: 'Kystruten Bergen–Kirkenes (Herøy)' },
   { orgnr: '985979456', name: 'HURTIGRUTEN SJØ AS', why: 'Kystruten Bergen–Kirkenes (Sør-Varanger)' },
   { orgnr: '982947863', name: 'RØDNE TRAFIKK AS', why: 'Hurtigbåt og fjordcruise, også i Bergen (Stavanger)' },
+  {
+    orgnr: '979273177',
+    name: 'UNISEA AS',
+    why: 'Programvare for skipsdrift og rederier (Karmøy)',
+    segment: { code: '62.100', label: 'Maritim programvare', group: 'Havn & tjenester' },
+  },
 ];
 
 /** @type {{ code: string, label: string, group: string }[]} */

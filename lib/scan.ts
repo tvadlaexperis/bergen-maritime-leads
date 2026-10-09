@@ -170,7 +170,10 @@ class CompanyLog {
 }
 
 function toUpsertInput(co: RawCompany, manual = false): UpsertCompanyInput {
-  const match = matchNace(co.nace.map((n) => n.code)) as { code: string; label: string; group: string } | null;
+  // An EXTRA_COMPANIES entry outside the maritime NACE list brings its own segment.
+  const match = (matchNace(co.nace.map((n) => n.code)) ??
+    EXTRA_COMPANIES.find((x) => x.orgnr === co.orgnr)?.segment ??
+    null) as { code: string; label: string; group: string } | null;
   return {
     orgnr: co.orgnr,
     name: co.name,

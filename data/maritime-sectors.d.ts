@@ -10,6 +10,6 @@ export interface NaceEntry {
 }
 
 export const KOMMUNER: Kommune[];
-export const EXTRA_COMPANIES: { orgnr: string; name: string; why: string }[];
+export const EXTRA_COMPANIES: { orgnr: string; name: string; why: string; segment?: NaceEntry }[];
 export const NACE_CODES: NaceEntry[];
 export function matchNace(codes: (string | null | undefined)[]): NaceEntry | null;
