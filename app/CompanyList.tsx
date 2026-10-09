@@ -613,7 +613,7 @@ export default function CompanyList({
                       title={favorites.has(r.orgnr) ? 'Fjern fra arbeidslisten' : 'Legg til i arbeidslisten'}
                       aria-pressed={favorites.has(r.orgnr)}
                     >
-                      {favorites.has(r.orgnr) ? '★' : '☆'}
+                      <BookmarkIcon filled={favorites.has(r.orgnr)} />
                     </button>
                   </td>
                   <td>
@@ -694,7 +694,7 @@ export default function CompanyList({
                 <tr>
                   <td colSpan={14} className="muted" style={{ textAlign: 'center', padding: 28 }}>
                     {lockFavorites && favorites.size === 0
-                      ? 'Arbeidslisten er tom. Klikk ☆ ved et selskap i listen, eller «Legg til i arbeidslisten» på kartet.'
+                      ? 'Arbeidslisten er tom. Klikk bokmerket ved et selskap i listen, eller «Legg til i arbeidslisten» på kartet.'
                       : 'Ingen selskaper matcher filtrene.'}
                   </td>
                 </tr>
@@ -775,5 +775,15 @@ function MeetingCell({ r }: { r: CompanyWithScore }) {
     <span className={`meeting-chip${upcoming ? ' upcoming' : ''}`} title={upcoming ? 'Avtalt møte' : 'Møtet er avholdt'}>
       {isoLabel(m)}
     </span>
+  );
+}
+
+// Arbeidsliste marker: an outline bookmark, filled when the company is on the list.
+function BookmarkIcon({ filled }: { filled: boolean }) {
+  return (
+    <svg viewBox="0 0 24 24" width="16" height="16" fill={filled ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.9" strokeLinejoin="round" aria-hidden="true">
+      <path d="M6 3.5h12a1 1 0 0 1 1 1V21l-7-4.5L5 21V4.5a1 1 0 0 1 1-1Z" />
+      {!filled && <path d="M12 8v5M9.5 10.5h5" strokeLinecap="round" />}
+    </svg>
   );
 }

@@ -115,13 +115,13 @@ export default function CompanyMap({ companies, segments }: { companies: MapComp
           .join(' · ');
         box.appendChild(meta);
         // Add to / remove from the work list (lib/worklist.ts, same list as
-        // the ☆ in the company list).
+        // the bookmark in the company list).
         const btn = document.createElement('button');
         btn.type = 'button';
         btn.className = 'btn btn-ghost btn-sm map-popup-btn';
         const label = () => {
           const on = readWorklist().has(c.orgnr);
-          btn.textContent = on ? '★ På arbeidslisten — fjern' : '☆ Legg til i arbeidslisten';
+          btn.textContent = on ? 'På arbeidslisten — fjern' : '+ Legg til i arbeidslisten';
           btn.setAttribute('aria-pressed', String(on));
         };
         label();

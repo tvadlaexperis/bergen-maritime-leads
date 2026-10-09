@@ -5,7 +5,7 @@ import CompanyList from '../CompanyList';
 export const dynamic = 'force-dynamic';
 export const metadata: Metadata = { title: 'Arbeidsliste' };
 
-// One work list for now — the companies marked ☆ in the list or added from
+// One work list for now — the companies bookmarked in the list or added from
 // the map popup. Stored in this browser (lib/worklist.ts).
 export default async function WorklistPage() {
   const rows = await listCompaniesWithScore();
@@ -15,7 +15,7 @@ export default async function WorklistPage() {
     <CompanyList
       rows={active}
       title="Arbeidsliste"
-      subtitle="Selskaper du har lagt til fra listen (☆) eller kartet — lagres i denne nettleseren."
+      subtitle="Selskaper du har lagt til med bokmerket i listen eller fra kartet — lagres i denne nettleseren."
       lockFavorites
     />
   );
