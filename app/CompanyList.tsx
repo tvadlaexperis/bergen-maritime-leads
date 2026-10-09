@@ -8,6 +8,7 @@ import { fmtNok, fmtPct, fmtInt, dateLabel, agoLabel } from './format';
 import ScoreBadge from './components/ScoreBadge';
 import SignalBadge, { parseBuyingSignalLevel } from './components/SignalBadge';
 import { readWorklist, toggleWorklist, WORKLIST_EVENT } from '@/lib/worklist';
+import { ContactStatusIcon, MeetingCell, meetingDate } from '@/app/components/ContactStatus';
 
 type SizeFilter = 'all' | 'under5' | '5-15' | '15-50' | '50';
 type ScoreFilter = 'all' | '40' | '66';
@@ -706,77 +707,6 @@ export default function CompanyList({
         </div>
       </div>
     </div>
-  );
-}
-
-// --- Kundekontakt status (from the konsern's main company) ---
-
-/** Booked meeting: Bedriftsmøte date, else the date of a «avtalt møte» contact. */
-function meetingDate(r: CompanyWithScore): string | null {
-  return r.home_meeting_date || r.contact_meeting_on || null;
-}
-
-function isoLabel(iso: string): string {
-  const [y, m, d] = iso.split('-').map(Number);
-  return new Date(y, m - 1, d).toLocaleDateString('nb-NO', { day: 'numeric', month: 'short', year: 'numeric' });
-}
-
-type ContactState = 'none' | 'called' | 'answered' | 'meeting';
-
-function contactState(r: CompanyWithScore): ContactState {
-  if (meetingDate(r)) return 'meeting';
-  if ((r.contact_answered ?? 0) > 0) return 'answered';
-  if ((r.contact_count ?? 0) > 0) return 'called';
-  return 'none';
-}
-
-const STATE_TEXT: Record<ContactState, string> = {
-  none: 'Ikke kontaktet ennå',
-  called: 'Ringt — ikke fått svar',
-  answered: 'Fått svar',
-  meeting: 'Møte avtalt',
-};
-
-// Phone icon: grey = not contacted, amber = called without reaching anyone,
-// blue = reached someone; a green calendar = meeting booked. Details on hover.
-function ContactStatusIcon({ r }: { r: CompanyWithScore }) {
-  const state = contactState(r);
-  const meeting = meetingDate(r);
-  const title = [
-    STATE_TEXT[state],
-    r.contact_count ? `${r.contact_count} registrert${r.contact_count === 1 ? '' : 'e'} kontakt${r.contact_count === 1 ? '' : 'er'}` : null,
-    r.contact_last_on ? `sist ${isoLabel(r.contact_last_on)}${r.contact_last_outcome ? ` (${r.contact_last_outcome})` : ''}` : null,
-    meeting ? `møte ${isoLabel(meeting)}` : null,
-  ]
-    .filter(Boolean)
-    .join(' · ');
-  return (
-    <Link href={`/company/${r.orgnr}`} className="contact-status" data-state={state} title={title} aria-label={title}>
-      {state === 'meeting' ? (
-        // Meeting booked: a calendar with a tick, so it doesn't read as just another phone colour.
-        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-          <rect x="3" y="4.5" width="18" height="16.5" rx="2" />
-          <path d="M3 9.5h18M8 2.5v4M16 2.5v4" />
-          <path d="m9 15 2 2 4-4" />
-        </svg>
-      ) : (
-      <svg viewBox="0 0 24 24" width="15" height="15" fill={state === 'none' ? 'none' : 'currentColor'} stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
-        <path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.5c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z" strokeLinejoin="round" />
-      </svg>
-      )}
-    </Link>
-  );
-}
-
-function MeetingCell({ r }: { r: CompanyWithScore }) {
-  const m = meetingDate(r);
-  if (!m) return <span className="muted">—</span>;
-  const today = new Date().toLocaleDateString('sv-SE');
-  const upcoming = m >= today;
-  return (
-    <span className={`meeting-chip${upcoming ? ' upcoming' : ''}`} title={upcoming ? 'Avtalt møte' : 'Møtet er avholdt'}>
-      {isoLabel(m)}
-    </span>
   );
 }
 

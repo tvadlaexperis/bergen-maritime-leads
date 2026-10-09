@@ -1145,44 +1145,47 @@ export interface CompanyBrief {
   name: string;
   poststed: string | null;
   lead_score: number | null;
-  group_size: number;
+  group_key: string | null;
+  group_main_orgnr: string | null;
+  contact_count: number;
+  contact_last_on: string | null;
+  contact_last_outcome: string | null;
+  contact_answered: number;
+  contact_meeting_on: string | null;
+  home_meeting_date: string | null;
 }
 
-// The company page's side list (split view): one row per customer — a
-// konsern shows as its main company with the group's best lead score, like
-// the main list's «Slå sammen konsern». Only the columns it shows.
+// Kundekontakt / Bedriftsmøte status columns, read from the konsern's main
+// company (where it's saved). `co` is the companies alias.
+const HOME_ID = `COALESCE((SELECT h.id FROM companies h WHERE h.orgnr = co.group_main_orgnr), co.id)`;
+const CONTACT_COLS = `
+  (SELECT COUNT(*) FROM contact_log l WHERE l.company_id = ${HOME_ID}) AS contact_count,
+  (SELECT l.contacted_on FROM contact_log l WHERE l.company_id = ${HOME_ID}
+    ORDER BY l.contacted_on DESC, l.created_at DESC LIMIT 1) AS contact_last_on,
+  (SELECT l.outcome FROM contact_log l WHERE l.company_id = ${HOME_ID}
+    ORDER BY l.contacted_on DESC, l.created_at DESC LIMIT 1) AS contact_last_outcome,
+  (SELECT COUNT(*) FROM contact_log l WHERE l.company_id = ${HOME_ID}
+    AND l.outcome NOT IN ('ikke svar', 'la igjen beskjed')) AS contact_answered,
+  (SELECT MAX(l.contacted_on) FROM contact_log l WHERE l.company_id = ${HOME_ID} AND l.outcome = 'avtalt møte') AS contact_meeting_on,
+  (SELECT h.meeting_date FROM companies h WHERE h.id = ${HOME_ID}) AS home_meeting_date`;
+
+// The company page's side list (split view): every active company with the
+// columns it shows. The client picks the work list or collapses konsern.
 export async function listCompaniesBrief(): Promise<CompanyBrief[]> {
   const c = await db();
   const res = await c.execute(`
-    SELECT orgnr, name, poststed, lead_score, group_size FROM (
-      SELECT co.orgnr, co.name, co.poststed,
-        MAX(sc.lead_score) OVER (PARTITION BY COALESCE(co.group_key, 'c' || co.id)) AS lead_score,
-        COUNT(*) OVER (PARTITION BY COALESCE(co.group_key, 'c' || co.id)) AS group_size,
-        ROW_NUMBER() OVER (PARTITION BY COALESCE(co.group_key, 'c' || co.id)
-          ORDER BY (co.orgnr = co.group_main_orgnr) DESC, COALESCE(sc.lead_score, -1) DESC, co.id) AS rn
-      FROM companies co ${SCORE_JOIN}
-      WHERE co.status = 'active'
-    ) WHERE rn = 1
-    ORDER BY (lead_score IS NULL), lead_score DESC, name COLLATE NOCASE
+    SELECT co.orgnr, co.name, co.poststed, sc.lead_score, co.group_key, co.group_main_orgnr, ${CONTACT_COLS}
+    FROM companies co ${SCORE_JOIN}
+    WHERE co.status = 'active'
+    ORDER BY (sc.lead_score IS NULL), sc.lead_score DESC, co.name COLLATE NOCASE
   `);
   return plain<CompanyBrief>(res.rows);
 }
 
 export async function listCompaniesWithScore(): Promise<CompanyWithScore[]> {
   const c = await db();
-  // Contact/meeting status lives on the konsern's main company.
-  const HOME = `COALESCE((SELECT h.id FROM companies h WHERE h.orgnr = co.group_main_orgnr), co.id)`;
   const res = await c.execute(`
-    SELECT co.*, ${SCORE_COLS},
-      (SELECT COUNT(*) FROM contact_log l WHERE l.company_id = ${HOME}) AS contact_count,
-      (SELECT l.contacted_on FROM contact_log l WHERE l.company_id = ${HOME}
-        ORDER BY l.contacted_on DESC, l.created_at DESC LIMIT 1) AS contact_last_on,
-      (SELECT l.outcome FROM contact_log l WHERE l.company_id = ${HOME}
-        ORDER BY l.contacted_on DESC, l.created_at DESC LIMIT 1) AS contact_last_outcome,
-      (SELECT COUNT(*) FROM contact_log l WHERE l.company_id = ${HOME}
-        AND l.outcome NOT IN ('ikke svar', 'la igjen beskjed')) AS contact_answered,
-      (SELECT MAX(l.contacted_on) FROM contact_log l WHERE l.company_id = ${HOME} AND l.outcome = 'avtalt møte') AS contact_meeting_on,
-      (SELECT h.meeting_date FROM companies h WHERE h.id = ${HOME}) AS home_meeting_date
+    SELECT co.*, ${SCORE_COLS}, ${CONTACT_COLS}
     FROM companies co ${SCORE_JOIN}
     ORDER BY (sc.lead_score IS NULL) ASC, sc.lead_score DESC, co.name COLLATE NOCASE
   `);
