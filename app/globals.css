@@ -1802,3 +1802,21 @@ a {
   font-size: 0.82rem;
   color: var(--text-secondary);
 }
+
+/* ── Company list: Kundekontakt status icon + Møte column ── */
+.contact-status { display: inline-flex; color: var(--border-strong); }
+.contact-status[data-state='none'] { color: var(--text-muted); opacity: 0.45; }
+.contact-status[data-state='called'] { color: #d97706; }
+.contact-status[data-state='answered'] { color: var(--accent); }
+.contact-status[data-state='meeting'] { color: var(--positive); }
+.contact-status:hover { opacity: 1; }
+.meeting-chip {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: var(--radius-pill);
+  font-size: 0.74rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: var(--surface-hover);
+}
+.meeting-chip.upcoming { background: var(--positive); color: var(--surface-raised); }

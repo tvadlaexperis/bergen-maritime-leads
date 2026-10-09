@@ -184,6 +184,14 @@ export interface CompanyWithScore extends Company {
   latest_year: number | null;
   reason: string | null;
   computed_at: number | null;
+  // «Kundekontakt» / «Bedriftsmøte» status, read from the konsern's main
+  // company (where it's saved) — only filled by listCompaniesWithScore.
+  contact_count?: number;
+  contact_last_on?: string | null;
+  contact_last_outcome?: string | null;
+  contact_answered?: number; // any contact where we reached someone
+  contact_meeting_on?: string | null; // a log entry «avtalt møte» — its date
+  home_meeting_date?: string | null; // Bedriftsmøte date on the main company
 }
 
 // Local dev / scripts use an embedded SQLite file. Production points
@@ -1162,8 +1170,19 @@ export async function listCompaniesBrief(): Promise<CompanyBrief[]> {
 
 export async function listCompaniesWithScore(): Promise<CompanyWithScore[]> {
   const c = await db();
+  // Contact/meeting status lives on the konsern's main company.
+  const HOME = `COALESCE((SELECT h.id FROM companies h WHERE h.orgnr = co.group_main_orgnr), co.id)`;
   const res = await c.execute(`
-    SELECT co.*, ${SCORE_COLS}
+    SELECT co.*, ${SCORE_COLS},
+      (SELECT COUNT(*) FROM contact_log l WHERE l.company_id = ${HOME}) AS contact_count,
+      (SELECT l.contacted_on FROM contact_log l WHERE l.company_id = ${HOME}
+        ORDER BY l.contacted_on DESC, l.created_at DESC LIMIT 1) AS contact_last_on,
+      (SELECT l.outcome FROM contact_log l WHERE l.company_id = ${HOME}
+        ORDER BY l.contacted_on DESC, l.created_at DESC LIMIT 1) AS contact_last_outcome,
+      (SELECT COUNT(*) FROM contact_log l WHERE l.company_id = ${HOME}
+        AND l.outcome NOT IN ('ikke svar', 'la igjen beskjed')) AS contact_answered,
+      (SELECT MAX(l.contacted_on) FROM contact_log l WHERE l.company_id = ${HOME} AND l.outcome = 'avtalt møte') AS contact_meeting_on,
+      (SELECT h.meeting_date FROM companies h WHERE h.id = ${HOME}) AS home_meeting_date
     FROM companies co ${SCORE_JOIN}
     ORDER BY (sc.lead_score IS NULL) ASC, sc.lead_score DESC, co.name COLLATE NOCASE
   `);
