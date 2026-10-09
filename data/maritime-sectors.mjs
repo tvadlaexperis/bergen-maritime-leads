@@ -55,6 +55,13 @@ export const EXTRA_COMPANIES = [
     why: 'Kommunal vann og avløp i Bergen (underenhet av Bergen kommune)',
     segment: { code: '36.000', label: 'Vann og avløp (kommunal)', group: 'Offentlig' },
   },
+  {
+    // In Bergen, but registered as R&D (72.100), so the NACE filter misses it.
+    orgnr: '977073944',
+    name: 'SCANTROL DEEP VISION AS',
+    why: 'Kamerasystemer for trål og fiskeri (Bergen)',
+    segment: { code: '72.100', label: 'Marin teknologi (fiskeri)', group: 'Sjømat' },
+  },
 ];
 
 /** @type {{ code: string, label: string, group: string }[]} */
