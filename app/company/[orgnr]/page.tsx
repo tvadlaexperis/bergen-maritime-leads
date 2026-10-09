@@ -419,20 +419,6 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
                     </p>
                   ),
                 },
-                {
-                  key: 'contact-log',
-                  label: contactLog.length ? `Kundekontakt (${contactLog.length})` : 'Kundekontakt',
-                  content: (
-                    <ContactLogTab
-                      companyId={co.id}
-                      people={people.map((p) => ({ name: p.name, phone: p.phones[0] ?? null }))}
-                      entries={contactLog}
-                      canLog={canShare}
-                      currentUserId={user ? Number(user.sub) : null}
-                      isAdmin={isAdmin}
-                    />
-                  ),
-                },
               ]}
             />
           </div>
@@ -536,6 +522,32 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
         </div>
         <div className="split-scroll-col news-wide">{newsBox}</div>
       </div>
+            ),
+          },
+          {
+            key: 'contact-log',
+            label: contactLog.length ? `Kundekontakt (${contactLog.length})` : 'Kundekontakt',
+            content: (
+              <div className="split-scroll">
+                <div className="split-scroll-col">
+                  <div className="box">
+                    <div className="box-header">
+                      <span className="box-title">Kundekontakt</span>
+                      <span className="muted" style={{ fontSize: '0.72rem' }}>hvem vi har ringt, og hvordan det gikk</span>
+                    </div>
+                    <div className="box-pad">
+                      <ContactLogTab
+                      companyId={co.id}
+                      people={people.map((p) => ({ name: p.name, phone: p.phones[0] ?? null }))}
+                      entries={contactLog}
+                      canLog={canShare}
+                      currentUserId={user ? Number(user.sub) : null}
+                      isAdmin={isAdmin}
+                    />
+                    </div>
+                  </div>
+                </div>
+              </div>
             ),
           },
           {
