@@ -540,7 +540,7 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
           },
           {
             key: 'contact-log',
-            label: contactLog.length ? `Kundekontakt (${contactLog.length})` : 'Kundekontakt',
+            label: `Kundekontakt (${contactLog.length})`,
             content: (
               <div className="split-scroll">
                 <div className="split-scroll-col">
@@ -567,7 +567,10 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
           },
           {
             key: 'meetings',
-            label: 'Møter',
+            // One meeting per customer for now (the Bedriftsmøte fields): 1 once anything is filled in.
+            label: `Møter (${
+              [home.meeting_date, home.meeting_location, home.meeting_attendees, home.meeting_prep, home.meeting_during, home.meeting_notes].some(Boolean) ? 1 : 0
+            })`,
             content: (
       <div className="split-scroll">
         <div className="split-scroll-col">
