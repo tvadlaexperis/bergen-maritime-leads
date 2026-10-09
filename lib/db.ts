@@ -567,6 +567,17 @@ async function ensureSchema(): Promise<void> {
       );
       CREATE INDEX IF NOT EXISTS idx_user_notifications_user ON user_notifications(user_id, created_at);
 
+      -- A work list sent to a friend: a snapshot of the sender's list (which
+      -- otherwise lives only in their browser), opened from the notification.
+      CREATE TABLE IF NOT EXISTS shared_worklists (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        from_user INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        to_user INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        orgnrs TEXT NOT NULL,
+        message TEXT,
+        created_at INTEGER NOT NULL
+      );
+
       -- «Kundekontakt»: who we called/e-mailed/met, when, how it went. A
       -- phone typed here is the newest number for that person (contact card).
       CREATE TABLE IF NOT EXISTS contact_log (
@@ -587,6 +598,7 @@ async function ensureSchema(): Promise<void> {
       )
       .then(() => addColumnsIfMissing('companies', CONTACT_COLUMNS))
       .then(() => addColumnsIfMissing('users', ["status TEXT NOT NULL DEFAULT 'active'"]))
+      .then(() => addColumnsIfMissing('user_notifications', ['ref_id INTEGER']))
       .then(() => addColumnsIfMissing('company_scores', SCORE_COLUMNS))
       .then(() => addColumnsIfMissing('company_contacts', ["source TEXT NOT NULL DEFAULT 'nettside'"]))
       .then(() => addColumnsIfMissing('scans', ['details TEXT']))
@@ -918,7 +930,7 @@ export async function areFriends(a: number, b: number): Promise<boolean> {
 
 // --- Personal notifications ---
 
-export type UserNotificationType = 'friend_request' | 'friend_accepted' | 'company_shared' | 'user_signup';
+export type UserNotificationType = 'friend_request' | 'friend_accepted' | 'company_shared' | 'user_signup' | 'worklist_shared';
 export interface UserNotification {
   id: number;
   type: UserNotificationType;
@@ -928,6 +940,8 @@ export interface UserNotification {
   message: string | null;
   created_at: number;
   read_at: number | null;
+  /** worklist_shared: the shared_worklists id. */
+  ref_id: number | null;
 }
 
 export async function addUserNotification(n: {
@@ -937,19 +951,52 @@ export async function addUserNotification(n: {
   orgnr?: string | null;
   companyName?: string | null;
   message?: string | null;
+  refId?: number | null;
 }): Promise<void> {
   const c = await db();
   await c.execute({
-    sql: `INSERT INTO user_notifications (user_id, type, actor_id, orgnr, company_name, message, created_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    args: [n.userId, n.type, n.actorId, n.orgnr ?? null, n.companyName ?? null, n.message ?? null, Date.now()],
+    sql: `INSERT INTO user_notifications (user_id, type, actor_id, orgnr, company_name, message, ref_id, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    args: [n.userId, n.type, n.actorId, n.orgnr ?? null, n.companyName ?? null, n.message ?? null, n.refId ?? null, Date.now()],
   });
+}
+
+export async function createSharedWorklist(fromUser: number, toUser: number, orgnrs: string[], message: string | null): Promise<number> {
+  const c = await db();
+  const res = await c.execute({
+    sql: 'INSERT INTO shared_worklists (from_user, to_user, orgnrs, message, created_at) VALUES (?, ?, ?, ?, ?)',
+    args: [fromUser, toUser, JSON.stringify(orgnrs), message, Date.now()],
+  });
+  return Number(res.lastInsertRowid);
+}
+
+/** A shared list — only for its sender or recipient. */
+export async function getSharedWorklist(
+  id: number,
+  userId: number,
+): Promise<{ id: number; from_name: string; orgnrs: string[]; message: string | null; created_at: number } | null> {
+  const c = await db();
+  const res = await c.execute({
+    sql: `SELECT w.id, u.display_name AS from_name, w.orgnrs, w.message, w.created_at
+          FROM shared_worklists w JOIN users u ON u.id = w.from_user
+          WHERE w.id = ? AND (w.to_user = ? OR w.from_user = ?)`,
+    args: [id, userId, userId],
+  });
+  const r = plain<{ id: number; from_name: string; orgnrs: string; message: string | null; created_at: number }>(res.rows)[0];
+  if (!r) return null;
+  let orgnrs: string[] = [];
+  try {
+    orgnrs = (JSON.parse(r.orgnrs) as unknown[]).map(String);
+  } catch {
+    // corrupt row — an empty list
+  }
+  return { ...r, orgnrs };
 }
 
 export async function listUserNotifications(userId: number, limit = 15): Promise<UserNotification[]> {
   const c = await db();
   const res = await c.execute({
-    sql: `SELECT n.id, n.type, u.display_name AS actor_name, n.orgnr, n.company_name, n.message, n.created_at, n.read_at
+    sql: `SELECT n.id, n.type, u.display_name AS actor_name, n.orgnr, n.company_name, n.message, n.created_at, n.read_at, n.ref_id
           FROM user_notifications n JOIN users u ON u.id = n.actor_id
           WHERE n.user_id = ? ORDER BY n.created_at DESC, n.id DESC LIMIT ?`,
     args: [userId, limit],

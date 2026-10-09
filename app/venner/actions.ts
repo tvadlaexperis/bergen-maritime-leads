@@ -16,6 +16,7 @@ import {
   addUserNotification,
   getCompanyByOrgnr,
   markUserNotificationsRead,
+  createSharedWorklist,
   type UserSearchResult,
   type Friend,
 } from '@/lib/db';
@@ -104,6 +105,33 @@ export async function shareCompanyAction(orgnr: string, friendIds: number[], mes
       orgnr: company.orgnr,
       companyName: company.name,
       message: note,
+    });
+    sent++;
+  }
+  if (sent === 0) return { error: 'Du kan bare dele med bekreftede venner.' };
+  return { ok: true, sent };
+}
+
+/** Sends a snapshot of the sender's work list (orgnrs from their browser) to friends. */
+export async function shareWorklistAction(orgnrs: string[], friendIds: number[], message: string): Promise<Result & { sent?: number }> {
+  const { id } = await me();
+  if (await isRateLimited(`share-worklist:${id}`, 30, 60 * 60 * 1000)) return { error: 'For mange delinger — prøv igjen senere.' };
+  const list = [...new Set((Array.isArray(orgnrs) ? orgnrs : []).map(String).filter((o) => /^\d{9}$/.test(o)))].slice(0, 500);
+  if (list.length === 0) return { error: 'Arbeidslisten er tom.' };
+  const ids = [...new Set((Array.isArray(friendIds) ? friendIds : []).map(Number).filter(Number.isInteger))].slice(0, 50);
+  if (ids.length === 0) return { error: 'Velg minst én venn.' };
+  const note = String(message ?? '').trim().slice(0, 500) || null;
+  let sent = 0;
+  for (const friendId of ids) {
+    if (!(await areFriends(id, friendId))) continue;
+    const listId = await createSharedWorklist(id, friendId, list, note);
+    await addUserNotification({
+      userId: friendId,
+      type: 'worklist_shared',
+      actorId: id,
+      companyName: `${list.length} selskap${list.length === 1 ? '' : 'er'}`,
+      message: note,
+      refId: listId,
     });
     sent++;
   }

@@ -72,16 +72,26 @@ export default function NotificationsBell({
                 {personal.map((n) => (
                   <li key={`u${n.id}`}>
                     <Link
-                      href={n.type === 'company_shared' && n.orgnr ? `/company/${n.orgnr}` : n.type === 'user_signup' ? '/admin?view=brukere' : '/venner'}
+                      href={
+                        n.type === 'company_shared' && n.orgnr
+                          ? `/company/${n.orgnr}`
+                          : n.type === 'worklist_shared' && n.ref_id
+                            ? `/arbeidsliste?delt=${n.ref_id}`
+                            : n.type === 'user_signup'
+                              ? '/admin?view=brukere'
+                              : '/venner'
+                      }
                       className={`notif-item${n.read_at ? '' : ' notif-item-new'}`}
                       onClick={() => setOpen(false)}
                     >
                       <span className="notif-company">
-                        {n.type === 'company_shared' ? n.company_name : n.actor_name}
+                        {n.type === 'company_shared' ? n.company_name : n.type === 'worklist_shared' ? 'Arbeidsliste' : n.actor_name}
                       </span>
                       <span className="notif-message">
                         {n.type === 'company_shared'
                           ? `${n.actor_name} sendte deg dette selskapet`
+                          : n.type === 'worklist_shared'
+                            ? `${n.actor_name} delte arbeidslisten sin med deg (${n.company_name ?? ''})`
                           : n.type === 'friend_request'
                             ? 'vil bli venn med deg'
                             : n.type === 'user_signup'

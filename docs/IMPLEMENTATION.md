@@ -218,3 +218,12 @@ login route refuses pending accounts. No e-mail exists to verify the address, so
 approves or rejects each sign-up in Admin → Brukere (also role changes and removal; the guest
 account and your own account can't be changed there). Admins get a `user_signup` notification.
 Sign-up is rate-limited per IP and answers the same for an existing address (no enumeration).
+
+
+## Dele arbeidslisten (2026-10-09)
+
+The work list lives in the browser, so «Del arbeidslisten» (`/arbeidsliste`) sends a snapshot:
+one `shared_worklists` row per friend (orgnrs JSON + optional note) and a `worklist_shared`
+notification whose `ref_id` points at it. `/arbeidsliste?delt=<id>` shows the list (only to its
+sender/recipient) with «Legg alle til i min arbeidsliste», which merges it into the recipient's
+browser list.

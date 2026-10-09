@@ -87,13 +87,20 @@ export default function CompanyList({
   title,
   subtitle,
   lockFavorites,
+  onlyOrgnrs,
+  actions,
 }: {
   rows: CompanyWithScore[];
   title: string;
   subtitle: ReactNode;
   /** Forces the list to show favorites only and hides the toggle — used by the /arbeidsliste page. */
   lockFavorites?: boolean;
+  /** Show exactly these companies (a work list shared by a friend). */
+  onlyOrgnrs?: string[];
+  /** Extra buttons in the header (e.g. «Del arbeidslisten»). */
+  actions?: ReactNode;
 }) {
+  const onlySet = useMemo(() => (onlyOrgnrs ? new Set(onlyOrgnrs) : null), [onlyOrgnrs]);
   const [group, setGroup] = useState<string>(DEFAULT_FILTERS.group);
   const [bransje, setBransje] = useState<string>(DEFAULT_FILTERS.bransje);
   const [orgForm, setOrgForm] = useState<string>(DEFAULT_FILTERS.orgForm);
@@ -253,7 +260,7 @@ export default function CompanyList({
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     const list = rows.filter((r) => {
-      if (lockFavorites && !favorites.has(r.orgnr)) return false;
+      if (onlySet ? !onlySet.has(r.orgnr) : lockFavorites && !favorites.has(r.orgnr)) return false;
       if (group !== 'ALL' && r.matched_group !== group) return false;
       if (bransje !== 'ALL' && r.nace1_text !== bransje) return false;
       if (orgForm !== 'ALL' && r.org_form !== orgForm) return false;
@@ -331,7 +338,7 @@ export default function CompanyList({
       );
     }
     return out;
-  }, [rows, group, bransje, orgForm, kommuneFilter, minSize, minGrowth, minScore, signalFilter, signalById, search, favorites, lockFavorites, sortKey, sortDir, mergeGroups, membersByGroup, groupTotals]);
+  }, [rows, group, bransje, orgForm, kommuneFilter, minSize, minGrowth, minScore, signalFilter, signalById, search, favorites, lockFavorites, onlySet, sortKey, sortDir, mergeGroups, membersByGroup, groupTotals]);
 
   return (
     <div className="page-fill" style={{ gap: 16 }}>
@@ -343,6 +350,7 @@ export default function CompanyList({
           </p>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          {actions}
           <input
             type="search"
             className="search-input"
