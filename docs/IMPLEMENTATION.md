@@ -198,3 +198,14 @@ tool (ferry/express-boat operators with routes or crews in the region — Fjord1
 Sjø, Torghatten, Fjord Line, Havila, Hurtigruten Sjø, Rødne). Discovery fetches each with
 `brreg.getEnhet`; `hideOutsideScope` never hides them, nor any `manual_entry` company (it used
 to hide hand-added companies outside the area on the next scan).
+
+
+## Hovedselskap per konsern (2026-10-09)
+
+`recomputeGroups` also stores `group_main_orgnr` — the member highest up the ownership chain
+inside the group (most members below it via `parent_orgnr`), then most employees (FRAMO AS
+over Framo Fusa/Flatøy/Services). Lists show the main company with the group's best score.
+Kundekontakt, Bedriftsmøte and Notater are always saved on it (`homeCompanyId` in the server
+actions) and shown on every member's page; `consolidateGroupUserData` moves anything saved
+on another member (runs after every recompute, and once on first page load via
+`ensureGroupsFresh`'s `group_main_v1` flag).

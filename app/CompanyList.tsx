@@ -318,7 +318,15 @@ export default function CompanyList({
       }
       if (seen.has(r.group_key)) continue;
       seen.add(r.group_key);
-      out.push(operating(r.group_key) ?? r);
+      // The konsern's main company (group_main_orgnr) when it's in the list,
+      // with the best score in the group — `r` is the best-ranked member here.
+      const main = (membersByGroup.get(r.group_key) ?? []).find((m) => m.orgnr === m.group_main_orgnr && inList.has(m.id));
+      const shown = main ?? operating(r.group_key) ?? r;
+      out.push(
+        shown.id === r.id || (shown.lead_score ?? -1) >= (r.lead_score ?? -1)
+          ? shown
+          : { ...shown, lead_score: r.lead_score, reason: `Beste i konsernet: ${r.name} — ${r.reason ?? ''}` },
+      );
     }
     return out;
   }, [rows, group, bransje, orgForm, kommuneFilter, minSize, minGrowth, minScore, signalFilter, signalById, search, favorites, lockFavorites, sortKey, sortDir, mergeGroups, membersByGroup, groupTotals]);

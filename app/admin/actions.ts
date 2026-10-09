@@ -24,6 +24,7 @@ import {
   getAiProgressSince,
   type AiProgress,
   type CompanyStatus,
+  homeCompanyId,
 } from '@/lib/db';
 import { runScan, refreshCompany } from '@/lib/scan';
 import { aiConfigured } from '@/lib/orchestrator/providers/ai';
@@ -41,8 +42,10 @@ async function guard(bucket: string): Promise<SessionPayload> {
 
 export async function updateNotesAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
   const user = await guard('admin-notes');
-  const id = Number(formData.get('id'));
-  if (!id || !(await getCompany(id))) return { error: 'Ukjent selskap.' };
+  const given = Number(formData.get('id'));
+  if (!given || !(await getCompany(given))) return { error: 'Ukjent selskap.' };
+  // Saved on the konsern's main company (one history per customer).
+  const id = await homeCompanyId(given);
   const notes = String(formData.get('notes') ?? '').slice(0, 4000);
   await setCompanyNotes(id, notes || null);
   await audit('company.notes', { actor: user.email, target: `company:${id}` });
@@ -53,8 +56,9 @@ export async function updateNotesAction(_prev: ActionState, formData: FormData):
 // «Bedriftsmøte»: date + notes before and after the meeting.
 export async function updateMeetingAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
   const user = await guard('admin-meeting');
-  const id = Number(formData.get('id'));
-  if (!id || !(await getCompany(id))) return { error: 'Ukjent selskap.' };
+  const given = Number(formData.get('id'));
+  if (!given || !(await getCompany(given))) return { error: 'Ukjent selskap.' };
+  const id = await homeCompanyId(given); // the konsern's main company
   const text = (k: string) => String(formData.get(k) ?? '').trim().slice(0, 8000) || null;
   const date = String(formData.get('date') ?? '').trim();
   if (date && !/^\d{4}-\d{2}-\d{2}$/.test(date)) return { error: 'Ugyldig dato.' };

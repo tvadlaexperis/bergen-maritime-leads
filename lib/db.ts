@@ -74,6 +74,7 @@ export interface Company {
   meeting_prep: string | null; // notes before the meeting
   meeting_notes: string | null; // summary after the meeting
   meeting_during: string | null; // notes taken in the meeting
+  group_main_orgnr: string | null; // the group's main company («hovedselskap») — see recomputeGroups
   meeting_location: string | null; // where (address, Teams, …)
   meeting_attendees: string | null; // who takes part, theirs and ours — free text
   news_checked_at: number | null;
@@ -234,6 +235,7 @@ const CONTACT_COLUMNS = [
   'meeting_location TEXT',
   'meeting_attendees TEXT',
   'meeting_during TEXT',
+  'group_main_orgnr TEXT',
   'news_checked_at INTEGER',
   'konsern_root_orgnr TEXT',
   'konsern_root_name TEXT',
@@ -1139,16 +1141,17 @@ export interface CompanyBrief {
 }
 
 // The company page's side list (split view): one row per customer — a
-// konsern shows as its best-scoring company, like the main list's
-// «Slå sammen konsern» — best lead score first. Only the columns it shows.
+// konsern shows as its main company with the group's best lead score, like
+// the main list's «Slå sammen konsern». Only the columns it shows.
 export async function listCompaniesBrief(): Promise<CompanyBrief[]> {
   const c = await db();
   const res = await c.execute(`
     SELECT orgnr, name, poststed, lead_score, group_size FROM (
-      SELECT co.orgnr, co.name, co.poststed, sc.lead_score,
+      SELECT co.orgnr, co.name, co.poststed,
+        MAX(sc.lead_score) OVER (PARTITION BY COALESCE(co.group_key, 'c' || co.id)) AS lead_score,
         COUNT(*) OVER (PARTITION BY COALESCE(co.group_key, 'c' || co.id)) AS group_size,
         ROW_NUMBER() OVER (PARTITION BY COALESCE(co.group_key, 'c' || co.id)
-          ORDER BY COALESCE(sc.lead_score, -1) DESC, co.id) AS rn
+          ORDER BY (co.orgnr = co.group_main_orgnr) DESC, COALESCE(sc.lead_score, -1) DESC, co.id) AS rn
       FROM companies co ${SCORE_JOIN}
       WHERE co.status = 'active'
     ) WHERE rn = 1
@@ -1727,7 +1730,7 @@ export async function listJobAds(companyIds: number[], activeOnly = true): Promi
 export async function recomputeGroups(): Promise<number> {
   const c = await db();
   const [cos, people] = await Promise.all([
-    c.execute(`SELECT orgnr, name, website, email, ceo_name, parent_orgnr, konsern_root_orgnr, konsern_root_name
+    c.execute(`SELECT orgnr, name, website, email, ceo_name, parent_orgnr, konsern_root_orgnr, konsern_root_name, employees
                FROM companies WHERE status = 'active'`),
     c.execute(`SELECT co.orgnr, cc.name FROM company_contacts cc JOIN companies co ON co.id = cc.company_id
                WHERE cc.source = 'brreg' AND co.status = 'active'`),
@@ -1739,6 +1742,7 @@ export async function recomputeGroups(): Promise<number> {
   type Row = {
     orgnr: string; name: string; website: string | null; email: string | null; ceo_name: string | null;
     parent_orgnr: string | null; konsern_root_orgnr: string | null; konsern_root_name: string | null;
+    employees: number | null;
   };
   const rows = cos.rows as unknown as Row[];
   const groups = computeGroups(
@@ -1754,14 +1758,45 @@ export async function recomputeGroups(): Promise<number> {
       people: board.get(r.orgnr) ?? [],
     })),
   );
+  // «Hovedselskap» per group: the member highest up the ownership chain
+  // inside the group (most members below it via parent_orgnr — FRAMO AS over
+  // Framo Fusa/Flatøy/Services), then most employees. Customer contact,
+  // meetings and notes live on it (lib/db.ts consolidateGroupUserData).
+  const byKey = new Map<string, Row[]>();
+  for (const r of rows) {
+    const g = groups.get(r.orgnr);
+    if (g) byKey.set(g.key, [...(byKey.get(g.key) ?? []), r]);
+  }
+  const mainOf = new Map<string, string>();
+  for (const [key, members] of byKey) {
+    const inGroup = new Map(members.map((m) => [m.orgnr, m]));
+    const below = (orgnr: string) => {
+      let n = 0;
+      for (const m of members) {
+        // Walk m's parents inside the group; count it if we reach `orgnr`.
+        const seen = new Set<string>();
+        for (let p = m.parent_orgnr; p && inGroup.has(p) && !seen.has(p); p = inGroup.get(p)!.parent_orgnr) {
+          seen.add(p);
+          if (p === orgnr) {
+            n++;
+            break;
+          }
+        }
+      }
+      return n;
+    };
+    const main = [...members].sort((a, b) => below(b.orgnr) - below(a.orgnr) || (b.employees ?? -1) - (a.employees ?? -1))[0];
+    mainOf.set(key, main.orgnr);
+  }
   const statements = rows.map((r) => {
     const g = groups.get(r.orgnr);
     return {
-      sql: 'UPDATE companies SET group_key = ?, group_basis = ? WHERE orgnr = ?',
-      args: [g?.key ?? null, g ? JSON.stringify(g.basis) : null, r.orgnr],
+      sql: 'UPDATE companies SET group_key = ?, group_basis = ?, group_main_orgnr = ? WHERE orgnr = ?',
+      args: [g?.key ?? null, g ? JSON.stringify(g.basis) : null, g ? (mainOf.get(g.key) ?? null) : null, r.orgnr],
     };
   });
   for (let i = 0; i < statements.length; i += 200) await c.batch(statements.slice(i, i + 200), 'write');
+  await consolidateGroupUserData();
   await c.execute({
     sql: 'INSERT INTO app_meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',
     args: ['groups_computed_at', String(Date.now())],
@@ -1776,7 +1811,74 @@ export async function ensureGroupsFresh(maxAgeMs = 26 * 3600_000): Promise<void>
   const c = await db();
   const r = await c.execute({ sql: 'SELECT value FROM app_meta WHERE key = ?', args: ['groups_computed_at'] });
   const at = Number((r.rows[0] as unknown as { value: string } | undefined)?.value ?? 0);
-  if (Date.now() - at > maxAgeMs) await recomputeGroups();
+  // group_main_orgnr arrived 2026-10-09: recompute once so it's filled in
+  // (and existing customer data moved to the main company) on the first page load.
+  const v = await c.execute({ sql: 'SELECT 1 FROM app_meta WHERE key = ?', args: ['group_main_v1'] });
+  if (Date.now() - at > maxAgeMs || v.rows.length === 0) {
+    await recomputeGroups();
+    await c.execute({
+      sql: 'INSERT INTO app_meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',
+      args: ['group_main_v1', String(Date.now())],
+    });
+  }
+}
+
+/** The id customer data is saved under: the group's main company, else the company itself. */
+export async function homeCompanyId(id: number): Promise<number> {
+  const c = await db();
+  const res = await c.execute({
+    sql: `SELECT COALESCE(h.id, m.id) AS id FROM companies m
+          LEFT JOIN companies h ON h.orgnr = m.group_main_orgnr WHERE m.id = ?`,
+    args: [id],
+  });
+  return Number((res.rows[0] as unknown as { id: number } | undefined)?.id ?? id);
+}
+
+// What people type about a customer — Kundekontakt, Bedriftsmøte, Notater —
+// belongs on the group's main company, so the whole konsern has one history.
+// Moves anything saved on another member: contact log rows move over; meeting
+// fields fill the main company's empty ones; notes are appended with where
+// they came from. Idempotent — runs after every recomputeGroups.
+export async function consolidateGroupUserData(): Promise<number> {
+  const c = await db();
+  const res = await c.execute(`
+    SELECT m.id AS member_id, m.name AS member_name, h.id AS main_id,
+           m.notes, m.meeting_date, m.meeting_location, m.meeting_attendees, m.meeting_prep, m.meeting_during, m.meeting_notes
+    FROM companies m JOIN companies h ON h.orgnr = m.group_main_orgnr
+    WHERE m.group_main_orgnr IS NOT NULL AND m.orgnr != m.group_main_orgnr
+      AND (m.notes IS NOT NULL OR m.meeting_date IS NOT NULL OR m.meeting_location IS NOT NULL OR m.meeting_attendees IS NOT NULL
+           OR m.meeting_prep IS NOT NULL OR m.meeting_during IS NOT NULL OR m.meeting_notes IS NOT NULL
+           OR EXISTS (SELECT 1 FROM contact_log l WHERE l.company_id = m.id))`);
+  type R = {
+    member_id: number; member_name: string; main_id: number; notes: string | null;
+    meeting_date: string | null; meeting_location: string | null; meeting_attendees: string | null;
+    meeting_prep: string | null; meeting_during: string | null; meeting_notes: string | null;
+  };
+  const rows = plain<R>(res.rows);
+  for (const r of rows) {
+    const fields = ['meeting_date', 'meeting_location', 'meeting_attendees', 'meeting_prep', 'meeting_during', 'meeting_notes'] as const;
+    await c.batch(
+      [
+        { sql: 'UPDATE contact_log SET company_id = ? WHERE company_id = ?', args: [r.main_id, r.member_id] },
+        ...fields
+          .filter((f) => r[f] != null)
+          .map((f) => ({ sql: `UPDATE companies SET ${f} = COALESCE(${f}, ?) WHERE id = ?`, args: [r[f], r.main_id] })),
+        ...(r.notes
+          ? [{
+              sql: `UPDATE companies SET notes = CASE WHEN notes IS NULL OR notes = '' THEN ? ELSE notes || char(10) || char(10) || ? END WHERE id = ?`,
+              args: [`(Fra ${r.member_name}) ${r.notes}`, `(Fra ${r.member_name}) ${r.notes}`, r.main_id],
+            }]
+          : []),
+        {
+          sql: `UPDATE companies SET notes = NULL, meeting_date = NULL, meeting_location = NULL, meeting_attendees = NULL,
+                  meeting_prep = NULL, meeting_during = NULL, meeting_notes = NULL WHERE id = ?`,
+          args: [r.member_id],
+        },
+      ],
+      'write',
+    );
+  }
+  return rows.length;
 }
 
 export interface GroupMember {

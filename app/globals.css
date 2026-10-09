@@ -1792,3 +1792,13 @@ a {
 .contact-log-note { margin: 6px 0 0; font-size: 0.86rem; line-height: 1.55; white-space: pre-wrap; }
 .contact-log-meta { margin: 4px 0 0; font-size: 0.72rem; }
 .person-card-contacted { display: block; margin-top: 4px; font-size: 0.72rem; color: var(--positive); font-weight: 600; }
+
+/* «Lagres på hovedselskapet …» on a konsern member's Kundekontakt / Møter */
+.home-note {
+  margin: 0 0 12px;
+  padding: 8px 12px;
+  border-radius: var(--radius-control);
+  background: var(--accent-soft);
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+}

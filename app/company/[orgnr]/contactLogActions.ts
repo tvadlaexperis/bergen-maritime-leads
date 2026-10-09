@@ -9,6 +9,7 @@ import {
   addContactLog,
   getContactLogEntry,
   deleteContactLog,
+  homeCompanyId,
   CONTACT_CHANNELS,
   CONTACT_OUTCOMES,
 } from '@/lib/db';
@@ -29,8 +30,9 @@ const isDate = (v: string) => /^\d{4}-\d{2}-\d{2}$/.test(v);
 export async function addContactLogAction(_prev: ContactLogState, form: FormData): Promise<ContactLogState> {
   const user = await seller();
   if (await isRateLimited(`contact-log:${user.sub}`, 120, 60 * 60 * 1000)) return { error: 'For mange registreringer — vent litt.' };
-  const companyId = Number(form.get('id'));
-  if (!companyId || !(await getCompany(companyId))) return { error: 'Ukjent selskap.' };
+  const given = Number(form.get('id'));
+  if (!given || !(await getCompany(given))) return { error: 'Ukjent selskap.' };
+  const companyId = await homeCompanyId(given); // the konsern's main company
 
   const text = (k: string, max: number) => String(form.get(k) ?? '').trim().slice(0, max) || null;
   const contactedOn = text('contacted_on', 10) ?? '';

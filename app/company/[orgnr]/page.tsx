@@ -112,6 +112,20 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
   if (!co) notFound();
 
   const base = await getCompany(co.id);
+  // Kundekontakt, Bedriftsmøte and Notater live on the konsern's main company
+  // («hovedselskap», group_main_orgnr) — the same on every member's page.
+  const home =
+    co.group_main_orgnr && co.group_main_orgnr !== co.orgnr ? ((await getCompanyByOrgnr(co.group_main_orgnr)) ?? co) : co;
+  const homeNote =
+    home.orgnr !== co.orgnr ? (
+      <p className="home-note">
+        Lagres på hovedselskapet{' '}
+        <Link href={`/company/${home.orgnr}`} className="link-accent">
+          {home.name}
+        </Link>{' '}
+        — felles for hele konsernet.
+      </p>
+    ) : null;
   const [financials, history, user, storedNews, groupMembers, allContacts, contactLog] = await Promise.all([
     listFinancials(co.id),
     getScoreHistory(co.id, 12),
@@ -119,7 +133,7 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
     listCompanyNews(co.id, 6),
     co.group_key ? listGroupMembers(co.group_key) : Promise.resolve([]),
     listWebsiteContacts(co.id),
-    listContactLog(co.id),
+    listContactLog(home.id),
   ]);
   // The rest of the group (lib/groups.ts): their website contacts and news
   // are shown here too — for a salesperson the group is one customer.
@@ -536,6 +550,7 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
                       <span className="muted" style={{ fontSize: '0.72rem' }}>hvem vi har ringt, og hvordan det gikk</span>
                     </div>
                     <div className="box-pad">
+                      {homeNote}
                       <ContactLogTab
                       companyId={co.id}
                       people={people.map((p) => ({ name: p.name, phone: p.phones[0] ?? null }))}
@@ -561,21 +576,22 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
               <span className="box-title">Bedriftsmøte</span>
             </div>
             <div className="box-pad">
+                    {homeNote}
                     <MeetingTab
                       id={co.id}
-                      date={co.meeting_date}
-                      location={co.meeting_location}
-                      attendees={co.meeting_attendees}
-                      prep={co.meeting_prep}
-                      during={co.meeting_during}
-                      notes={co.meeting_notes}
+                      date={home.meeting_date}
+                      location={home.meeting_location}
+                      attendees={home.meeting_attendees}
+                      prep={home.meeting_prep}
+                      during={home.meeting_during}
+                      notes={home.meeting_notes}
                       canEdit={isAdmin}
                     />
             </div>
           </div>
         </div>
         <div className="split-scroll-col">
-          {isAdmin && base && <NotesBox id={co.id} notes={base.notes ?? ''} />}
+          {isAdmin && base && <NotesBox id={co.id} notes={home.notes ?? ''} />}
         </div>
       </div>
             ),
@@ -884,7 +900,7 @@ export default async function CompanyPage({ params }: { params: { orgnr: string 
             status={base.status}
             website={base.website}
             contactPage={base.contact_page_url}
-            notes={base.notes ?? ''}
+            notes={home.notes ?? ''}
           />
         </AdminPanelModal>
       )}
