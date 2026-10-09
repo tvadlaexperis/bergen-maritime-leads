@@ -1863,3 +1863,5 @@ a {
   font: inherit;
   font-size: 0.82rem;
 }
+
+.worklist-picker { max-width: 300px; font-weight: 600; }

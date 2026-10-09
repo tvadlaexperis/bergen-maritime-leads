@@ -970,6 +970,29 @@ export async function createSharedWorklist(fromUser: number, toUser: number, org
   return Number(res.lastInsertRowid);
 }
 
+export interface SharedWorklistSummary {
+  id: number;
+  direction: 'received' | 'sent';
+  other_name: string;
+  count: number;
+  created_at: number;
+}
+
+/** Work lists sent to / by this user, newest first — for the Arbeidsliste picker. */
+export async function listSharedWorklists(userId: number): Promise<SharedWorklistSummary[]> {
+  const c = await db();
+  const res = await c.execute({
+    sql: `SELECT w.id, CASE WHEN w.to_user = ? THEN 'received' ELSE 'sent' END AS direction,
+                 u.display_name AS other_name, json_array_length(w.orgnrs) AS count, w.created_at
+          FROM shared_worklists w
+          JOIN users u ON u.id = CASE WHEN w.to_user = ? THEN w.from_user ELSE w.to_user END
+          WHERE w.to_user = ? OR w.from_user = ?
+          ORDER BY w.created_at DESC LIMIT 50`,
+    args: [userId, userId, userId, userId],
+  });
+  return plain<SharedWorklistSummary>(res.rows);
+}
+
 /** A shared list — only for its sender or recipient. */
 export async function getSharedWorklist(
   id: number,

@@ -1,10 +1,11 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { getCurrentUser } from '@/lib/auth';
-import { listCompaniesWithScore, getSharedWorklist } from '@/lib/db';
+import { listCompaniesWithScore, getSharedWorklist, listSharedWorklists } from '@/lib/db';
 import CompanyList from '../CompanyList';
 import ShareWorklist from './ShareWorklist';
 import CopySharedList from './CopySharedList';
+import WorklistPicker from './WorklistPicker';
 
 export const dynamic = 'force-dynamic';
 export const metadata: Metadata = { title: 'Arbeidsliste' };
@@ -18,7 +19,9 @@ export default async function WorklistPage({ searchParams }: { searchParams: { d
   const guest = (process.env.GUEST_EMAIL ?? '').trim().toLowerCase();
   const canShare = !!user && user.email.toLowerCase() !== guest;
 
+  const sharedLists = canShare && user ? await listSharedWorklists(Number(user.sub)) : [];
   const sharedId = Number(searchParams.delt);
+  const picker = sharedLists.length > 0 ? <WorklistPicker lists={sharedLists} current={sharedId || null} /> : null;
   if (sharedId && user) {
     const shared = await getSharedWorklist(sharedId, Number(user.sub));
     if (shared) {
@@ -37,7 +40,12 @@ export default async function WorklistPage({ searchParams }: { searchParams: { d
             </>
           }
           onlyOrgnrs={shared.orgnrs}
-          actions={<CopySharedList orgnrs={shared.orgnrs} />}
+          actions={
+            <>
+              {picker}
+              <CopySharedList orgnrs={shared.orgnrs} />
+            </>
+          }
         />
       );
     }
@@ -49,7 +57,14 @@ export default async function WorklistPage({ searchParams }: { searchParams: { d
       title="Arbeidsliste"
       subtitle="Selskaper du har lagt til med bokmerket i listen eller fra kartet — lagres i denne nettleseren."
       lockFavorites
-      actions={canShare ? <ShareWorklist /> : undefined}
+      actions={
+        canShare ? (
+          <>
+            {picker}
+            <ShareWorklist />
+          </>
+        ) : undefined
+      }
     />
   );
 }
