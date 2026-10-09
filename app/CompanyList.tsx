@@ -571,11 +571,13 @@ export default function CompanyList({
               <tr>
                 <th style={{ width: 34 }}>#</th>
                 <th style={{ width: 28 }} aria-label="Arbeidsliste" />
-                <th style={{ width: 28 }} aria-label="Kundekontakt" title="Kundekontakt: ringt, fått svar, avtalt møte" />
                 {COLUMNS.map((col) => {
                   const activeCol = col.key === sortKey;
                   return (
                     <Fragment key={col.key}>
+                      {col.key === 'meeting' && (
+                        <th style={{ width: 28 }} aria-label="Kundekontakt" title="Kundekontakt: ringt, fått svar, avtalt møte" />
+                      )}
                       <th
                         className={col.align === 'right' ? 'col-right' : undefined}
                         aria-sort={activeCol ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}
@@ -615,9 +617,6 @@ export default function CompanyList({
                     >
                       <BookmarkIcon filled={favorites.has(r.orgnr)} />
                     </button>
-                  </td>
-                  <td>
-                    <ContactStatusIcon r={r} />
                   </td>
                   <td>
                     <Link href={`/company/${r.orgnr}`} className="link-accent">
@@ -680,6 +679,9 @@ export default function CompanyList({
                   </td>
                   <td className="col-right">
                     <ScoreBadge score={r.lead_score} reason={r.reason} />
+                  </td>
+                  <td style={{ textAlign: 'center' }}>
+                    <ContactStatusIcon r={r} />
                   </td>
                   <td className="col-right" style={{ whiteSpace: 'nowrap' }}>
                     <MeetingCell r={r} />
