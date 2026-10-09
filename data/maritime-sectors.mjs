@@ -23,6 +23,24 @@ export const KOMMUNER = [
   { nr: '4625', name: 'Austevoll' },
 ];
 
+/** @type {{ orgnr: string, name: string, why: string }[]} */
+// Companies outside KOMMUNER that belong in the tool anyway — ferry and
+// express-boat operators with big routes, crews or contracts in the Bergen
+// region (Fjord1 sits in Florø, Norled in Stavanger, …). The scan always
+// fetches these and never hides them for their address. Add an orgnr here
+// to include another; the scan picks it up on its next discovery run.
+export const EXTRA_COMPANIES = [
+  { orgnr: '983472583', name: 'FJORD1 AS', why: 'Største ferjerederi på Vestlandet (Florø)' },
+  { orgnr: '982985927', name: 'F1 ADMINISTRASJON AS', why: 'Fjord1-konsernets administrasjon (Florø)' },
+  { orgnr: '981940768', name: 'NORLED AS', why: 'Ferje og hurtigbåt, mange Vestland-samband (Stavanger)' },
+  { orgnr: '974208849', name: 'BOREAL SJØ AS', why: 'Ferje- og hurtigbåtrederi (Hammerfest)' },
+  { orgnr: '916819927', name: 'TORGHATTEN AS', why: 'Morselskap i Torghatten-konsernet, ferje og hurtigbåt (Trondheim)' },
+  { orgnr: '910310895', name: 'FJORD LINE AS', why: 'Utenlandsferje Bergen–Stavanger–Hirtshals (Eigersund)' },
+  { orgnr: '918458999', name: 'HAVILA KYSTRUTEN OPERATIONS AS', why: 'Kystruten Bergen–Kirkenes (Herøy)' },
+  { orgnr: '985979456', name: 'HURTIGRUTEN SJØ AS', why: 'Kystruten Bergen–Kirkenes (Sør-Varanger)' },
+  { orgnr: '982947863', name: 'RØDNE TRAFIKK AS', why: 'Hurtigbåt og fjordcruise, også i Bergen (Stavanger)' },
+];
+
 /** @type {{ code: string, label: string, group: string }[]} */
 export const NACE_CODES = [
   { code: '30.11', label: 'Bygging av skip og flytende materiell', group: 'Verft & bygging' },

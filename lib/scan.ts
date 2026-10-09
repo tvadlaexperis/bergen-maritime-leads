@@ -59,7 +59,7 @@ import {
   hideOutsideScope,
   SEARCH_MIN_SCORE,
 } from './db';
-import { KOMMUNER, NACE_CODES, matchNace } from '../data/maritime-sectors.mjs';
+import { KOMMUNER, NACE_CODES, EXTRA_COMPANIES, matchNace } from '../data/maritime-sectors.mjs';
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -211,6 +211,16 @@ async function discover(errors: ScanError[]): Promise<Map<string, RawCompany>> {
     for (let k = kommuner.shift(); k; k = kommuner.shift()) await discoverKommune(k, found, errors);
   };
   await Promise.all([worker(), worker(), worker()]);
+  // Hand-picked companies outside the area (EXTRA_COMPANIES), one lookup each.
+  for (const extra of EXTRA_COMPANIES) {
+    if (found.has(extra.orgnr)) continue;
+    const res = await orchestrator.callTool<RawCompany | null>('brreg.getEnhet', { orgnr: extra.orgnr }, 12_000);
+    if (!res.ok) {
+      errors.push({ scope: `discover ${extra.name}`, message: res.error });
+      continue;
+    }
+    if (res.data && !res.data.bankrupt) found.set(extra.orgnr, res.data);
+  }
   return found;
 }
 
@@ -852,7 +862,10 @@ export async function runScan(opts: RunScanOptions = {}): Promise<ScanResult> {
   if (details.brreg.processed < batch.length) details.stoppedEarly = true;
   // A company that moved its address out of the scan area stops showing up.
   if (details.brreg.processed > 0) {
-    await hideOutsideScope((KOMMUNER as { nr: string }[]).map((k) => k.nr)).catch((e) =>
+    await hideOutsideScope(
+      (KOMMUNER as { nr: string }[]).map((k) => k.nr),
+      EXTRA_COMPANIES.map((x) => x.orgnr),
+    ).catch((e) =>
       errors.push({ scope: 'scope', message: e instanceof Error ? e.message : String(e) }),
     );
   }

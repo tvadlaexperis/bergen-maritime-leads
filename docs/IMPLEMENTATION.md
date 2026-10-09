@@ -189,3 +189,12 @@ optional note). The scan feed in `notifications` stays shared. «Send til venn»
 page sends to confirmed friends only; the bell shows «Til deg» above «Siste oppdateringer».
 Server Actions in `app/venner/actions.ts` (rate-limited per user). No e-mail yet — users are
 still created with `scripts/create-user.mjs`.
+
+
+## Selskaper utenfor området (2026-10-09)
+
+`EXTRA_COMPANIES` in `data/maritime-sectors.mjs`: orgnrs outside `KOMMUNER` that belong in the
+tool (ferry/express-boat operators with routes or crews in the region — Fjord1, Norled, Boreal
+Sjø, Torghatten, Fjord Line, Havila, Hurtigruten Sjø, Rødne). Discovery fetches each with
+`brreg.getEnhet`; `hideOutsideScope` never hides them, nor any `manual_entry` company (it used
+to hide hand-added companies outside the area on the next scan).

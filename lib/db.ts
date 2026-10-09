@@ -2032,14 +2032,17 @@ export async function getAiProgressSince(since: number): Promise<AiProgress> {
 
 // Hides active companies registered outside the scan area (a move out of
 // Bergen after discovery). Status 'hidden', so nothing is deleted.
-export async function hideOutsideScope(kommunenummer: string[]): Promise<number> {
+// Never hides a company added by hand (manual_entry) or one on the
+// EXTRA_COMPANIES list (`keepOrgnr`) — those are in on purpose, wherever they are.
+export async function hideOutsideScope(kommunenummer: string[], keepOrgnr: string[] = []): Promise<number> {
   if (kommunenummer.length === 0) return 0;
   const c = await db();
+  const keep = keepOrgnr.length ? `AND orgnr NOT IN (${keepOrgnr.map(() => '?').join(',')})` : '';
   const res = await c.execute({
     sql: `UPDATE companies SET status = 'hidden'
-          WHERE status = 'active' AND kommunenummer IS NOT NULL
-            AND kommunenummer NOT IN (${kommunenummer.map(() => '?').join(',')})`,
-    args: kommunenummer,
+          WHERE status = 'active' AND kommunenummer IS NOT NULL AND COALESCE(manual_entry, 0) = 0
+            AND kommunenummer NOT IN (${kommunenummer.map(() => '?').join(',')}) ${keep}`,
+    args: [...kommunenummer, ...keepOrgnr],
   });
   return res.rowsAffected;
 }
