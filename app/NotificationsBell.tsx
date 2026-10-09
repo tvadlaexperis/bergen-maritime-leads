@@ -72,7 +72,7 @@ export default function NotificationsBell({
                 {personal.map((n) => (
                   <li key={`u${n.id}`}>
                     <Link
-                      href={n.type === 'company_shared' && n.orgnr ? `/company/${n.orgnr}` : '/venner'}
+                      href={n.type === 'company_shared' && n.orgnr ? `/company/${n.orgnr}` : n.type === 'user_signup' ? '/admin?view=brukere' : '/venner'}
                       className={`notif-item${n.read_at ? '' : ' notif-item-new'}`}
                       onClick={() => setOpen(false)}
                     >
@@ -84,7 +84,9 @@ export default function NotificationsBell({
                           ? `${n.actor_name} sendte deg dette selskapet`
                           : n.type === 'friend_request'
                             ? 'vil bli venn med deg'
-                            : 'godtok venneforespørselen din'}
+                            : n.type === 'user_signup'
+                              ? 'har registrert seg og venter på godkjenning'
+                              : 'godtok venneforespørselen din'}
                       </span>
                       {n.message && <span className="notif-note">«{n.message}»</span>}
                       <span className="notif-time muted">{agoLabel(n.created_at)}</span>

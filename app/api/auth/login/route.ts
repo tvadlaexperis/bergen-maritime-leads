@@ -39,6 +39,14 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Invalid email or password' }, { status: 401 });
   }
 
+  if (user.status === 'pending') {
+    await audit('login.pending', { actor: user.email, ip });
+    return NextResponse.json(
+      { error: 'Kontoen venter på godkjenning fra en administrator.' },
+      { status: 403 },
+    );
+  }
+
   await audit('login.success', { actor: user.email, ip, detail: `role=${user.role}` });
   const token = await createSessionToken(user);
   const res = NextResponse.json({

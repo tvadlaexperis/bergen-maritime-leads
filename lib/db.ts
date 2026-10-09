@@ -13,6 +13,8 @@ export interface User {
   display_name: string;
   role: Role;
   created_at: number;
+  /** 'pending' = registered via /registrer, waiting for an admin to approve. */
+  status: 'active' | 'pending';
 }
 
 export interface Company {
@@ -584,6 +586,7 @@ async function ensureSchema(): Promise<void> {
     `,
       )
       .then(() => addColumnsIfMissing('companies', CONTACT_COLUMNS))
+      .then(() => addColumnsIfMissing('users', ["status TEXT NOT NULL DEFAULT 'active'"]))
       .then(() => addColumnsIfMissing('company_scores', SCORE_COLUMNS))
       .then(() => addColumnsIfMissing('company_contacts', ["source TEXT NOT NULL DEFAULT 'nettside'"]))
       .then(() => addColumnsIfMissing('scans', ['details TEXT']))
@@ -732,6 +735,66 @@ export async function getUserById(id: number): Promise<User | undefined> {
   return res.rows[0] as unknown as User | undefined;
 }
 
+// --- Registrering (self sign-up, admin approval) ---
+
+export interface UserRow {
+  id: number;
+  email: string;
+  display_name: string;
+  role: Role;
+  status: 'active' | 'pending';
+  created_at: number;
+}
+
+/** A /registrer sign-up: a viewer that can't log in until an admin approves it. */
+export async function createPendingUser(email: string, name: string, hash: string): Promise<number> {
+  const c = await db();
+  const res = await c.execute({
+    sql: `INSERT INTO users (email, password_hash, display_name, role, created_at, status) VALUES (?, ?, ?, 'viewer', ?, 'pending')`,
+    args: [email.toLowerCase(), hash, name, Date.now()],
+  });
+  return Number(res.lastInsertRowid);
+}
+
+export async function listUsers(): Promise<UserRow[]> {
+  const c = await db();
+  const res = await c.execute(
+    `SELECT id, email, display_name, role, COALESCE(status, 'active') AS status, created_at FROM users
+     ORDER BY (status = 'pending') DESC, display_name COLLATE NOCASE`,
+  );
+  return plain<UserRow>(res.rows);
+}
+
+export async function listAdminIds(): Promise<number[]> {
+  const c = await db();
+  const res = await c.execute(`SELECT id FROM users WHERE role = 'admin' AND COALESCE(status, 'active') = 'active'`);
+  return (res.rows as unknown as { id: number }[]).map((r) => Number(r.id));
+}
+
+export async function setUserStatus(id: number, status: 'active' | 'pending'): Promise<void> {
+  const c = await db();
+  await c.execute({ sql: 'UPDATE users SET status = ? WHERE id = ?', args: [status, id] });
+}
+
+export async function setUserRole(id: number, role: Role): Promise<void> {
+  const c = await db();
+  await c.execute({ sql: 'UPDATE users SET role = ? WHERE id = ?', args: [role, id] });
+}
+
+/** Removes a user; their contact log entries stay (user_id → NULL). */
+export async function deleteUser(id: number): Promise<void> {
+  const c = await db();
+  await c.batch(
+    [
+      { sql: 'DELETE FROM user_notifications WHERE user_id = ? OR actor_id = ?', args: [id, id] },
+      { sql: 'DELETE FROM friendships WHERE requester_id = ? OR addressee_id = ?', args: [id, id] },
+      { sql: 'UPDATE contact_log SET user_id = NULL WHERE user_id = ?', args: [id] },
+      { sql: 'DELETE FROM users WHERE id = ?', args: [id] },
+    ],
+    'write',
+  );
+}
+
 // --- Venner ---
 // Same model as minmatside (lib/db.ts there): search → request → accept.
 // The shared guest login (GUEST_EMAIL) is never offered as a friend.
@@ -771,7 +834,7 @@ export async function searchUsers(q: string, me: number): Promise<UserSearchResu
     (
       await c.execute({
         sql: `SELECT id, display_name, email FROM users
-              WHERE id != ? AND email != ? AND (display_name LIKE ? OR email LIKE ?)
+              WHERE id != ? AND email != ? AND COALESCE(status, 'active') = 'active' AND (display_name LIKE ? OR email LIKE ?)
               ORDER BY display_name COLLATE NOCASE LIMIT 20`,
         args: [me, guestEmail(), like, like],
       })
@@ -855,7 +918,7 @@ export async function areFriends(a: number, b: number): Promise<boolean> {
 
 // --- Personal notifications ---
 
-export type UserNotificationType = 'friend_request' | 'friend_accepted' | 'company_shared';
+export type UserNotificationType = 'friend_request' | 'friend_accepted' | 'company_shared' | 'user_signup';
 export interface UserNotification {
   id: number;
   type: UserNotificationType;

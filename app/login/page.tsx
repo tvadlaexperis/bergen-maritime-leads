@@ -1,6 +1,7 @@
 'use client';
 
 import { Suspense, useState, type FormEvent } from 'react';
+import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 
 function LoginForm() {
@@ -65,6 +66,12 @@ function LoginForm() {
         <button type="submit" disabled={loading} className="btn btn-primary">
           {loading ? 'Logger inn…' : 'Logg inn'}
         </button>
+        <p className="muted" style={{ fontSize: '0.8rem', textAlign: 'center' }}>
+          Ny her?{' '}
+          <Link href="/registrer" className="link-accent">
+            Registrer deg
+          </Link>
+        </p>
       </form>
     </div>
   );

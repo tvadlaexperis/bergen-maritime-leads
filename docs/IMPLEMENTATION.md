@@ -209,3 +209,12 @@ Kundekontakt, Bedriftsmøte and Notater are always saved on it (`homeCompanyId` 
 actions) and shown on every member's page; `consolidateGroupUserData` moves anything saved
 on another member (runs after every recompute, and once on first page load via
 `ensureGroupsFresh`'s `group_main_v1` flag).
+
+
+## Registrering (2026-10-09)
+
+`/registrer` (public, like `/login`) creates a *pending* viewer (`users.status = 'pending'`); the
+login route refuses pending accounts. No e-mail exists to verify the address, so an admin
+approves or rejects each sign-up in Admin → Brukere (also role changes and removal; the guest
+account and your own account can't be changed there). Admins get a `user_signup` notification.
+Sign-up is rate-limited per IP and answers the same for an existing address (no enumeration).

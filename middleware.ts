@@ -44,7 +44,7 @@ async function readSession(request: NextRequest): Promise<Session> {
 
 // Paths reachable without a session. Everything else in the matcher requires
 // one (docs/09-security.md §8 — this is an internal tool, not a public site).
-const PUBLIC_PATHS = new Set(['/login', '/robots.txt', '/icon.svg', '/favicon.ico']);
+const PUBLIC_PATHS = new Set(['/login', '/registrer', '/robots.txt', '/icon.svg', '/favicon.ico']);
 
 function isPublic(pathname: string): boolean {
   if (PUBLIC_PATHS.has(pathname)) return true;

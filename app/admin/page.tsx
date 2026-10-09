@@ -19,12 +19,14 @@ import {
   parseTopN,
   TOP_CHOICES,
   AI_TOP_N,
+  listUsers,
 } from '@/lib/db';
 import { dateLabel, osloDayStart } from '@/app/format';
 import ScanPanel from './ScanPanel';
 import RunControls from './RunControls';
 import { aiConfigured, aiServiceLabel } from '@/lib/orchestrator/providers/ai';
 import GuestLinkPanel from './GuestLinkPanel';
+import UsersPanel from './UsersPanel';
 import BackArrow from '@/app/components/BackArrow';
 
 export const dynamic = 'force-dynamic';
@@ -35,20 +37,21 @@ export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 export const metadata: Metadata = { title: 'Admin' };
 
-type View = 'oppdatering' | 'logg' | 'nattlig' | 'gjest';
+type View = 'oppdatering' | 'logg' | 'nattlig' | 'gjest' | 'brukere';
 
 // Page-level tabs. Old `?view=skann|dekning` links (bookmarks, notifications)
 // map onto their new homes.
 const VIEWS: { key: View; label: string; href: string }[] = [
   { key: 'oppdatering', label: 'Datakvalitet', href: '/admin' },
   { key: 'nattlig', label: 'Nattlige kjøringer', href: '/admin?view=nattlig' },
+  { key: 'brukere', label: 'Brukere', href: '/admin?view=brukere' },
   { key: 'gjest', label: 'Gjestelenke', href: '/admin?view=gjest' },
   // Audit log (logins, manual actions) — rarely needed, so last.
   { key: 'logg', label: 'Logg', href: '/admin?view=logg' },
 ];
 
 function parseView(raw: string | undefined): View {
-  if (raw === 'logg' || raw === 'nattlig' || raw === 'gjest') return raw;
+  if (raw === 'logg' || raw === 'nattlig' || raw === 'gjest' || raw === 'brukere') return raw;
   // 'datakvalitet' / 'dekning' now live on the Oppdatering tab.
   return 'oppdatering';
 }
@@ -250,6 +253,10 @@ export default async function AdminPage({
               </>
             );
           })()}
+        </div>
+      ) : view === 'brukere' ? (
+        <div className="page-scroll">
+          <UsersPanel users={await listUsers()} me={Number(user.sub)} guestEmail={(process.env.GUEST_EMAIL ?? '').trim().toLowerCase()} />
         </div>
       ) : view === 'gjest' ? (
         <div style={{ maxWidth: 640 }}>
