@@ -1093,6 +1093,26 @@ export async function addContactLog(e: {
   });
 }
 
+export async function updateContactLog(
+  id: number,
+  e: {
+    contactedOn: string;
+    channel: string;
+    person: string | null;
+    phone: string | null;
+    outcome: string;
+    note: string | null;
+    followUpOn: string | null;
+  },
+): Promise<void> {
+  const c = await db();
+  await c.execute({
+    sql: `UPDATE contact_log SET contacted_on = ?, channel = ?, person = ?, phone = ?, outcome = ?, note = ?, follow_up_on = ?
+          WHERE id = ?`,
+    args: [e.contactedOn, e.channel, e.person, e.phone, e.outcome, e.note, e.followUpOn, id],
+  });
+}
+
 export async function getContactLogEntry(id: number): Promise<{ id: number; company_id: number; user_id: number | null } | undefined> {
   const c = await db();
   const res = await c.execute({ sql: 'SELECT id, company_id, user_id FROM contact_log WHERE id = ?', args: [id] });

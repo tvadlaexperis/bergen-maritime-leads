@@ -1812,6 +1812,18 @@ a {
 .contact-log-outcome[data-outcome='avtalt møte'] { background: var(--positive); color: var(--surface-raised); }
 .contact-log-outcome[data-outcome='ring tilbake'] { background: var(--accent-soft); color: var(--accent); }
 .contact-log-outcome[data-outcome='ikke interessert'] { color: var(--negative); }
+.contact-log-edit {
+  margin-left: auto;
+  display: inline-flex;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 2px;
+}
+.contact-log-edit:hover { color: var(--accent); }
+.contact-log-edit + .contact-log-delete { margin-left: 4px; }
+.contact-log-item.editing { border-color: var(--accent-border); background: var(--accent-soft); }
 .contact-log-delete {
   margin-left: auto;
   border: 0;

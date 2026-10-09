@@ -28,6 +28,7 @@ export default function ContactLogTab({
 }) {
   const [state, action] = useFormState<ContactLogState, FormData>(addContactLogAction, {});
   const [open, setOpen] = useState(entries.length === 0);
+  const [editing, setEditing] = useState<ContactLogEntry | null>(null);
   const [phone, setPhone] = useState('');
   const formRef = useRef<HTMLFormElement>(null);
   const [, startTransition] = useTransition();
@@ -38,8 +39,22 @@ export default function ContactLogTab({
       formRef.current?.reset();
       setPhone('');
       setOpen(false);
+      setEditing(null);
     }
   }, [state]);
+
+  const startEdit = (e: ContactLogEntry) => {
+    setEditing(e);
+    setPhone(e.phone ?? '');
+    setOpen(true);
+    requestAnimationFrame(() => formRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }));
+  };
+  const cancel = () => {
+    setEditing(null);
+    setPhone('');
+    setOpen(false);
+  };
+  const canChange = (e: ContactLogEntry) => isAdmin || (currentUserId != null && e.user_id === currentUserId);
 
   // Picking a known person fills in their number (still editable).
   const onPerson = (name: string) => {
@@ -59,16 +74,18 @@ export default function ContactLogTab({
       )}
 
       {canLog && open && (
-        <form ref={formRef} action={action} className="contact-log-form">
+        <form ref={formRef} key={editing?.id ?? 'new'} action={action} className="contact-log-form">
           <input type="hidden" name="id" value={companyId} />
+          {editing && <input type="hidden" name="entry_id" value={editing.id} />}
+          {editing && <p className="contact-log-heading" style={{ margin: 0 }}>Endre registrering</p>}
           <div className="contact-log-row">
             <label className="field" style={{ width: 160 }}>
               Dato
-              <input type="date" name="contacted_on" defaultValue={today} max={today} required />
+              <input type="date" name="contacted_on" defaultValue={editing?.contacted_on ?? today} max={today} required />
             </label>
             <label className="field" style={{ width: 130 }}>
               Kanal
-              <select name="channel" defaultValue="telefon">
+              <select name="channel" defaultValue={editing?.channel ?? 'telefon'}>
                 {CONTACT_CHANNELS.map((c) => (
                   <option key={c} value={c}>
                     {c}
@@ -84,6 +101,7 @@ export default function ContactLogTab({
                 list={`people-${companyId}`}
                 placeholder="Navn — velg eller skriv"
                 maxLength={120}
+                defaultValue={editing?.person ?? ''}
                 onChange={(e) => onPerson(e.target.value)}
               />
               <datalist id={`people-${companyId}`}>
@@ -107,7 +125,7 @@ export default function ContactLogTab({
           <div className="contact-log-row">
             <label className="field" style={{ width: 200 }}>
               Resultat
-              <select name="outcome" defaultValue="" required>
+              <select name="outcome" defaultValue={editing?.outcome ?? ''} required>
                 <option value="" disabled>
                   Velg …
                 </option>
@@ -120,20 +138,20 @@ export default function ContactLogTab({
             </label>
             <label className="field" style={{ width: 160 }}>
               Følg opp
-              <input type="date" name="follow_up_on" min={today} />
+              <input type="date" name="follow_up_on" defaultValue={editing?.follow_up_on ?? ''} min={editing ? undefined : today} />
             </label>
           </div>
           <label className="field">
             Notat
-            <textarea name="note" rows={3} maxLength={2000} placeholder="Hva ble sagt, hva er neste steg …" />
+            <textarea name="note" rows={3} maxLength={2000} placeholder="Hva ble sagt, hva er neste steg …" defaultValue={editing?.note ?? ''} />
           </label>
           <p className="muted" style={{ fontSize: '0.74rem', margin: 0 }}>
             Telefonnummeret lagres som det nyeste nummeret til personen og vises på kontaktkortet.
           </p>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             <SaveButton />
-            {entries.length > 0 && (
-              <button type="button" className="btn btn-ghost btn-sm" onClick={() => setOpen(false)}>
+            {(entries.length > 0 || editing) && (
+              <button type="button" className="btn btn-ghost btn-sm" onClick={cancel}>
                 Avbryt
               </button>
             )}
@@ -149,7 +167,7 @@ export default function ContactLogTab({
         ) : (
           <ul className="contact-log-list">
             {entries.map((e) => (
-              <li key={e.id} className="contact-log-item">
+              <li key={e.id} className={`contact-log-item${editing?.id === e.id ? ' editing' : ''}`}>
                 <div className="contact-log-top">
                   <strong>{dateLabel(e.contacted_on)}</strong>
                   <span className="contact-log-outcome" data-outcome={e.outcome}>
@@ -160,7 +178,21 @@ export default function ContactLogTab({
                     {e.person ? ` · ${e.person}` : ''}
                     {e.phone ? ` · ${e.phone}` : ''}
                   </span>
-                  {(isAdmin || (currentUserId != null && e.user_id === currentUserId)) && (
+                  {canChange(e) && (
+                    <button
+                      type="button"
+                      className="contact-log-edit"
+                      title="Endre"
+                      aria-label="Endre registrering"
+                      onClick={() => startEdit(e)}
+                    >
+                      <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <path d="M12 20h9" />
+                        <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                      </svg>
+                    </button>
+                  )}
+                  {canChange(e) && (
                     <button
                       type="button"
                       className="contact-log-delete"

@@ -9,6 +9,7 @@ import {
   addContactLog,
   getContactLogEntry,
   deleteContactLog,
+  updateContactLog,
   homeCompanyId,
   CONTACT_CHANNELS,
   CONTACT_OUTCOMES,
@@ -46,9 +47,7 @@ export async function addContactLogAction(_prev: ContactLogState, form: FormData
   const phone = text('phone', 40);
   if (phone && !/^[+\d][\d\s()-]{4,}$/.test(phone)) return { error: 'Telefonnummeret ser ikke riktig ut.' };
 
-  await addContactLog({
-    companyId,
-    userId: Number(user.sub),
+  const fields = {
     contactedOn,
     channel,
     person: text('person', 120),
@@ -56,7 +55,21 @@ export async function addContactLogAction(_prev: ContactLogState, form: FormData
     outcome,
     note: text('note', 2000),
     followUpOn: followUp,
-  });
+  };
+
+  // Editing an existing entry: your own, or any as admin — same rule as delete.
+  const entryId = Number(form.get('entry_id'));
+  if (entryId) {
+    const entry = await getContactLogEntry(entryId);
+    if (!entry || entry.company_id !== companyId) return { error: 'Fant ikke registreringen.' };
+    if (user.role !== 'admin' && entry.user_id !== Number(user.sub)) return { error: 'Du kan bare endre dine egne.' };
+    await updateContactLog(entryId, fields);
+    await audit('company.contact_log.edit', { actor: user.email, target: `company:${companyId}` });
+    revalidatePath('/company');
+    return { ok: 'Endringen er lagret.' };
+  }
+
+  await addContactLog({ companyId, userId: Number(user.sub), ...fields });
   await audit('company.contact_log', { actor: user.email, target: `company:${companyId}` });
   revalidatePath('/company');
   return { ok: 'Kontakt registrert.' };
