@@ -13,10 +13,8 @@ import {
   listFriends,
   listIncomingFriendRequests,
 } from '@/lib/db';
-import { Suspense } from 'react';
 import ThemeToggle from './ThemeToggle';
 import NavLinks from './NavLinks';
-import FxTicker from './FxTicker';
 import NotificationsBell from './NotificationsBell';
 import FriendsMenu from './FriendsMenu';
 import ProfileMenu from './ProfileMenu';
@@ -61,12 +59,6 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
             </svg>
             <span className="app-brand-name">Maritim Bergen</span>
           </Link>
-
-          {user && (
-            <Suspense fallback={<div className="fx-ticker" />}>
-              <FxTicker />
-            </Suspense>
-          )}
 
           <div className="app-nav">
             {user && <NavLinks />}
