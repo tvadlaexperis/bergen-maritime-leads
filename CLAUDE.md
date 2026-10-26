@@ -1,8 +1,5 @@
 # Claude Context Guide — Maritim Bergen (bergen-maritime-leads)
 
-## Global personal instructions
-@C:\Users\TVadla\.claude\Global Claude TV.md
-
 ## What this project is
 An internal **sales-prospecting** tool for the **maritime sector in Bergen**. It scans
 the official Norwegian company registers (Brønnøysundregistrene) and ranks companies by
@@ -45,3 +42,22 @@ jose+bcrypt auth, CSP middleware, orchestrator pattern, Vercel + Cron). `README.
   writing App Router code.
 - Keep `README.md` / `docs/IMPLEMENTATION.md` in sync as decisions are made. New env
   vars go in `.env.local.example` with a comment on what breaks without them.
+
+## Publishing
+- After a confirmed change that typechecks (`npx tsc --noEmit`): commit, push to `origin`
+  and deploy to Vercel production with `npx vercel --prod --yes` — don't ask first. Still ask
+  before anything destructive (force-push, deleting branches, infra changes).
+- Work PC is behind Zscaler: the Vercel CLI needs the Zscaler root CA. Export "Zscaler Root CA"
+  from `Cert:\CurrentUser\Root` to `$env:TEMP\zscaler-root-ca.pem`, then in Git Bash
+  `export NODE_EXTRA_CA_CERTS=/tmp/zscaler-root-ca.pem`. Never use `NODE_TLS_REJECT_UNAUTHORIZED=0`.
+- "Not authorized" on deploy while `vercel whoami` works → `npx vercel link --yes` to re-link
+  `.vercel/project.json` to the `torvad` scope.
+
+## Verifying UI changes
+After any UI/layout change, screenshot the affected pages and look at them before reporting:
+- `playwright-core` in the session scratchpad (never a project dependency), launched with system
+  Edge: `C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe`.
+- Log in via `context.request.post('/api/auth/login', …)` with ADMIN_EMAIL/ADMIN_PASSWORD from
+  `.env.local` (never print them). Run `npx next dev -p <port>` in the background; stop it after.
+- Git Bash: prefix with `MSYS_NO_PATHCONV=1`. The app scrolls inside `.app-main` / `.page-scroll`,
+  not the window. Headless Edge hides scrollbars — measure overflow instead of eyeballing it.
